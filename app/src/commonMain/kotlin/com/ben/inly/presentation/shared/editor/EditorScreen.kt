@@ -209,6 +209,19 @@ fun EditorScreen(
     var localFocusRequest by remember { mutableStateOf<FocusRequest?>(null) }
     val activeFocusRequest = focusRequest ?: localFocusRequest
 
+    if (!isDesktopPlatform) {
+        val imeBottom = WindowInsets.ime.getBottom(LocalDensity.current)
+        val isKeyboardOpen = imeBottom > 0
+        LaunchedEffect(isKeyboardOpen) {
+            if (!isKeyboardOpen) {
+                focusManager.clearFocus()
+                activeBlockId = null
+                GlobalEditorState.currentlyFocusedBlockId = null
+                localFocusRequest = null
+            }
+        }
+    }
+
     var showSlashMenu by remember { mutableStateOf(false) }
 
     var isSlashKilled by remember { mutableStateOf(false) }

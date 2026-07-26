@@ -400,6 +400,7 @@ fun DailyScreen(
                 state = pagerState,
                 modifier = Modifier
                     .fillMaxSize(),
+                userScrollEnabled = false,
                 beyondViewportPageCount = 1,
                 key = { page -> initialDate.plus((page - initialPage).toLong(), DateTimeUnit.DAY).toString() }
             ) { page ->
