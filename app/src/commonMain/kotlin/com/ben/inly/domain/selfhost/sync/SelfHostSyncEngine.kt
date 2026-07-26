@@ -706,7 +706,7 @@ class SelfHostSyncEngine(
         return when {
             remote == null -> local
             local == null -> remote
-            remote.updatedAt >= local.updatedAt -> remote
+            remote.updatedAt > local.updatedAt -> remote
             else -> local
         }
     }

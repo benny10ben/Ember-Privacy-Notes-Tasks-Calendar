@@ -14,6 +14,7 @@ import com.ben.inly.domain.util.SyncEventBus
 import com.ben.inly.domain.util.VoiceTaskEventBus
 import com.ben.inly.presentation.reminders.ReminderScheduler
 import com.ben.inly.presentation.shared.editor.BaseEditorViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -184,6 +185,8 @@ class DailyEditorViewModel(
                     text = block.text.ifBlank { "Unfinished task" },
                     timestamp = timestamp
                 )
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 e.printStackTrace()
                 if (homeDateString == currentDateString && _blocks.value.none { it.id == blockId }) {
@@ -341,6 +344,8 @@ class DailyEditorViewModel(
                 }
             }
             true
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             e.printStackTrace()
             false

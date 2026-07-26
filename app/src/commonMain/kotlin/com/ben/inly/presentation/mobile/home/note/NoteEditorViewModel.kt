@@ -9,6 +9,7 @@ import com.ben.inly.domain.util.MediaStorageHelper
 import com.ben.inly.domain.util.SyncCoordinator
 import com.ben.inly.presentation.reminders.ReminderScheduler
 import com.ben.inly.presentation.shared.editor.BaseEditorViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -155,6 +156,8 @@ class NoteEditorViewModel(
                 }
             }
             true
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             e.printStackTrace()
             false

@@ -262,7 +262,7 @@ class SyncRepositoryImpl(
                                 val resolvedUpdatedAt = maxOf(localMeta.updatedAt, envelope.updatedAt)
                                 val mergedMeta = localMeta.copy(
                                     isFavorite     = localMeta.isFavorite || remoteMeta.isFavorite,
-                                    coverImagePath = remoteMeta.coverImagePath ?: localMeta.coverImagePath
+                                    coverImagePath = if (envelope.updatedAt > localMeta.updatedAt) remoteMeta.coverImagePath else localMeta.coverImagePath
                                 )
                                 repository.saveDailyNote(dateString, mergedContent, resolvedUpdatedAt, mergedMeta)
 

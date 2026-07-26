@@ -14,6 +14,7 @@ import com.ben.inly.domain.util.SyncCoordinator
 import com.ben.inly.domain.util.SyncEventBus
 import com.ben.inly.presentation.reminders.ReminderScheduler
 import com.ben.inly.presentation.shared.editor.FocusRequest
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -309,6 +310,8 @@ class RemindersViewModel constructor(
                         }
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -419,6 +422,8 @@ class RemindersViewModel constructor(
                 } else {
                     reminderScheduler.cancel(blockId)
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 e.printStackTrace()
                 val revert = previousTimestamp
