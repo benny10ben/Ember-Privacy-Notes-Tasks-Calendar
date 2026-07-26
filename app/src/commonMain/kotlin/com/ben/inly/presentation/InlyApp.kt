@@ -34,6 +34,7 @@ import com.ben.inly.domain.repository.EmojiRepository
 import com.ben.inly.domain.util.rememberMicrophonePermissionLauncher
 import inly.app.generated.resources.Res
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import com.ben.inly.presentation.mobile.home.HomeScreen
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.withContext
@@ -100,13 +101,16 @@ fun InlyApp(
     var showRagChatOverlay by remember { mutableStateOf(false) }
 
     var isSelectionActive by remember { mutableStateOf(false) }
-    val isKeyboardOpen = WindowInsets.ime.getBottom(density) > 0
 
     val isTopLevelScreen = currentRoute == Screen.Daily.route ||
             currentRoute == Screen.Home.route ||
             currentRoute == Screen.Note.route
-    val isBottomBarVisible = isTopLevelScreen && !isKeyboardOpen && !isSelectionActive
+    val isBottomBarVisible = isTopLevelScreen && !isSelectionActive
     var bottomBarHeightDp by remember { mutableStateOf(0.dp) }
+    var suppressBottomBarEnterAnimation by remember { mutableStateOf(true) }
+    LaunchedEffect(isBottomBarVisible) {
+        if (isBottomBarVisible) suppressBottomBarEnterAnimation = false
+    }
 
     var isSidebarVisible by remember { mutableStateOf(true) }
 
@@ -122,6 +126,18 @@ fun InlyApp(
     }
 
     var fullScreenContent by remember { mutableStateOf<(@Composable () -> Unit)?>(null) }
+
+    var isStatusBarInsetReady by remember { mutableStateOf(isDesktopPlatform) }
+    if (!isDesktopPlatform) {
+        val statusBarInsetTopPx = WindowInsets.statusBars.getTop(density)
+        LaunchedEffect(statusBarInsetTopPx) {
+            if (statusBarInsetTopPx > 0) isStatusBarInsetReady = true
+        }
+        LaunchedEffect(Unit) {
+            delay(500)
+            isStatusBarInsetReady = true
+        }
+    }
 
     CompositionLocalProvider(
         LocalImageOverlay provides { content -> fullScreenContent = content }
@@ -157,7 +173,12 @@ fun InlyApp(
             return@CompositionLocalProvider
         }
 
-
+        if (!isStatusBarInsetReady) {
+            Box(
+                modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
+            )
+            return@CompositionLocalProvider
+        }
 
         Scaffold(
             containerColor = MaterialTheme.colorScheme.background,
@@ -646,14 +667,18 @@ fun InlyApp(
 
                     AnimatedVisibility(
                         visible = isBottomBarVisible,
-                        enter = slideInVertically(
-                            initialOffsetY = { it },
-                            animationSpec = tween(
-                                durationMillis = 250,
-                                delayMillis = 100,
-                                easing = FastOutSlowInEasing
-                            )
-                        ) + fadeIn(tween(durationMillis = 250, delayMillis = 100)),
+                        enter = if (suppressBottomBarEnterAnimation) {
+                            EnterTransition.None
+                        } else {
+                            slideInVertically(
+                                initialOffsetY = { it },
+                                animationSpec = tween(
+                                    durationMillis = 250,
+                                    delayMillis = 100,
+                                    easing = FastOutSlowInEasing
+                                )
+                            ) + fadeIn(tween(durationMillis = 250, delayMillis = 100))
+                        },
                         exit = slideOutVertically(
                             targetOffsetY = { it },
                             animationSpec = tween(
