@@ -32,6 +32,27 @@ import inly.app.generated.resources.Res
 import inly.app.generated.resources.file_text
 import org.jetbrains.compose.resources.painterResource
 
+private fun documentFormatLabel(fileName: String, mimeType: String?): String {
+    val extension = fileName.substringAfterLast('.', "").uppercase()
+    if (extension.isNotEmpty() && extension.length <= 5) return extension
+    return when (mimeType) {
+        "application/pdf" -> "PDF"
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document" -> "DOCX"
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" -> "XLSX"
+        "application/vnd.ms-powerpoint",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation" -> "PPTX"
+        "image/png" -> "PNG"
+        "image/jpeg" -> "JPEG"
+        "image/gif" -> "GIF"
+        "image/webp" -> "WEBP"
+        "text/plain" -> "TXT"
+        "application/zip" -> "ZIP"
+        else -> "FILE"
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun DocumentBlockView(
@@ -102,7 +123,7 @@ fun DocumentBlockView(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = block.fileSizeString,
+                    text = "${block.fileSizeString} · ${documentFormatLabel(block.fileName, block.mimeType)}",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline
                 )
