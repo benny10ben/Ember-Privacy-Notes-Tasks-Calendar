@@ -78,6 +78,9 @@ import com.ben.inly.domain.util.showFeedback
 import com.ben.inly.presentation.shared.components.InlyDesktopMenu
 import com.ben.inly.presentation.shared.components.TopBarIconButton
 import com.ben.inly.presentation.shared.StickyNoteWindowBus
+import com.ben.inly.presentation.shared.SubNoteOpenMode
+import com.ben.inly.data.local.prefs.SettingsManager
+import com.ben.inly.data.local.prefs.SyncConstants
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.togetherWith
@@ -122,12 +125,15 @@ fun NoteScreen(
     isStickyNote: Boolean = false,
     onExportMarkdown: (fileName: String, content: String) -> Unit = { _, _ -> },
     onExportPdf: (fileName: String, title: String, blocks: List<NoteBlock>) -> Unit = { _, _, _ -> },
+    externalHazeState: HazeState? = null,
+    topBarBgColor: Color? = null,
+    topBarContentColor: Color? = null,
     viewModel: NoteEditorViewModel = koinViewModel(key = noteId)
 ) {
 
     val canUndo by viewModel.canUndo.collectAsState()
     val canRedo by viewModel.canRedo.collectAsState()
-    val hazeState = remember { HazeState() }
+    val hazeState = externalHazeState ?: remember { HazeState() }
     val clipboardManager = LocalClipboardManager.current
     val blocks by viewModel.visibleBlocks.collectAsState()
     val noteTitle by viewModel.noteTitle.collectAsState()
@@ -168,6 +174,12 @@ fun NoteScreen(
 
     var showOptionsMenu by remember { mutableStateOf(false) }
     var subNotePanelId by remember { mutableStateOf<String?>(null) }
+    val settingsManager: SettingsManager = org.koin.compose.koinInject()
+    val subNoteOpenModeName by settingsManager.subNoteOpenModeFlow.collectAsState(
+        initial = SyncConstants.DEFAULT_SUBNOTE_OPEN_MODE
+    )
+    val subNoteOpenMode = runCatching { SubNoteOpenMode.valueOf(subNoteOpenModeName) }
+        .getOrDefault(SubNoteOpenMode.SIDE_PANEL)
     val globalTags by viewModel.globalTags.collectAsState()
     val databaseTemplates by viewModel.databaseTemplates.collectAsState()
     var showDatabasePicker by remember { mutableStateOf(false) }
@@ -526,6 +538,8 @@ fun NoteScreen(
                     isEditingTemplate = isEditingTemplate,
                     onDismissOptionsMenu = { showOptionsMenu = false },
                     hazeState = hazeState,
+                    topBarBgColor = topBarBgColor,
+                    topBarContentColor = topBarContentColor,
                     onBackClick = {
                         if (isSelectionMode) {
                             viewModel.clearSelection()
@@ -653,7 +667,8 @@ fun NoteScreen(
                         onPickDocument = onPickDocument,
                         onOpenFile = onOpenFile,
                         onExportMarkdown = onExportMarkdown,
-                        onExportPdf = onExportPdf
+                        onExportPdf = onExportPdf,
+                        openMode = subNoteOpenMode
                     )
                 }
 
@@ -1034,11 +1049,13 @@ private fun NoteTopBar(
     showOptionsMenu: Boolean = false,
     isEditingTemplate: Boolean = false,
     hazeState: HazeState? = null,
+    topBarBgColor: Color? = null,
+    topBarContentColor: Color? = null,
     onDismissOptionsMenu: () -> Unit = {},
     desktopMenuContent: @Composable () -> Unit = {}
 ) {
-    val defaultBgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.45f)
-    val defaultContentColor = MaterialTheme.colorScheme.onSurface
+    val defaultBgColor = topBarBgColor ?: MaterialTheme.colorScheme.background.copy(alpha = 0.45f)
+    val defaultContentColor = topBarContentColor ?: MaterialTheme.colorScheme.onSurface
 
     Box(
         modifier = Modifier

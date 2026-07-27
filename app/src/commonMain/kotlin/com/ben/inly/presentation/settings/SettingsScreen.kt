@@ -48,8 +48,10 @@ import inly.app.generated.resources.info
 import inly.app.generated.resources.palette
 import inly.app.generated.resources.refresh_cw
 import inly.app.generated.resources.shield_alert
+import inly.app.generated.resources.sidebar
 import inly.app.generated.resources.timer_reset
 import inly.app.generated.resources.triangle_alert
+import com.ben.inly.presentation.shared.SubNoteOpenMode
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import org.koin.compose.viewmodel.koinViewModel
@@ -81,6 +83,9 @@ fun SettingsScreen(
     val fontSizePreference by viewModel.fontSizePreference.collectAsState()
     val fontStylePreference by viewModel.fontStylePreference.collectAsState()
     var showFontStyleSheet by remember { mutableStateOf(false) }
+
+    val subNoteOpenMode by viewModel.subNoteOpenMode.collectAsState()
+    var showSubNoteOpenModeSheet by remember { mutableStateOf(false) }
 
     val internalHazeState = remember { HazeState() }
     val listState = rememberLazyListState()
@@ -219,6 +224,17 @@ fun SettingsScreen(
                             .getOrDefault(FontStylePreference.POPPINS).displayName,
                         onClick = { showFontStyleSheet = true }
                     )
+
+                    if (isDesktopPlatform) {
+                        SettingsDivider()
+                        SettingsActionRow(
+                            icon = painterResource(Res.drawable.sidebar),
+                            title = "Subnote Opening",
+                            trailingLabel = runCatching { SubNoteOpenMode.valueOf(subNoteOpenMode) }
+                                .getOrDefault(SubNoteOpenMode.SIDE_PANEL).displayName,
+                            onClick = { showSubNoteOpenModeSheet = true }
+                        )
+                    }
                 }
             }
 
@@ -477,6 +493,57 @@ fun SettingsScreen(
                     }
 
                     if (index != FontStylePreference.entries.lastIndex) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 20.dp),
+                            thickness = 1.dp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    if (showSubNoteOpenModeSheet) {
+        InlyBottomSheet(
+            expanded = true,
+            onDismiss = { showSubNoteOpenModeSheet = false },
+            title = "Subnote Opening",
+            subtitle = "Choose how notes linked inside another note (subnotes) open on desktop."
+        ) {
+            val selectedMode = runCatching { SubNoteOpenMode.valueOf(subNoteOpenMode) }
+                .getOrDefault(SubNoteOpenMode.SIDE_PANEL)
+
+            Column(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
+                SubNoteOpenMode.entries.forEachIndexed { index, option ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                viewModel.setSubNoteOpenMode(option.name)
+                                showSubNoteOpenModeSheet = false
+                            }
+                            .padding(horizontal = 20.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = option.displayName,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        if (option == selectedMode) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = "Selected",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
+                    if (index != SubNoteOpenMode.entries.lastIndex) {
                         HorizontalDivider(
                             modifier = Modifier.padding(horizontal = 20.dp),
                             thickness = 1.dp,

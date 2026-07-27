@@ -111,6 +111,12 @@ fun DailyEditorPane(
     val showToolbar = !isSelectionMode && (isKeyboardOpen || isDesktopPlatform)
 
     var subNotePanelId by remember { mutableStateOf<String?>(null) }
+    val settingsManager: com.ben.inly.data.local.prefs.SettingsManager = org.koin.compose.koinInject()
+    val subNoteOpenModeName by settingsManager.subNoteOpenModeFlow.collectAsState(
+        initial = com.ben.inly.data.local.prefs.SyncConstants.DEFAULT_SUBNOTE_OPEN_MODE
+    )
+    val subNoteOpenMode = runCatching { com.ben.inly.presentation.shared.SubNoteOpenMode.valueOf(subNoteOpenModeName) }
+        .getOrDefault(com.ben.inly.presentation.shared.SubNoteOpenMode.SIDE_PANEL)
 
     val actions = remember(viewModel, onOpenFile) {
         object : EditorActions {
@@ -332,7 +338,8 @@ fun DailyEditorPane(
                 onPickDocument = onPickDocument,
                 onOpenFile = onOpenFile,
                 onExportMarkdown = onExportMarkdown,
-                onExportPdf = onExportPdf
+                onExportPdf = onExportPdf,
+                openMode = subNoteOpenMode
             )
         }
 

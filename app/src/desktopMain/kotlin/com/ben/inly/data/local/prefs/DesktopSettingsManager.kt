@@ -192,4 +192,14 @@ class DesktopSettingsManager : SettingsManager {
         prefs.put(SyncConstants.KEY_FONT_STYLE_PREFERENCE, preference)
         _fontStylePreference.value = preference
     }
+
+    private val _subNoteOpenMode = MutableStateFlow(
+        prefs.get(SyncConstants.KEY_SUBNOTE_OPEN_MODE, SyncConstants.DEFAULT_SUBNOTE_OPEN_MODE)
+    )
+    override val subNoteOpenModeFlow: Flow<String> = _subNoteOpenMode
+
+    override fun saveSubNoteOpenMode(mode: String) {
+        prefs.put(SyncConstants.KEY_SUBNOTE_OPEN_MODE, mode)
+        _subNoteOpenMode.value = mode
+    }
 }

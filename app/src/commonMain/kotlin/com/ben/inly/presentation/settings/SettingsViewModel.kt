@@ -97,6 +97,16 @@ class SettingsViewModel(
         settingsManager.saveFontStylePreference(preference)
     }
 
+    val subNoteOpenMode: StateFlow<String> = settingsManager.subNoteOpenModeFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = com.ben.inly.data.local.prefs.SyncConstants.DEFAULT_SUBNOTE_OPEN_MODE
+    )
+
+    fun setSubNoteOpenMode(mode: String) {
+        settingsManager.saveSubNoteOpenMode(mode)
+    }
+
     /**
      * Parses the JSON backup and merges it into the local database.
      */

@@ -1,5 +1,6 @@
 package com.ben.inly.presentation.mobile.home.note
 
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -13,14 +14,31 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.unit.dp
 import com.ben.inly.domain.model.NoteBlock
+import com.ben.inly.presentation.shared.SubNoteOpenMode
 import com.ben.inly.presentation.shared.components.TopBarIconButton
+import dev.chrisbanes.haze.HazeState
 import inly.app.generated.resources.Res
 import inly.app.generated.resources.maximize_2
 import inly.app.generated.resources.minimize_2
 import org.jetbrains.compose.resources.painterResource
+
+private fun Painter.scaledDown(factor: Float): Painter = object : Painter() {
+    override val intrinsicSize: Size = this@scaledDown.intrinsicSize
+    override fun DrawScope.onDraw() {
+        scale(factor) {
+            with(this@scaledDown) { draw(size) }
+        }
+    }
+}
 
 /**
  * Notion-style slide-in panel for database row notes (desktop only).
@@ -43,29 +61,53 @@ fun SubNotePanel(
     onTakePhoto: (onPathSelected: (String) -> Unit) -> Unit = {},
     onExportMarkdown: (fileName: String, content: String) -> Unit = { _, _ -> },
     onExportPdf: (fileName: String, title: String, blocks: List<NoteBlock>) -> Unit = { _, _, _ -> },
+    openMode: SubNoteOpenMode = SubNoteOpenMode.SIDE_PANEL,
 ) {
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(noteId) { visible = true }
 
-    var isExpanded by remember(noteId) { mutableStateOf(false) }
+    var isExpanded by remember(noteId) { mutableStateOf(openMode == SubNoteOpenMode.FULL_RIGHT_PANEL) }
 
+    val isDialogMode = openMode == SubNoteOpenMode.CENTER_DIALOG
+
+    val animationDurationMillis = 200
+
+    // Side panel: slides in by growing its width fraction from the right edge.
     val widthFraction by animateFloatAsState(
         targetValue = when {
-            !visible   -> 0f
-            isExpanded -> 1f
-            else       -> 0.5f
+            isDialogMode -> if (isExpanded) 1f else 0.8f
+            !visible     -> 0f
+            isExpanded   -> 1f
+            else         -> 0.5f
         },
-        animationSpec = tween(durationMillis = 280),
+        animationSpec = tween(durationMillis = animationDurationMillis),
         label = "panelWidth",
-        // onClose() removes this composable from the caller's tree (the `if (subNotePanelId != null)`
-        // guard at the call site). Firing it here — once the width has actually animated down to 0f —
-        // instead of eagerly inside `dismiss`, lets the 280ms slide-out play before Compose disposes us.
-        finishedListener = { finishedValue -> if (finishedValue == 0f) onClose() }
+        finishedListener = { finishedValue -> if (!isDialogMode && finishedValue == 0f) onClose() }
+    )
+
+    val heightFraction by animateFloatAsState(
+        targetValue = if (isDialogMode) { if (isExpanded) 1f else 0.92f } else 1f,
+        animationSpec = tween(durationMillis = animationDurationMillis),
+        label = "panelHeight"
+    )
+
+    // Center dialog: stays at its target size and instead scales + fades in/out,
+    // so the note content underneath never has to reflow mid-animation.
+    val dialogScale by animateFloatAsState(
+        targetValue = if (visible) 1f else 0.94f,
+        animationSpec = tween(durationMillis = animationDurationMillis, easing = FastOutSlowInEasing),
+        label = "dialogScale"
+    )
+    val dialogAlpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(durationMillis = animationDurationMillis),
+        label = "dialogAlpha",
+        finishedListener = { finishedValue -> if (isDialogMode && finishedValue == 0f) onClose() }
     )
 
     val scrimAlpha by animateFloatAsState(
         targetValue = if (visible && !isExpanded) 0.3f else 0f,
-        animationSpec = tween(durationMillis = 280),
+        animationSpec = tween(durationMillis = animationDurationMillis),
         label = "scrimAlpha"
     )
 
@@ -92,13 +134,28 @@ fun SubNotePanel(
         Box(
             modifier = Modifier
                 .fillMaxWidth(widthFraction)
-                .fillMaxHeight()
-                .align(Alignment.CenterEnd)
-                .shadow(elevation = 20.dp, shape = RoundedCornerShape(12.dp))
-                .clip(RoundedCornerShape(12.dp))
+                .fillMaxHeight(heightFraction)
+                .align(if (isDialogMode) Alignment.Center else Alignment.CenterEnd)
+                .then(
+                    if (isDialogMode) {
+                        Modifier.graphicsLayer {
+                            scaleX = dialogScale
+                            scaleY = dialogScale
+                            alpha = dialogAlpha
+                        }
+                    } else {
+                        Modifier
+                    }
+                )
+                .shadow(elevation = 20.dp, shape = if (isExpanded) RectangleShape else RoundedCornerShape(12.dp))
+                .clip(if (isExpanded) RectangleShape else RoundedCornerShape(12.dp))
         ) {
             var showInnerPanel by remember { mutableStateOf(false) }
             var innerPanelNoteId by remember { mutableStateOf<String?>(null) }
+            val hazeState = remember { HazeState() }
+
+            val topBarBgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.45f)
+            val topBarContentColor = MaterialTheme.colorScheme.onSurface
 
             val panelColorScheme = MaterialTheme.colorScheme.copy(
                 background = if (isExpanded) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.surface
@@ -113,6 +170,9 @@ fun SubNotePanel(
                     onOpenFile = onOpenFile,
                     onExportMarkdown = onExportMarkdown,
                     onExportPdf = onExportPdf,
+                    externalHazeState = hazeState,
+                    topBarBgColor = topBarBgColor,
+                    topBarContentColor = topBarContentColor,
                     onNavigateToEditor = { nestedId ->
                         innerPanelNoteId = nestedId
                         showInnerPanel = true
@@ -130,6 +190,7 @@ fun SubNotePanel(
                         onOpenFile = onOpenFile,
                         onExportMarkdown = onExportMarkdown,
                         onExportPdf = onExportPdf,
+                        openMode = openMode,
                     )
                 }
             }
@@ -137,13 +198,14 @@ fun SubNotePanel(
             Box(
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .padding(top = 14.dp, start = 64.dp)
+                    .padding(top = 16.dp, start = 74.dp)
             ) {
                 TopBarIconButton(
-                    icon = if (isExpanded) painterResource(Res.drawable.minimize_2) else painterResource(Res.drawable.maximize_2),
+                    icon = (if (isExpanded) painterResource(Res.drawable.minimize_2) else painterResource(Res.drawable.maximize_2)).scaledDown(0.8f),
                     contentDescription = if (isExpanded) "Collapse panel" else "Expand panel",
                     bgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.45f),
                     tint = MaterialTheme.colorScheme.onSurface,
+                    hazeState = hazeState,
                     onClick = { isExpanded = !isExpanded }
                 )
             }

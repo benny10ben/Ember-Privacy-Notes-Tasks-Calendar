@@ -206,4 +206,15 @@ class AndroidSettingsManager(
         sharedPreferences.edit { putString(SyncConstants.KEY_FONT_STYLE_PREFERENCE, preference) }
         _fontStylePreference.value = preference
     }
+
+    private val _subNoteOpenMode = MutableStateFlow(
+        sharedPreferences.getString(SyncConstants.KEY_SUBNOTE_OPEN_MODE, SyncConstants.DEFAULT_SUBNOTE_OPEN_MODE)
+            ?: SyncConstants.DEFAULT_SUBNOTE_OPEN_MODE
+    )
+    override val subNoteOpenModeFlow: Flow<String> = _subNoteOpenMode
+
+    override fun saveSubNoteOpenMode(mode: String) {
+        sharedPreferences.edit { putString(SyncConstants.KEY_SUBNOTE_OPEN_MODE, mode) }
+        _subNoteOpenMode.value = mode
+    }
 }

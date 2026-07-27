@@ -13,6 +13,8 @@ object SyncConstants {
     const val DEFAULT_FONT_SIZE_PREFERENCE = "DEFAULT"
     const val KEY_FONT_STYLE_PREFERENCE = "font_style_preference"
     const val DEFAULT_FONT_STYLE_PREFERENCE = "POPPINS"
+    const val KEY_SUBNOTE_OPEN_MODE = "subnote_open_mode"
+    const val DEFAULT_SUBNOTE_OPEN_MODE = "SIDE_PANEL"
     // Sync Keys
     const val KEY_SYNC_TIMESTAMP = "last_sync_timestamp"
     const val KEY_SELF_HOST_SYNC_TIMESTAMP = "self_host_last_sync_timestamp"

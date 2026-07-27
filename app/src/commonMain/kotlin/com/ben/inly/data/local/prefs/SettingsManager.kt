@@ -64,4 +64,7 @@ interface SettingsManager {
 
     val fontStylePreferenceFlow: Flow<String>
     fun saveFontStylePreference(preference: String)
+
+    val subNoteOpenModeFlow: Flow<String>
+    fun saveSubNoteOpenMode(mode: String)
 }
