@@ -2,6 +2,7 @@ package com.ben.inly.presentation
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
@@ -23,7 +24,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
@@ -33,6 +33,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,6 +43,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -79,19 +81,32 @@ fun InlyBottomBar(
     onMicClick: () -> Unit,
     onAiIconTap: () -> Unit = {},
     isListening: Boolean = false,
-    partialText: String = ""
+    partialText: String = "",
+    isCompact: Boolean = false
 ) {
     val defaultBgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.65f)
     val defaultContentColor = MaterialTheme.colorScheme.onSurface
 
-    val barSize = 44.dp
-    val navItemHeight = 40.dp
+    val barAnimationSpec = tween<Dp>(durationMillis = 350, easing = FastOutSlowInEasing)
+    val barSize by animateDpAsState(
+        targetValue = if (isCompact) 44.dp else 52.dp,
+        animationSpec = barAnimationSpec
+    )
+    val bottomInset by animateDpAsState(
+        targetValue = if (isCompact) 0.dp else 6.dp,
+        animationSpec = barAnimationSpec
+    )
+    val horizontalInset by animateDpAsState(
+        targetValue = if (isCompact) 24.dp else 12.dp,
+        animationSpec = barAnimationSpec
+    )
+    val navItemHeight = barSize - 12.dp
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(bottom = 6.dp, start = 16.dp, end = 16.dp),
+            .padding(bottom = bottomInset, start = 16.dp, end = 16.dp),
         contentAlignment = Alignment.BottomCenter
     ) {
         AnimatedVisibility(
@@ -111,7 +126,7 @@ fun InlyBottomBar(
                 color = defaultBgColor,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp)
+                    .padding(horizontal = horizontalInset)
                     .height(barSize)
                     .customInlyShadow(CircleShape)
                     .clip(CircleShape)
@@ -185,17 +200,17 @@ fun InlyBottomBar(
             AnimatedVisibility(
                 visible = isListening || partialText.isNotEmpty(),
                 enter = fadeIn(tween(200)) + expandHorizontally(
-                    expandFrom = Alignment.End,
+                    expandFrom = Alignment.CenterHorizontally,
                     animationSpec = tween(200)
                 ),
                 exit = fadeOut(tween(200)) + shrinkHorizontally(
-                    shrinkTowards = Alignment.End,
+                    shrinkTowards = Alignment.CenterHorizontally,
                     animationSpec = tween(200)
                 ),
                 modifier = Modifier
-                    .align(Alignment.BottomEnd)
+                    .align(Alignment.BottomCenter)
                     .offset(y = -(barSize + 8.dp))
-                    .wrapContentWidth(unbounded = true, align = Alignment.End)
+                    .wrapContentWidth(unbounded = true, align = Alignment.CenterHorizontally)
             ) {
                 Surface(
                     shape = RoundedCornerShape(100f),
@@ -203,7 +218,6 @@ fun InlyBottomBar(
                     contentColor = defaultContentColor,
                     modifier = Modifier
                         .widthIn(max = 240.dp)
-                        .customInlyShadow(RoundedCornerShape(100f))
                         .clip(RoundedCornerShape(100f))
                         .hazeEffect(hazeState, HazeStyle.Unspecified, null)
                         .border(

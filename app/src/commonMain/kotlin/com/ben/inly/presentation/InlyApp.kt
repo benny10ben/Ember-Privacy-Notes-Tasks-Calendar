@@ -10,8 +10,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
@@ -38,6 +42,7 @@ import kotlinx.coroutines.delay
 import com.ben.inly.presentation.mobile.home.HomeScreen
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.withContext
+import kotlin.time.Duration.Companion.milliseconds
 
 private val DESKTOP_SIDEBAR_WIDTH = 340.dp
 
@@ -87,11 +92,13 @@ fun InlyApp(
     }
 
     var activeTab by remember { mutableStateOf(Screen.Daily.route) }
+    var isBottomBarCompact by remember { mutableStateOf(false) }
 
     LaunchedEffect(currentRoute) {
         if (currentRoute == Screen.Daily.route || currentRoute == Screen.Home.route) {
             activeTab = currentRoute
         }
+        isBottomBarCompact = false
     }
 
     // AI chat ViewModel
@@ -114,6 +121,32 @@ fun InlyApp(
 
     var isSidebarVisible by remember { mutableStateOf(true) }
 
+    val bottomBarScrollAccumulator = remember { FloatArray(1) }
+    val bottomBarNestedScrollConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                val delta = available.y
+                if (delta == 0f) return Offset.Zero
+
+                val accumulated = bottomBarScrollAccumulator[0]
+                if ((delta < 0f && accumulated > 0f) || (delta > 0f && accumulated < 0f)) {
+                    bottomBarScrollAccumulator[0] = 0f
+                }
+                bottomBarScrollAccumulator[0] += delta
+
+                val toggleThresholdPx = 60f
+                if (bottomBarScrollAccumulator[0] <= -toggleThresholdPx && !isBottomBarCompact) {
+                    isBottomBarCompact = true
+                    bottomBarScrollAccumulator[0] = 0f
+                } else if (bottomBarScrollAccumulator[0] >= toggleThresholdPx && isBottomBarCompact) {
+                    isBottomBarCompact = false
+                    bottomBarScrollAccumulator[0] = 0f
+                }
+                return Offset.Zero
+            }
+        }
+    }
+
     val openAiChat: () -> Unit = {
         if (showRagChatOverlay) {
             showRagChatOverlay = false
@@ -134,7 +167,7 @@ fun InlyApp(
             if (statusBarInsetTopPx > 0) isStatusBarInsetReady = true
         }
         LaunchedEffect(Unit) {
-            delay(500)
+            delay(500.milliseconds)
             isStatusBarInsetReady = true
         }
     }
@@ -188,6 +221,7 @@ fun InlyApp(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(MaterialTheme.colorScheme.background)
+                    .nestedScroll(bottomBarNestedScrollConnection)
             ) {
                 NavHost(
                     navController = navController,
@@ -709,7 +743,8 @@ fun InlyApp(
                                 }
                             },
                             isListening = isVoiceTaskListening,
-                            partialText = partialText
+                            partialText = partialText,
+                            isCompact = isBottomBarCompact
                         )
                     }
                 }
