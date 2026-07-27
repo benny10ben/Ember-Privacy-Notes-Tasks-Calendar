@@ -6,8 +6,12 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
@@ -30,16 +34,28 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.input.pointer.PointerEventTimeoutCancellationException
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -52,6 +68,9 @@ import com.ben.inly.domain.model.DatabaseColumn
 import com.ben.inly.domain.model.DatabaseRow
 import com.ben.inly.domain.model.DatabaseView
 import com.ben.inly.domain.model.displayText
+import com.ben.inly.domain.util.isDesktopPlatform
+import com.ben.inly.presentation.shared.editor.components.DesktopCursor
+import com.ben.inly.presentation.shared.editor.components.desktopPointerCursor
 import com.ben.inly.presentation.shared.editor.EditorActions
 import com.ben.inly.presentation.shared.editor.mouseScrollable
 import dev.chrisbanes.haze.HazeState
@@ -105,6 +124,12 @@ fun TableView(
     val borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.65f)
     val borderColor1 = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
 
+    val orderedColumns = remember(visibleColumns) { mutableStateListOf(*visibleColumns.toTypedArray()) }
+    var draggedColId by remember { mutableStateOf<String?>(null) }
+    var dragStartIndex by remember { mutableStateOf(-1) }
+    var dragPointerX by remember { mutableStateOf(0f) }
+    val colBoundsInWindow = remember { mutableStateMapOf<String, Rect>() }
+
     Box(modifier = Modifier.fillMaxWidth().horizontalScroll(scrollState)
         .mouseScrollable(scrollState).hazeSource(state = hazeState)
     ) {
@@ -122,8 +147,10 @@ fun TableView(
                             .height(IntrinsicSize.Max)
                             .defaultMinSize(minHeight = 44.dp)
                     ) {
-                        visibleColumns.forEachIndexed { _, col ->
+                        orderedColumns.forEach { col ->
+                          key(col.id) {
                             val activeSort = activeView.activeSorts.find { it.columnId == col.id }
+                            val isDragged = draggedColId == col.id
 
                             val typeIcon = when (col.type) {
                                 ColumnType.TEXT     -> rememberVectorPainter(Icons.AutoMirrored.Filled.Subject)
@@ -143,7 +170,11 @@ fun TableView(
                                 ColumnType.STATUS   -> painterResource(Res.drawable.check_square)
                             }
 
-                            Box {
+                            Box(
+                                modifier = Modifier
+                                    .onGloballyPositioned { colBoundsInWindow[col.id] = it.boundsInWindow() }
+                                    .graphicsLayer { alpha = if (isDragged) 0.6f else 1f }
+                            ) {
                                 Box(
                                     modifier = Modifier
                                         .width(col.width.dp)
@@ -157,6 +188,38 @@ fun TableView(
                                         .clickable(enabled = !inSelectionMode) {
                                             onOpenSheet(DbSheetType.COLUMN_OPTIONS, null, col.id)
                                         }
+                                        .pointerInput(col.id) {
+                                            detectDragGesturesAfterLongPress(
+                                                onDragStart = {
+                                                    draggedColId = col.id
+                                                    dragStartIndex = visibleColumns.indexOfFirst { it.id == col.id }
+                                                    dragPointerX = colBoundsInWindow[col.id]?.center?.x ?: 0f
+                                                },
+                                                onDrag = { change, dragAmount ->
+                                                    change.consume()
+                                                    dragPointerX += dragAmount.x
+                                                    val hovered = colBoundsInWindow.entries
+                                                        .firstOrNull { (_, rect) -> dragPointerX in rect.left..rect.right }
+                                                        ?.key
+                                                    if (hovered != null && hovered != col.id) {
+                                                        val from = orderedColumns.indexOfFirst { it.id == col.id }
+                                                        val to = orderedColumns.indexOfFirst { it.id == hovered }
+                                                        if (from != -1 && to != -1) {
+                                                            orderedColumns.add(to, orderedColumns.removeAt(from))
+                                                        }
+                                                    }
+                                                },
+                                                onDragEnd = {
+                                                    draggedColId = null
+                                                    val finalIndex = orderedColumns.indexOfFirst { it.id == col.id }
+                                                    if (dragStartIndex != -1 && finalIndex != -1 && dragStartIndex != finalIndex) {
+                                                        actions.onReorderDbColumns(block.id, dragStartIndex, finalIndex)
+                                                    }
+                                                    dragStartIndex = -1
+                                                },
+                                                onDragCancel = { draggedColId = null; dragStartIndex = -1 }
+                                            )
+                                        }
                                         .padding(horizontal = 12.dp, vertical = 10.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
@@ -164,7 +227,7 @@ fun TableView(
                                         Icon(
                                             painter = typeIcon,
                                             contentDescription = null,
-                                            modifier = Modifier.size(13.dp),
+                                            modifier = Modifier.size(16.dp),
                                             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                                         )
                                         Spacer(Modifier.width(7.dp))
@@ -189,7 +252,7 @@ fun TableView(
                                             Icon(
                                                 if (activeSort.isAscending) painterResource(Res.drawable.arrow_up) else painterResource(Res.drawable.arrow_down),
                                                 contentDescription = null,
-                                                modifier = Modifier.size(12.dp),
+                                                modifier = Modifier.size(16.dp),
                                                 tint = MaterialTheme.colorScheme.primary
                                             )
                                         }
@@ -197,7 +260,42 @@ fun TableView(
                                 }
                                 desktopDropdown(activeColId == col.id && currentSheet in listOf(
                                     DbSheetType.COLUMN_OPTIONS, DbSheetType.RENAME, DbSheetType.FORMULA))
+
+                                if (isDesktopPlatform) {
+                                    val density = LocalDensity.current
+                                    var widthDragAccumulator by remember { mutableStateOf(0f) }
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.CenterEnd)
+                                            .fillMaxHeight()
+                                            .width(8.dp)
+                                            .desktopPointerCursor(DesktopCursor.RESIZE_HORIZONTAL)
+                                            .draggable(
+                                                orientation = Orientation.Horizontal,
+                                                state = rememberDraggableState { delta ->
+                                                    widthDragAccumulator += with(density) { delta.toDp().value }
+                                                    val wholePixels = widthDragAccumulator.toInt()
+                                                    if (wholePixels != 0) {
+                                                        widthDragAccumulator -= wholePixels
+                                                        val idx = orderedColumns.indexOfFirst { it.id == col.id }
+                                                        if (idx != -1) {
+                                                            val current = orderedColumns[idx]
+                                                            val newWidth = (current.width + wholePixels).coerceIn(40, 600)
+                                                            orderedColumns[idx] = current.copy(width = newWidth)
+                                                        }
+                                                    }
+                                                },
+                                                onDragStopped = {
+                                                    val idx = orderedColumns.indexOfFirst { it.id == col.id }
+                                                    if (idx != -1) {
+                                                        actions.onUpdateDbColumnWidth(block.id, col.id, orderedColumns[idx].width)
+                                                    }
+                                                }
+                                            )
+                                    )
+                                }
                             }
+                          }
                         }
 
                         Box(
@@ -222,7 +320,7 @@ fun TableView(
                     // Data rows
                     visibleRows.forEach { row ->
                         Row(modifier = Modifier.height(IntrinsicSize.Max).defaultMinSize(minHeight = 44.dp)) {
-                            visibleColumns.forEach { col ->
+                            orderedColumns.forEach { col ->
                                 val cellData = row.cells[col.id]
                                 val isHighlighted = currentSheet == DbSheetType.CELL_OPTIONS && activeRowId == row.id && activeColId == col.id
 
@@ -380,7 +478,7 @@ fun TableView(
 
             // Aggregation row
             Row(modifier = Modifier.height(IntrinsicSize.Max).defaultMinSize(minHeight = 36.dp)) {
-                visibleColumns.forEach { col ->
+                orderedColumns.forEach { col ->
                     val aggType = col.aggregationType
                     val isActivelyEditing = currentSheet == DbSheetType.AGGREGATION && activeColId == col.id
                     val isCurr  = col.type == ColumnType.MONEY || (col.type == ColumnType.FORMULA && col.isFormulaCurrency)

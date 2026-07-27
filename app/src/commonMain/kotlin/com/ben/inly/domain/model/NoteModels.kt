@@ -314,6 +314,7 @@ data class DatabaseColumn(
     val currencySymbol: String? = null,
     val isFormulaCurrency: Boolean = false,
     val isDeleted: Boolean = false,
+    val isNameManuallySet: Boolean = false,
     val updatedAt: Long = 0L
 )
 
@@ -471,6 +472,24 @@ data class ThreeDotDividerBlock(
     override val updatedAt: Long = 0L
 ) : NoteBlock()
 enum class ColumnType { TEXT, NUMBER, CHECKBOX, DATE, FORMULA, PHONE, EMAIL, TAGS, URL, FILES, PRIORITY, MONEY, AUDIO, NOTES, STATUS }
+
+fun ColumnType.propertyLabel(): String = when (this) {
+    ColumnType.TEXT -> "Text"
+    ColumnType.NUMBER -> "Number"
+    ColumnType.CHECKBOX -> "Checkbox"
+    ColumnType.DATE -> "Date"
+    ColumnType.FORMULA -> "Formula"
+    ColumnType.PHONE -> "Phone"
+    ColumnType.EMAIL -> "Email"
+    ColumnType.TAGS -> "Tags"
+    ColumnType.URL -> "URL"
+    ColumnType.FILES -> "Files"
+    ColumnType.PRIORITY -> "Priority"
+    ColumnType.MONEY -> "Money"
+    ColumnType.AUDIO -> "Audio"
+    ColumnType.NOTES -> "Notes"
+    ColumnType.STATUS -> "Status"
+}
 
 /**
  * Canonical Kanban status values. A STATUS cell is stored as [CellData.Text] holding one of these

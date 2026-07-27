@@ -23,7 +23,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -31,7 +31,18 @@ import androidx.compose.ui.unit.sp
 import com.ben.inly.domain.util.isDesktopPlatform
 import com.ben.inly.ui.theme.LocalInlyFontStyle
 import com.ben.inly.ui.theme.fontFamilyFor
+import inly.app.generated.resources.Res
+import inly.app.generated.resources.bell_off2
+import inly.app.generated.resources.calendar_add3
+import inly.app.generated.resources.calendar_day
+import inly.app.generated.resources.clock_circle
+import inly.app.generated.resources.history2
+import inly.app.generated.resources.history3
+import inly.app.generated.resources.moon_cloud
+import inly.app.generated.resources.sofa
+import inly.app.generated.resources.square_arrows_right
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.painterResource
 import java.util.Calendar
 import kotlin.math.abs
 
@@ -53,35 +64,41 @@ fun ReminderPresetMenu(
         ) {
             DropdownMenuItem(
                 text = { Text("Later today", style = MaterialTheme.typography.bodyLarge) },
-                leadingIcon = { Icon(Icons.Default.Today, null) },
+                leadingIcon = { painterResource(Res.drawable.calendar_day) },
                 onClick = { onPresetSelected(getDatePresetTime(DatePresetType.LATER_TODAY)); onDismiss() }
             )
             DropdownMenuItem(
                 text = { Text("Tomorrow", style = MaterialTheme.typography.bodyLarge) },
-                leadingIcon = { Icon(Icons.Default.Event, null) },
+                leadingIcon = { painterResource(Res.drawable.calendar_day) },
                 onClick = { onPresetSelected(getDatePresetTime(DatePresetType.TOMORROW)); onDismiss() }
             )
             DropdownMenuItem(
                 text = { Text("This weekend", style = MaterialTheme.typography.bodyLarge) },
-                leadingIcon = { Icon(Icons.Default.Weekend, null) },
+                leadingIcon = { painterResource(Res.drawable.sofa) },
                 onClick = { onPresetSelected(getDatePresetTime(DatePresetType.THIS_WEEKEND)); onDismiss() }
             )
             DropdownMenuItem(
                 text = { Text("Next week", style = MaterialTheme.typography.bodyLarge) },
-                leadingIcon = { Icon(Icons.Default.NextWeek, null) },
+                leadingIcon = { painterResource(Res.drawable.square_arrows_right) },
                 onClick = { onPresetSelected(getDatePresetTime(DatePresetType.NEXT_WEEK)); onDismiss() }
             )
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp, horizontal = 12.dp))
             DropdownMenuItem(
                 text = { Text("Custom date...", style = MaterialTheme.typography.bodyLarge) },
-                leadingIcon = { Icon(Icons.Default.CalendarMonth, null) },
+                leadingIcon = { painterResource(Res.drawable.calendar_add3) },
                 onClick = { onCustomSelected(); onDismiss() }
             )
             if (onRemove != null) {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp, horizontal = 12.dp))
                 DropdownMenuItem(
                     text = { Text("Remove reminder", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.error) },
-                    leadingIcon = { Icon(Icons.Default.NotificationsOff, null, tint = MaterialTheme.colorScheme.error) },
+                    leadingIcon = {
+                        Icon(
+                            painter = painterResource(Res.drawable.bell_off2),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    },
                     onClick = { onRemove(); onDismiss() }
                 )
             }
@@ -89,22 +106,22 @@ fun ReminderPresetMenu(
     } else {
         InlyBottomSheet(expanded = expanded, onDismiss = onDismiss, title = "Date") {
             Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
-                PresetSheetItem(Icons.Default.Today, "Later today") {
+                PresetSheetItem(painterResource(Res.drawable.calendar_day), "Later today") {
                     onPresetSelected(
                         getDatePresetTime(DatePresetType.LATER_TODAY)
                     ); onDismiss()
                 }
-                PresetSheetItem(Icons.Default.Event, "Tomorrow") {
+                PresetSheetItem(painterResource(Res.drawable.calendar_day), "Tomorrow") {
                     onPresetSelected(
                         getDatePresetTime(DatePresetType.TOMORROW)
                     ); onDismiss()
                 }
-                PresetSheetItem(Icons.Default.Weekend, "This weekend") {
+                PresetSheetItem(painterResource(Res.drawable.sofa), "This weekend") {
                     onPresetSelected(
                         getDatePresetTime(DatePresetType.THIS_WEEKEND)
                     ); onDismiss()
                 }
-                PresetSheetItem(Icons.Default.NextWeek, "Next week") {
+                PresetSheetItem(painterResource(Res.drawable.square_arrows_right), "Next week") {
                     onPresetSelected(
                         getDatePresetTime(DatePresetType.NEXT_WEEK)
                     ); onDismiss()
@@ -114,7 +131,7 @@ fun ReminderPresetMenu(
                     color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
                 )
                 PresetSheetItem(
-                    Icons.Default.CalendarMonth,
+                    painterResource(Res.drawable.calendar_add3),
                     "Custom date..."
                 ) { onCustomSelected(); onDismiss() }
                 if (onRemove != null) {
@@ -125,7 +142,7 @@ fun ReminderPresetMenu(
                         ), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
                     )
                     PresetSheetItem(
-                        Icons.Default.NotificationsOff,
+                        painterResource(Res.drawable.bell_off2),
                         "Remove reminder",
                         isDestructive = true
                     ) { onRemove(); onDismiss() }
@@ -155,52 +172,52 @@ fun TimePresetMenu(
         ) {
             DropdownMenuItem(
                 text = { Text("In 15 mins", style = MaterialTheme.typography.bodyLarge) },
-                leadingIcon = { Icon(Icons.Default.Timer, null) },
+                leadingIcon = { painterResource(Res.drawable.history2) },
                 onClick = { onPresetSelected(getTimePreset(TimePresetType.IN_15_MINS)); onDismiss() }
             )
             DropdownMenuItem(
                 text = { Text("In 1 hour", style = MaterialTheme.typography.bodyLarge) },
-                leadingIcon = { Icon(Icons.Default.Schedule, null) },
+                leadingIcon = { painterResource(Res.drawable.history2) },
                 onClick = { onPresetSelected(getTimePreset(TimePresetType.IN_1_HOUR)); onDismiss() }
             )
             DropdownMenuItem(
                 text = { Text("In 3 hours", style = MaterialTheme.typography.bodyLarge) },
-                leadingIcon = { Icon(Icons.Default.AccessTime, null) },
+                leadingIcon = { painterResource(Res.drawable.history3) },
                 onClick = { onPresetSelected(getTimePreset(TimePresetType.IN_3_HOURS)); onDismiss() }
             )
             DropdownMenuItem(
                 text = { Text("This evening", style = MaterialTheme.typography.bodyLarge) },
-                leadingIcon = { Icon(Icons.Default.NightsStay, null) },
+                leadingIcon = { painterResource(Res.drawable.moon_cloud) },
                 onClick = { onPresetSelected(getTimePreset(TimePresetType.THIS_EVENING)); onDismiss() }
             )
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp, horizontal = 12.dp))
             DropdownMenuItem(
                 text = { Text("Custom time...", style = MaterialTheme.typography.bodyLarge) },
-                leadingIcon = { Icon(Icons.Default.AccessTime, null) },
+                leadingIcon = { painterResource(Res.drawable.clock_circle) },
                 onClick = { onCustomSelected(); onDismiss() }
             )
         }
     } else {
         InlyBottomSheet(expanded = expanded, onDismiss = onDismiss, title = "Time") {
             Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
-                PresetSheetItem(Icons.Default.Timer, "In 15 mins") {
+                PresetSheetItem(painterResource(Res.drawable.history2), "In 15 mins") {
                     onPresetSelected(
                         getTimePreset(
                             TimePresetType.IN_15_MINS
                         )
                     ); onDismiss()
                 }
-                PresetSheetItem(Icons.Default.Schedule, "In 1 hour") {
+                PresetSheetItem(painterResource(Res.drawable.history2), "In 1 hour") {
                     onPresetSelected(
                         getTimePreset(TimePresetType.IN_1_HOUR)
                     ); onDismiss()
                 }
-                PresetSheetItem(Icons.Default.AccessTime, "In 3 hours") {
+                PresetSheetItem(painterResource(Res.drawable.history3), "In 3 hours") {
                     onPresetSelected(
                         getTimePreset(TimePresetType.IN_3_HOURS)
                     ); onDismiss()
                 }
-                PresetSheetItem(Icons.Default.NightsStay, "This evening") {
+                PresetSheetItem(painterResource(Res.drawable.moon_cloud), "This evening") {
                     onPresetSelected(
                         getTimePreset(TimePresetType.THIS_EVENING)
                     ); onDismiss()
@@ -210,7 +227,7 @@ fun TimePresetMenu(
                     color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
                 )
                 PresetSheetItem(
-                    Icons.Default.AccessTime,
+                    painterResource(Res.drawable.clock_circle),
                     "Custom time..."
                 ) { onCustomSelected(); onDismiss() }
                 InlyButtonPrimary(
@@ -224,19 +241,18 @@ fun TimePresetMenu(
 }
 
 @Composable
-private fun PresetSheetItem(icon: ImageVector, text: String, isDestructive: Boolean = false, onClick: () -> Unit) {
+private fun PresetSheetItem(icon: Painter, text: String, isDestructive: Boolean = false, onClick: () -> Unit) {
     val textColor = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
     val iconColor = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
     Row(
         modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 20.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(imageVector = icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(20.dp))
+        Icon(painter = icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(20.dp))
         Spacer(modifier = Modifier.width(12.dp))
         Text(text = text, style = MaterialTheme.typography.bodyLarge, color = textColor)
     }
 }
-
 // Custom date picker
 private val MonthNames = listOf(
     "January", "February", "March", "April", "May", "June",
@@ -451,44 +467,42 @@ private fun MonthYearPickerContent(
     val years = remember { ((initialYear - 100)..(initialYear + 100)).map { it.toString() } }
     val pickerItemHeight = if (isDesktopPlatform) 40.dp else 44.dp
 
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        WheelPicker(
-            items = MonthNames,
-            selectedIndex = selectedMonth,
-            onItemSelected = { selectedMonth = it },
-            itemHeight = pickerItemHeight,
-            itemWidth = if (isDesktopPlatform) 108.dp else 124.dp,
-            selectedSize = 18f,
-            unselectedSize = 14f
-        )
-        Spacer(modifier = Modifier.width(12.dp))
-        WheelPicker(
-            items = years,
-            selectedIndex = years.indexOf(selectedYear.toString()).coerceAtLeast(0),
-            onItemSelected = { selectedYear = years[it].toInt() },
-            itemHeight = pickerItemHeight
-        )
-    }
+    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
 
-    HorizontalDivider(
-        modifier = Modifier.padding(horizontal = 16.dp),
-        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
-    )
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            WheelPicker(
+                items = MonthNames,
+                selectedIndex = selectedMonth,
+                onItemSelected = { selectedMonth = it },
+                itemHeight = pickerItemHeight,
+                itemWidth = if (isDesktopPlatform) 108.dp else 124.dp,
+                selectedSize = 18f,
+                unselectedSize = 14f
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            WheelPicker(
+                items = years,
+                selectedIndex = years.indexOf(selectedYear.toString()).coerceAtLeast(0),
+                onItemSelected = { selectedYear = years[it].toInt() },
+                itemHeight = pickerItemHeight
+            )
+        }
 
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        InlyButtonSecondary(text = "Back", onClick = onBack, modifier = Modifier.weight(1f))
-        InlyButtonPrimary(
-            text = "Save",
-            onClick = { onConfirm(selectedMonth, selectedYear) },
-            modifier = Modifier.weight(1f)
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            InlyButtonSecondary(text = "Back", onClick = onBack, modifier = Modifier.weight(1f))
+            InlyButtonPrimary(
+                text = "Save",
+                onClick = { onConfirm(selectedMonth, selectedYear) },
+                modifier = Modifier.weight(1f)
+            )
+        }
     }
 }
 

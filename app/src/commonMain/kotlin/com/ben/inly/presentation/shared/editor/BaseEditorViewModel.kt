@@ -1206,9 +1206,9 @@ abstract class BaseEditorViewModel(
         scheduleAutosave()
     }
 
-    fun updateDbColumn(blockId: String, colId: String, newName: String, newType: ColumnType) {
+    fun updateDbColumn(blockId: String, colId: String, newName: String, newType: ColumnType, isManualNameChange: Boolean = true) {
         val now = System.currentTimeMillis()
-        modifyBlocks { list -> mapBlockById(list, blockId, now) { db -> if (db is DatabaseBlock) db.copy(columns = db.columns.map { col -> if (col.id == colId) col.copy(name = newName, type = newType, updatedAt = now) else col }, updatedAt = now) else db } }
+        modifyBlocks { list -> mapBlockById(list, blockId, now) { db -> if (db is DatabaseBlock) db.copy(columns = db.columns.map { col -> if (col.id == colId) col.copy(name = newName, type = newType, isNameManuallySet = col.isNameManuallySet || isManualNameChange, updatedAt = now) else col }, updatedAt = now) else db } }
         scheduleAutosave()
     }
 
@@ -1387,6 +1387,21 @@ abstract class BaseEditorViewModel(
                     val moved = cols.removeAt(fromIndex)
                     cols.add(toIndex, moved)
                     db.copy(columns = cols, updatedAt = now)
+                } else db
+            }
+        }
+        scheduleAutosave()
+    }
+
+    fun reorderDatabaseViews(blockId: String, fromIndex: Int, toIndex: Int) {
+        val now = System.currentTimeMillis()
+        modifyBlocks { list ->
+            mapBlockById(list, blockId, now) { db ->
+                if (db is DatabaseBlock) {
+                    val views = db.views.toMutableList()
+                    val moved = views.removeAt(fromIndex)
+                    views.add(toIndex, moved)
+                    db.copy(views = views, updatedAt = now)
                 } else db
             }
         }

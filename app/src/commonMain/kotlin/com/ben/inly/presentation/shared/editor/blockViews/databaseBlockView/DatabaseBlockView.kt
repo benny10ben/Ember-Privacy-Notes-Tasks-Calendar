@@ -8,6 +8,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -99,6 +100,7 @@ import com.ben.inly.domain.model.DEFAULT_STATUS_OPTIONS
 import com.ben.inly.domain.model.GalleryCardSize
 import com.ben.inly.domain.model.ViewType
 import com.ben.inly.domain.model.displayText
+import com.ben.inly.domain.model.propertyLabel
 import com.ben.inly.domain.util.isDesktopPlatform
 import com.ben.inly.domain.util.triggerHapticFeedback
 import com.ben.inly.presentation.shared.components.InlyBottomSheet
@@ -148,6 +150,7 @@ import inly.app.generated.resources.check_square
 import inly.app.generated.resources.file_text
 import inly.app.generated.resources.files
 import inly.app.generated.resources.funnel
+import inly.app.generated.resources.group
 import inly.app.generated.resources.hash
 import inly.app.generated.resources.images
 import inly.app.generated.resources.link
@@ -156,24 +159,26 @@ import inly.app.generated.resources.maximize_2
 import inly.app.generated.resources.microphone
 import inly.app.generated.resources.minimize_2
 import inly.app.generated.resources.minus
-import inly.app.generated.resources.move_left
-import inly.app.generated.resources.move_right
 import inly.app.generated.resources.paperclip
 import inly.app.generated.resources.pause
 import inly.app.generated.resources.pen
 import inly.app.generated.resources.play
 import inly.app.generated.resources.plus
 import inly.app.generated.resources.sigma
+import inly.app.generated.resources.slider_h2
 import inly.app.generated.resources.sliders_horizontal
 import inly.app.generated.resources.square
 import inly.app.generated.resources.square_arrow_out_up_right
 import inly.app.generated.resources.square_check
+import inly.app.generated.resources.square_kanban
+import inly.app.generated.resources.table
 import inly.app.generated.resources.trash
+import inly.app.generated.resources.widget
 import inly.app.generated.resources.x
 import org.jetbrains.compose.resources.painterResource
 import kotlin.time.Duration.Companion.milliseconds
 
-enum class DbSheetType { NONE, COLUMN_OPTIONS, RENAME, FORMULA, FILTER, SORT, GROUP_BY, CELL_OPTIONS, TAG_SELECTION, FILE_OPTIONS, PRIORITY_SELECTION, STATUS_SELECTION, AGGREGATION, CURRENCY_SELECTION, SAVE_AS_TEMPLATE, ADD_VIEW, TABLE_SETTINGS, CARD_SIZE }
+enum class DbSheetType { NONE, COLUMN_OPTIONS, RENAME, RENAME_VIEW, FORMULA, FILTER, SORT, GROUP_BY, CELL_OPTIONS, TAG_SELECTION, FILE_OPTIONS, PRIORITY_SELECTION, STATUS_SELECTION, AGGREGATION, CURRENCY_SELECTION, SAVE_AS_TEMPLATE, ADD_VIEW, TABLE_SETTINGS, CARD_SIZE }
 
 @Composable
 fun DbOptionRow(
@@ -261,6 +266,7 @@ fun DatabaseBlockView(
     var currentSheet by remember { mutableStateOf(DbSheetType.NONE) }
     var activeColId by remember { mutableStateOf<String?>(null) }
     var activeRowId by remember { mutableStateOf<String?>(null) }
+    var renamingViewId by remember { mutableStateOf<String?>(null) }
     var textInput by remember { mutableStateOf("") }
     var textInputMax by remember { mutableStateOf("") }
     var filterOperator by remember { mutableStateOf("contains") }
@@ -294,6 +300,7 @@ fun DatabaseBlockView(
         }
         currentSheet = DbSheetType.NONE
         activeRowId = null
+        renamingViewId = null
         aggregationExpandedSection = null
     }
 
@@ -411,6 +418,7 @@ fun DatabaseBlockView(
                 DbSheetType.COLUMN_OPTIONS -> visibleColumns.find { it.id == activeColId }?.name
                     ?: "Column Options"
 
+                DbSheetType.RENAME_VIEW -> "Rename View"
                 DbSheetType.SORT -> "Sort by"
                 DbSheetType.FILTER -> "Filter"
                 DbSheetType.GROUP_BY -> "Group By"
@@ -426,20 +434,7 @@ fun DatabaseBlockView(
                 else -> ""
             }
 
-            if (title.isNotBlank()) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(
-                        bottom = 12.dp,
-                        top = if (isDesktopPlatform) 8.dp else 16.dp
-                    ).padding(horizontal = 20.dp)
-                )
-            }
-
-            // sub-menus get a back button
+            // sub-menus get a back button, shown above the title
             val backTarget = when (targetSheet) {
                 DbSheetType.RENAME, DbSheetType.FORMULA, DbSheetType.CURRENCY_SELECTION ->
                     DbSheetType.COLUMN_OPTIONS
@@ -455,6 +450,19 @@ fun DatabaseBlockView(
                 HorizontalDivider(
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
                     color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                )
+            }
+
+            if (title.isNotBlank()) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(
+                        bottom = 12.dp,
+                        top = if (isDesktopPlatform) 8.dp else 16.dp
+                    ).padding(horizontal = 20.dp)
                 )
             }
 
@@ -507,8 +515,6 @@ fun DatabaseBlockView(
                 DbSheetType.COLUMN_OPTIONS -> {
                     val col = visibleColumns.find { it.id == activeColId }
                     if (col != null) {
-                        val colIndex = visibleColumns.indexOf(col)
-
                         DbOptionRow(painterResource(Res.drawable.pen), "Rename Column") {
                             textInput = col.name
                             currentSheet = DbSheetType.RENAME
@@ -583,30 +589,6 @@ fun DatabaseBlockView(
                             }
                         }
 
-                        if (colIndex > 0) {
-                            DbOptionRow(painterResource(Res.drawable.move_left), "Move Left") {
-                                applyAction {
-                                    actions.onReorderDbColumns(
-                                        block.id,
-                                        colIndex,
-                                        colIndex - 1
-                                    )
-                                }
-                            }
-                        }
-
-                        if (colIndex < visibleColumns.lastIndex) {
-                            DbOptionRow(painterResource(Res.drawable.move_right), "Move Right") {
-                                applyAction {
-                                    actions.onReorderDbColumns(
-                                        block.id,
-                                        colIndex,
-                                        colIndex + 1
-                                    )
-                                }
-                            }
-                        }
-
                         HorizontalDivider(
                             modifier = Modifier.padding(
                                 horizontal = 20.dp,
@@ -614,78 +596,80 @@ fun DatabaseBlockView(
                             ), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
                         )
 
-                        Text(
-                            text = "Column Width",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(
-                                start = 20.dp,
-                                end = 20.dp,
-                                top = 4.dp,
-                                bottom = 8.dp
-                            )
-                        )
-
-                        Row(
-                            modifier = Modifier
-                                .padding(horizontal = 20.dp)
-                                .padding(bottom = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.surface,
-                                border = BorderStroke(
-                                    1.dp,
-                                    MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
-                                ),
-                                modifier = Modifier.clickable {
-                                    actions.onUpdateDbColumnWidth(
-                                        block.id,
-                                        col.id,
-                                        col.width - 20
-                                    )
-                                }
-                            ) {
-                                Icon(
-                                    painterResource(Res.drawable.minus),
-                                    contentDescription = null,
-                                    modifier = Modifier.padding(8.dp).size(18.dp),
-                                    tint = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-
+                        if (!isDesktopPlatform) {
                             Text(
-                                text = "${col.width} px",
-                                style = MaterialTheme.typography.bodyLarge,
+                                text = "Column Width",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.widthIn(min = 50.dp),
-                                textAlign = TextAlign.Center
+                                modifier = Modifier.padding(
+                                    start = 20.dp,
+                                    end = 20.dp,
+                                    top = 4.dp,
+                                    bottom = 8.dp
+                                )
                             )
 
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.surface,
-                                border = BorderStroke(
-                                    1.dp,
-                                    MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
-                                ),
-                                modifier = Modifier.clickable {
-                                    actions.onUpdateDbColumnWidth(
-                                        block.id,
-                                        col.id,
-                                        col.width + 20
+                            Row(
+                                modifier = Modifier
+                                    .padding(horizontal = 20.dp)
+                                    .padding(bottom = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.surface,
+                                    border = BorderStroke(
+                                        1.dp,
+                                        MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                                    ),
+                                    modifier = Modifier.clickable {
+                                        actions.onUpdateDbColumnWidth(
+                                            block.id,
+                                            col.id,
+                                            col.width - 20
+                                        )
+                                    }
+                                ) {
+                                    Icon(
+                                        painterResource(Res.drawable.minus),
+                                        contentDescription = null,
+                                        modifier = Modifier.padding(8.dp).size(18.dp),
+                                        tint = MaterialTheme.colorScheme.onSurface
                                     )
                                 }
-                            ) {
-                                Icon(
-                                    painterResource(Res.drawable.plus),
-                                    contentDescription = null,
-                                    modifier = Modifier.padding(8.dp).size(18.dp),
-                                    tint = MaterialTheme.colorScheme.onSurface
+
+                                Text(
+                                    text = "${col.width} px",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.widthIn(min = 50.dp),
+                                    textAlign = TextAlign.Center
                                 )
+
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.surface,
+                                    border = BorderStroke(
+                                        1.dp,
+                                        MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                                    ),
+                                    modifier = Modifier.clickable {
+                                        actions.onUpdateDbColumnWidth(
+                                            block.id,
+                                            col.id,
+                                            col.width + 20
+                                        )
+                                    }
+                                ) {
+                                    Icon(
+                                        painterResource(Res.drawable.plus),
+                                        contentDescription = null,
+                                        modifier = Modifier.padding(8.dp).size(18.dp),
+                                        tint = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
                             }
                         }
 
@@ -721,15 +705,15 @@ fun DatabaseBlockView(
                                             actions.onUpdateDbColumn(
                                                 block.id,
                                                 col.id,
-                                                col.name,
-                                                type
+                                                if (col.isNameManuallySet) col.name else type.propertyLabel(),
+                                                type,
+                                                isManualNameChange = false
                                             )
                                         }
                                     },
                                     label = {
                                         Text(
-                                            text = type.name.lowercase()
-                                                .replaceFirstChar { it.uppercase() },
+                                            text = type.propertyLabel(),
                                             style = MaterialTheme.typography.labelSmall
                                         )
                                     },
@@ -790,6 +774,46 @@ fun DatabaseBlockView(
                             },
                             modifier = Modifier.weight(1f)
                         )
+                    }
+                }
+
+                // rename a view
+                DbSheetType.RENAME_VIEW -> {
+                    InlyTextField(value = textInput, onValueChange = { textInput = it }, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        InlyButtonSecondary(text = "Cancel", onClick = { closeSheet() }, modifier = Modifier.weight(1f))
+                        InlyButtonPrimary(
+                            text = "Save",
+                            onClick = {
+                                val viewId = renamingViewId
+                                if (viewId != null && textInput.isNotBlank()) {
+                                    applyAction { actions.onRenameDatabaseView(block.id, viewId, textInput.trim()) }
+                                }
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                    if (block.views.size > 1) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                        )
+                        DbOptionRow(
+                            icon = painterResource(Res.drawable.trash),
+                            text = "Delete View",
+                            color = MaterialTheme.colorScheme.error
+                        ) {
+                            val viewId = renamingViewId
+                            if (viewId != null) {
+                                applyAction { actions.onDeleteDatabaseView(block.id, viewId) }
+                            }
+                        }
+                        Spacer(Modifier.height(8.dp))
                     }
                 }
 
@@ -1088,14 +1112,6 @@ fun DatabaseBlockView(
                         it.type == ColumnType.CHECKBOX || it.type == ColumnType.STATUS
                     }
                     val selectedGroupColumn = eligibleColumns.find { it.id == activeView.groupByColumnId }
-
-                    Text(
-                        text = "Group cards by",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 8.dp)
-                    )
 
                     Column(modifier = Modifier.fillMaxWidth()) {
                         val isNoneSelected = activeView.groupByColumnId == null
@@ -2143,15 +2159,15 @@ fun DatabaseBlockView(
                 // add view
                 DbSheetType.ADD_VIEW -> {
                     DbOptionRow(
-                        icon = painterResource(Res.drawable.hash),
+                        icon = painterResource(Res.drawable.table),
                         text = "Table"
                     ) { applyAction { actions.onAddDatabaseView(block.id, ViewType.TABLE) } }
                     DbOptionRow(
-                        icon = painterResource(Res.drawable.files),
+                        icon = painterResource(Res.drawable.square_kanban),
                         text = "Board"
                     ) { applyAction { actions.onAddDatabaseView(block.id, ViewType.KANBAN) } }
                     DbOptionRow(
-                        icon = painterResource(Res.drawable.images),
+                        icon = painterResource(Res.drawable.widget),
                         text = "Gallery"
                     ) { applyAction { actions.onAddDatabaseView(block.id, ViewType.GALLERY) } }
                 }
@@ -2184,13 +2200,13 @@ fun DatabaseBlockView(
 
                     if (activeView.type == ViewType.KANBAN) {
                         DbOptionRow(
-                            icon = painterResource(Res.drawable.files),
+                            icon = painterResource(Res.drawable.group),
                             text = "Group By"
                         ) { currentSheet = DbSheetType.GROUP_BY }
                     }
                     if (activeView.type == ViewType.GALLERY) {
                         DbOptionRow(
-                            icon = painterResource(Res.drawable.square),
+                            icon = painterResource(Res.drawable.slider_h2),
                             text = "Card Size"
                         ) { currentSheet = DbSheetType.CARD_SIZE }
                     }
@@ -2239,101 +2255,10 @@ fun DatabaseBlockView(
                 onLongClick = { actions.onToggleSelection(block.id) }
             )
     ) {
-        // view switcher, tabs across block.views
+        // title row
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(start = 20.dp, end = 20.dp, bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            block.views.forEach { view ->
-                val isActive = view.id == activeView.id
-                var isRenaming by remember(view.id) { mutableStateOf(false) }
-                var renameText by remember(view.id) { mutableStateOf(view.name) }
-                val renameFocusRequester = remember(view.id) { FocusRequester() }
-
-                fun commitRename() {
-                    isRenaming = false
-                    val trimmed = renameText.trim()
-                    if (trimmed.isNotEmpty() && trimmed != view.name) {
-                        actions.onRenameDatabaseView(block.id, view.id, trimmed)
-                    }
-                }
-
-                LaunchedEffect(isRenaming) {
-                    if (isRenaming) renameFocusRequester.requestFocus()
-                }
-
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = if (isActive) MaterialTheme.colorScheme.surface else Color.Transparent,
-                    modifier = Modifier.combinedClickable(
-                        enabled = !inSelectionMode,
-                        onClick = { if (!isActive) actions.onSetActiveDatabaseView(block.id, view.id) },
-                        onLongClick = { renameText = view.name; isRenaming = true }
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            painter = when (view.type) {
-                                ViewType.TABLE -> painterResource(Res.drawable.hash)
-                                ViewType.KANBAN -> painterResource(Res.drawable.files)
-                                ViewType.GALLERY -> painterResource(Res.drawable.images)
-                            },
-                            contentDescription = null,
-                            modifier = Modifier.size(13.dp),
-                            tint = if (isActive) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        if (isRenaming) {
-                            BasicTextField(
-                                value = renameText,
-                                onValueChange = { renameText = it },
-                                textStyle = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurface),
-                                singleLine = true,
-                                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                                keyboardActions = KeyboardActions(onDone = { commitRename() }),
-                                modifier = Modifier
-                                    .widthIn(min = 40.dp, max = 120.dp)
-                                    .focusRequester(renameFocusRequester)
-                                    .onFocusChanged { if (!it.isFocused && isRenaming) commitRename() }
-                            )
-                        } else {
-                            Text(
-                                text = view.name,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                        if (isActive && !isRenaming && block.views.size > 1) {
-                            Spacer(Modifier.width(6.dp))
-                            Icon(
-                                painterResource(Res.drawable.x),
-                                contentDescription = "Delete view",
-                                modifier = Modifier.size(11.dp).clickable(enabled = !inSelectionMode) {
-                                    actions.onDeleteDatabaseView(block.id, view.id)
-                                },
-                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                            )
-                        }
-                    }
-                }
-            }
-
-        }
-
-        // title + sort/filter toolbar
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 10.dp),
-            horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             var titleTfv by remember(block.id) {
                 mutableStateOf(TextFieldValue(block.title, TextRange(block.title.length)))
@@ -2375,13 +2300,120 @@ fun DatabaseBlockView(
                     }
                     inner()
                 },
-                modifier = Modifier.weight(1f).padding(end = 12.dp),
+                modifier = Modifier.fillMaxWidth(),
                 enabled = !inSelectionMode,
                 keyboardOptions = KeyboardOptions(
                     capitalization = KeyboardCapitalization.Sentences,
                     autoCorrectEnabled = false
                 )
             )
+        }
+
+        // view switcher tabs + sort/settings toolbar, same row
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically
+        ) {
+            val orderedViews = remember(block.views) { mutableStateListOf(*block.views.toTypedArray()) }
+            var draggedViewId by remember { mutableStateOf<String?>(null) }
+            var dragStartIndex by remember { mutableStateOf(-1) }
+            var dragPointerX by remember { mutableStateOf(0f) }
+            val viewBoundsInWindow = remember { mutableStateMapOf<String, androidx.compose.ui.geometry.Rect>() }
+
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .horizontalScroll(rememberScrollState()),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+            orderedViews.forEach { view ->
+                key(view.id) {
+                    val isActive = view.id == activeView.id
+                    val isDragged = draggedViewId == view.id
+
+                    Box(
+                        modifier = Modifier
+                            .onGloballyPositioned { viewBoundsInWindow[view.id] = it.boundsInWindow() }
+                            .graphicsLayer { alpha = if (isDragged) 0.6f else 1f }
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isActive) MaterialTheme.colorScheme.surface else Color.Transparent,
+                            modifier = Modifier
+                                .clickable(enabled = !inSelectionMode) {
+                                    if (isActive) {
+                                        textInput = view.name
+                                        renamingViewId = view.id
+                                        currentSheet = DbSheetType.RENAME_VIEW
+                                    } else {
+                                        actions.onSetActiveDatabaseView(block.id, view.id)
+                                    }
+                                }
+                                .pointerInput(view.id) {
+                                    detectDragGesturesAfterLongPress(
+                                        onDragStart = {
+                                            draggedViewId = view.id
+                                            dragStartIndex = block.views.indexOfFirst { it.id == view.id }
+                                            dragPointerX = viewBoundsInWindow[view.id]?.center?.x ?: 0f
+                                        },
+                                        onDrag = { change, dragAmount ->
+                                            change.consume()
+                                            dragPointerX += dragAmount.x
+                                            val hovered = viewBoundsInWindow.entries
+                                                .firstOrNull { (_, rect) -> dragPointerX in rect.left..rect.right }
+                                                ?.key
+                                            if (hovered != null && hovered != view.id) {
+                                                val from = orderedViews.indexOfFirst { it.id == view.id }
+                                                val to = orderedViews.indexOfFirst { it.id == hovered }
+                                                if (from != -1 && to != -1) {
+                                                    orderedViews.add(to, orderedViews.removeAt(from))
+                                                }
+                                            }
+                                        },
+                                        onDragEnd = {
+                                            draggedViewId = null
+                                            val finalIndex = orderedViews.indexOfFirst { it.id == view.id }
+                                            if (dragStartIndex != -1 && finalIndex != -1 && dragStartIndex != finalIndex) {
+                                                actions.onReorderDatabaseViews(block.id, dragStartIndex, finalIndex)
+                                            }
+                                            dragStartIndex = -1
+                                        },
+                                        onDragCancel = { draggedViewId = null; dragStartIndex = -1 }
+                                    )
+                                }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    painter = when (view.type) {
+                                        ViewType.TABLE -> painterResource(Res.drawable.table)
+                                        ViewType.KANBAN -> painterResource(Res.drawable.square_kanban)
+                                        ViewType.GALLERY -> painterResource(Res.drawable.widget)
+                                    },
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = if (isActive) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    text = view.name,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                        DesktopDbDropdown(renamingViewId == view.id && currentSheet == DbSheetType.RENAME_VIEW)
+                    }
+                }
+            }
+            }
+
+            Spacer(Modifier.width(12.dp))
 
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box {

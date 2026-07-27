@@ -57,7 +57,7 @@ import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.hazeEffect
 import inly.app.generated.resources.Res
 import inly.app.generated.resources.astroid
-import inly.app.generated.resources.calendar
+import inly.app.generated.resources.daily
 import inly.app.generated.resources.house
 import inly.app.generated.resources.microphone
 import inly.app.generated.resources.search
@@ -84,7 +84,7 @@ fun InlyBottomBar(
     partialText: String = "",
     isCompact: Boolean = false
 ) {
-    val defaultBgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.65f)
+    val defaultBgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.35f)
     val defaultContentColor = MaterialTheme.colorScheme.onSurface
 
     val barAnimationSpec = tween<Dp>(durationMillis = 350, easing = FastOutSlowInEasing)
@@ -143,7 +143,7 @@ fun InlyBottomBar(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     BottomNavItem(
-                        icon = painterResource(Res.drawable.calendar),
+                        icon = painterResource(Res.drawable.daily),
                         isSelected = activeTab == Screen.Daily.route,
                         modifier = Modifier.weight(1f).height(navItemHeight)
                     ) {

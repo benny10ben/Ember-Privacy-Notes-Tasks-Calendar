@@ -113,6 +113,10 @@ import androidx.compose.ui.text.AnnotatedString
 import com.ben.inly.presentation.shared.components.InlyDesktopMenu
 import com.ben.inly.ui.theme.LocalInlyFontStyle
 import com.ben.inly.ui.theme.fontFamilyFor
+import inly.app.generated.resources.Res
+import inly.app.generated.resources.calendar_add
+import inly.app.generated.resources.clock_circle
+import org.jetbrains.compose.resources.painterResource
 import kotlin.time.Duration.Companion.milliseconds
 
 @Composable
@@ -642,7 +646,7 @@ fun NoteBlockItem(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Icon(
-                                            Icons.Default.CalendarToday, "Date",
+                                            painterResource(Res.drawable.calendar_add), "Date",
                                             modifier = Modifier.size(15.dp),
                                             tint = if (hasReminder) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurface
                                         )
@@ -683,7 +687,7 @@ fun NoteBlockItem(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Icon(
-                                            Icons.Default.AccessTime, "Time",
+                                            painterResource(Res.drawable.clock_circle), "Time",
                                             modifier = Modifier.size(16.dp),
                                             tint = if (hasReminder) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurface
                                         )

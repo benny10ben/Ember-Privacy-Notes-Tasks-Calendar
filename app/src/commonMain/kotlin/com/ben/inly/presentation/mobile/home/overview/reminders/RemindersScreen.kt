@@ -132,7 +132,7 @@ fun RemindersScreen(
                         override fun onAddDbRow(id: String) {}
                         override fun onAddDbColumn(id: String) {}
                         override fun onUpdateDbCell(blockId: String, rowId: String, colId: String, value: CellData) {}
-                        override fun onUpdateDbColumn(blockId: String, colId: String, name: String, type: ColumnType) {}
+                        override fun onUpdateDbColumn(blockId: String, colId: String, name: String, type: ColumnType, isManualNameChange: Boolean) {}
                         override fun onUpdateDbSort(blockId: String, colId: String, isAscending: Boolean?) {}
                         override fun onUpdateDbGroupBy(blockId: String, colId: String?) {}
                         override fun onUpdateDbGalleryCardSize(blockId: String, size: GalleryCardSize) {}
@@ -141,6 +141,7 @@ fun RemindersScreen(
                         override fun onAddDbFilter(blockId: String, colId: String, operator: String, value: String) {}
                         override fun onRemoveDbFilter(blockId: String, config: FilterConfig) {}
                         override fun onReorderDbColumns(blockId: String, from: Int, to: Int) {}
+                        override fun onReorderDatabaseViews(blockId: String, from: Int, to: Int) {}
                         override fun onUpdateDbFormula(blockId: String, colId: String, expression: String) {}
                         override fun onDeleteDbColumn(blockId: String, colId: String) {}
                         override fun onDeleteDbRow(blockId: String, rowId: String) {}
