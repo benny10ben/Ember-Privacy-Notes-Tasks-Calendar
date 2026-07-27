@@ -123,7 +123,7 @@ fun DocumentBlockView(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "${block.fileSizeString} · ${documentFormatLabel(block.fileName, block.mimeType)}",
+                    text = "${block.fileSizeString}    ${documentFormatLabel(block.fileName, block.mimeType)}",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline
                 )

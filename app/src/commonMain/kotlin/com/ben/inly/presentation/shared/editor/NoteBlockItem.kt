@@ -37,7 +37,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
@@ -85,12 +84,9 @@ import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.window.PopupProperties
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.zIndex
 import com.ben.inly.data.local.room.NoteMetadataEntity
 import com.ben.inly.domain.model.SolidDividerBlock
@@ -109,8 +105,6 @@ import com.ben.inly.presentation.shared.editor.blockViews.AudioBlockView
 import com.ben.inly.presentation.shared.editor.blockViews.BookmarkBlockView
 import com.ben.inly.presentation.shared.editor.blockViews.LinkedNoteBlockView
 import com.ben.inly.presentation.shared.editor.blockViews.plugins.SketchCanvasBlockView
-import com.ben.inly.presentation.shared.editor.components.DesktopCursor
-import com.ben.inly.presentation.shared.editor.components.desktopPointerCursor
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.OffsetMapping
@@ -119,7 +113,6 @@ import androidx.compose.ui.text.AnnotatedString
 import com.ben.inly.presentation.shared.components.InlyDesktopMenu
 import com.ben.inly.ui.theme.LocalInlyFontStyle
 import com.ben.inly.ui.theme.fontFamilyFor
-import kotlin.math.max
 import kotlin.time.Duration.Companion.milliseconds
 
 @Composable
@@ -719,7 +712,7 @@ fun NoteBlockItem(
                                     Text(
                                         text = timeText,
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onBackground
+                                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
                                     )
                                 }
                             }
