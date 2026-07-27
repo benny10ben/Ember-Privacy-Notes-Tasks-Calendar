@@ -161,6 +161,12 @@ abstract class BaseEditorViewModel(
 
     private val historyLock = Any()
 
+    protected var lastLocalMutationTime: Long = 0L
+    private val LOCAL_MUTATION_COOLDOWN_MS = 3000L
+
+    protected fun isWithinLocalMutationCooldown(): Boolean =
+        System.currentTimeMillis() - lastLocalMutationTime < LOCAL_MUTATION_COOLDOWN_MS
+
     protected var isAiIndexDirty = false
 
     open fun scheduleAutosave() {
@@ -243,6 +249,8 @@ abstract class BaseEditorViewModel(
         }
 
         if (currentList == newList) return
+
+        lastLocalMutationTime = System.currentTimeMillis()
 
         synchronized(historyLock) {
             val now = System.currentTimeMillis()
@@ -724,6 +732,12 @@ abstract class BaseEditorViewModel(
         _canRedo.value = redoStack.isNotEmpty()
     }
 
+    private fun withTombstonesForRemoved(current: List<NoteBlock>, target: List<NoteBlock>): List<NoteBlock> {
+        val targetIds = target.mapTo(HashSet()) { it.id }
+        val tombstones = current.filter { it.id !in targetIds && !it.isDeleted }.map { it.markDeleted() }
+        return if (tombstones.isEmpty()) target else target + tombstones
+    }
+
     fun undo() {
         val previousList = synchronized(historyLock) {
             if (undoStack.isEmpty()) return
@@ -761,11 +775,13 @@ abstract class BaseEditorViewModel(
             }
 
             synchronized(historyLock) {
-                redoStack.add(_blocks.value)
+                val beforeRevert = _blocks.value
+                redoStack.add(beforeRevert)
                 if (undoStack.isNotEmpty()) undoStack.removeAt(undoStack.lastIndex)
-                _blocks.value = previousList
+                _blocks.value = withTombstonesForRemoved(beforeRevert, previousList)
                 lastWasStructural = true
                 lastHistorySaveTime = System.currentTimeMillis()
+                lastLocalMutationTime = lastHistorySaveTime
                 updateHistoryState()
             }
             scheduleAutosave()
@@ -814,11 +830,13 @@ abstract class BaseEditorViewModel(
             }
 
             synchronized(historyLock) {
-                undoStack.add(_blocks.value)
+                val beforeAdvance = _blocks.value
+                undoStack.add(beforeAdvance)
                 if (redoStack.isNotEmpty()) redoStack.removeAt(redoStack.lastIndex)
-                _blocks.value = nextList
+                _blocks.value = withTombstonesForRemoved(beforeAdvance, nextList)
                 lastWasStructural = true
                 lastHistorySaveTime = System.currentTimeMillis()
+                lastLocalMutationTime = lastHistorySaveTime
                 updateHistoryState()
             }
             scheduleAutosave()

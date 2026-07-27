@@ -5,14 +5,16 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -20,10 +22,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -236,7 +237,261 @@ private fun PresetSheetItem(icon: ImageVector, text: String, isDestructive: Bool
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+// Custom date picker
+private val MonthNames = listOf(
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+)
+
+private data class CalendarDate(val year: Int, val month: Int, val day: Int) // month is 0-11
+
+private fun CalendarDate.toMillis(): Long {
+    val cal = Calendar.getInstance()
+    cal.set(year, month, day, 0, 0, 0)
+    cal.set(Calendar.MILLISECOND, 0)
+    return cal.timeInMillis
+}
+
+private fun Long.toCalendarDate(): CalendarDate {
+    val cal = Calendar.getInstance().apply { timeInMillis = this@toCalendarDate }
+    return CalendarDate(cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH))
+}
+
+private fun daysInMonth(year: Int, month: Int): Int {
+    val cal = Calendar.getInstance()
+    cal.set(year, month, 1)
+    return cal.getActualMaximum(Calendar.DAY_OF_MONTH)
+}
+
+private fun firstWeekdayOfMonth(year: Int, month: Int): Int {
+    // 0 = Sunday ... 6 = Saturday
+    val cal = Calendar.getInstance()
+    cal.set(year, month, 1)
+    return cal.get(Calendar.DAY_OF_WEEK) - 1
+}
+
+private class CustomDatePickerState(initialTimestamp: Long?) {
+    private val initial = (initialTimestamp ?: System.currentTimeMillis()).toCalendarDate()
+
+    var selectedDate by mutableStateOf(initial)
+        private set
+    var viewYear by mutableIntStateOf(initial.year)
+        private set
+    var viewMonth by mutableIntStateOf(initial.month)
+        private set
+
+    val selectedMillis: Long get() = selectedDate.toMillis()
+
+    fun selectDay(day: Int) {
+        selectedDate = CalendarDate(viewYear, viewMonth, day)
+    }
+
+    fun goToPreviousMonth() {
+        if (viewMonth == 0) {
+            viewMonth = 11
+            viewYear -= 1
+        } else {
+            viewMonth -= 1
+        }
+    }
+
+    fun goToNextMonth() {
+        if (viewMonth == 11) {
+            viewMonth = 0
+            viewYear += 1
+        } else {
+            viewMonth += 1
+        }
+    }
+
+    fun setMonthYear(month: Int, year: Int) {
+        viewMonth = month
+        viewYear = year
+    }
+}
+
+@Composable
+private fun rememberCustomDatePickerState(initialTimestamp: Long?): CustomDatePickerState {
+    return remember { CustomDatePickerState(initialTimestamp) }
+}
+
+@Composable
+private fun CustomCalendarHeader(
+    viewYear: Int,
+    viewMonth: Int,
+    onHeaderClick: () -> Unit,
+    onPreviousMonth: () -> Unit,
+    onNextMonth: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .clickable(onClick = onHeaderClick)
+                .padding(vertical = 6.dp, horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "${MonthNames[viewMonth]} $viewYear",
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.width(2.dp))
+            Icon(
+                imageVector = Icons.Default.ArrowDropDown,
+                contentDescription = "Choose month or year",
+                tint = MaterialTheme.colorScheme.onSurface
+            )
+        }
+        Spacer(modifier = Modifier.weight(1f))
+        IconButton(onClick = onPreviousMonth) {
+            Icon(Icons.Default.ChevronLeft, contentDescription = "Previous month")
+        }
+        IconButton(onClick = onNextMonth) {
+            Icon(Icons.Default.ChevronRight, contentDescription = "Next month")
+        }
+    }
+}
+
+@Composable
+private fun CalendarWeekdayRow() {
+    val weekdays = listOf("S", "M", "T", "W", "T", "F", "S")
+    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+        weekdays.forEach { label ->
+            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CustomCalendarGrid(
+    viewYear: Int,
+    viewMonth: Int,
+    selectedDate: CalendarDate,
+    onDaySelected: (Int) -> Unit
+) {
+    val today = remember { System.currentTimeMillis().toCalendarDate() }
+    val cells = remember(viewYear, viewMonth) {
+        val daysCount = daysInMonth(viewYear, viewMonth)
+        val startOffset = firstWeekdayOfMonth(viewYear, viewMonth)
+        buildList {
+            repeat(startOffset) { add(null) }
+            for (day in 1..daysCount) add(day)
+            while (size % 7 != 0) add(null)
+        }.chunked(7)
+    }
+
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
+        cells.forEach { week ->
+            Row(modifier = Modifier.fillMaxWidth()) {
+                week.forEach { day ->
+                    Box(
+                        modifier = Modifier.weight(1f).aspectRatio(1f).padding(2.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (day != null) {
+                            val isSelected = selectedDate.year == viewYear &&
+                                    selectedDate.month == viewMonth &&
+                                    selectedDate.day == day
+                            val isToday = today.year == viewYear &&
+                                    today.month == viewMonth &&
+                                    today.day == day
+
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(CircleShape)
+                                    .then(
+                                        when {
+                                            isSelected -> Modifier.background(MaterialTheme.colorScheme.primary)
+                                            isToday -> Modifier.border(1.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                                            else -> Modifier
+                                        }
+                                    )
+                                    .clickable { onDaySelected(day) },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = day.toString(),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = when {
+                                        isSelected -> MaterialTheme.colorScheme.onPrimary
+                                        isToday -> MaterialTheme.colorScheme.primary
+                                        else -> MaterialTheme.colorScheme.onSurface
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MonthYearPickerContent(
+    initialMonth: Int,
+    initialYear: Int,
+    onBack: () -> Unit,
+    onConfirm: (month: Int, year: Int) -> Unit
+) {
+    var selectedMonth by remember { mutableIntStateOf(initialMonth) }
+    var selectedYear by remember { mutableIntStateOf(initialYear) }
+    val years = remember { ((initialYear - 100)..(initialYear + 100)).map { it.toString() } }
+    val pickerItemHeight = if (isDesktopPlatform) 40.dp else 44.dp
+
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        WheelPicker(
+            items = MonthNames,
+            selectedIndex = selectedMonth,
+            onItemSelected = { selectedMonth = it },
+            itemHeight = pickerItemHeight,
+            itemWidth = if (isDesktopPlatform) 108.dp else 124.dp,
+            selectedSize = 18f,
+            unselectedSize = 14f
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        WheelPicker(
+            items = years,
+            selectedIndex = years.indexOf(selectedYear.toString()).coerceAtLeast(0),
+            onItemSelected = { selectedYear = years[it].toInt() },
+            itemHeight = pickerItemHeight
+        )
+    }
+
+    HorizontalDivider(
+        modifier = Modifier.padding(horizontal = 16.dp),
+        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+    )
+
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        InlyButtonSecondary(text = "Back", onClick = onBack, modifier = Modifier.weight(1f))
+        InlyButtonPrimary(
+            text = "Save",
+            onClick = { onConfirm(selectedMonth, selectedYear) },
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
 @Composable
 fun MinimalDatePickerDialog(
     expanded: Boolean = true,
@@ -244,19 +499,32 @@ fun MinimalDatePickerDialog(
     onDismiss: () -> Unit,
     onConfirm: (Long) -> Unit
 ) {
-    val seedMillis = initialTimestamp ?: System.currentTimeMillis()
-    val datePickerState = rememberDatePickerState(initialSelectedDateMillis = seedMillis)
+    val pickerState = rememberCustomDatePickerState(initialTimestamp)
+    var showMonthYearPicker by remember { mutableStateOf(false) }
 
-    val customDatePickerColors = DatePickerDefaults.colors(
-        containerColor = MaterialTheme.colorScheme.background,
-        selectedDayContainerColor = MaterialTheme.colorScheme.primary,
-        selectedDayContentColor = MaterialTheme.colorScheme.onPrimary,
-        todayContentColor = MaterialTheme.colorScheme.primary,
-        todayDateBorderColor = MaterialTheme.colorScheme.primary,
-        dayContentColor = MaterialTheme.colorScheme.onSurface,
-        weekdayContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-        disabledDayContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-    )
+    // Always land back on the calendar view the next time this dialog is opened.
+    LaunchedEffect(expanded) {
+        if (!expanded) showMonthYearPicker = false
+    }
+
+    val calendarContent = @Composable {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            CustomCalendarHeader(
+                viewYear = pickerState.viewYear,
+                viewMonth = pickerState.viewMonth,
+                onHeaderClick = { showMonthYearPicker = true },
+                onPreviousMonth = { pickerState.goToPreviousMonth() },
+                onNextMonth = { pickerState.goToNextMonth() }
+            )
+            CalendarWeekdayRow()
+            CustomCalendarGrid(
+                viewYear = pickerState.viewYear,
+                viewMonth = pickerState.viewMonth,
+                selectedDate = pickerState.selectedDate,
+                onDaySelected = { day -> pickerState.selectDay(day) }
+            )
+        }
+    }
 
     if (isDesktopPlatform) {
         InlyDesktopMenu(
@@ -264,62 +532,70 @@ fun MinimalDatePickerDialog(
             onDismissRequest = onDismiss
         ) {
             Column(modifier = Modifier.width(300.dp).wrapContentHeight().padding(bottom = 12.dp)) {
-
-                // Calendar Grid
-                val currentDensity = LocalDensity.current
-                CompositionLocalProvider(
-                    LocalDensity provides Density(
-                        density = currentDensity.density * 0.80f,
-                        fontScale = currentDensity.fontScale
+                if (showMonthYearPicker) {
+                    MonthYearPickerContent(
+                        initialMonth = pickerState.viewMonth,
+                        initialYear = pickerState.viewYear,
+                        onBack = { showMonthYearPicker = false },
+                        onConfirm = { month, year ->
+                            pickerState.setMonthYear(month, year)
+                            showMonthYearPicker = false
+                        }
                     )
-                ) {
-                    DatePicker(
-                        state = datePickerState,
-                        showModeToggle = false,
-                        title = null,
-                        headline = null,
-                        colors = customDatePickerColors,
+                } else {
+                    calendarContent()
+
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                    )
+
+                    Row(
                         modifier = Modifier
-                            .height(360.dp)
-                            .padding(top = 0.dp)
-                    )
-                }
-
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
-                )
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    InlyButtonSecondary(text = "Cancel", onClick = onDismiss, modifier = Modifier.weight(1f))
-                    InlyButtonPrimary(text = "Save", onClick = { datePickerState.selectedDateMillis?.let { onConfirm(it) }; onDismiss() }, modifier = Modifier.weight(1f))
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        InlyButtonSecondary(text = "Cancel", onClick = onDismiss, modifier = Modifier.weight(1f))
+                        InlyButtonPrimary(
+                            text = "Save",
+                            onClick = { onConfirm(pickerState.selectedMillis); onDismiss() },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
             }
         }
     } else {
-        InlyBottomSheet(expanded = expanded, onDismiss = onDismiss, title = "Select Date") {
-            val currentDensity = LocalDensity.current
-            CompositionLocalProvider(LocalDensity provides Density(density = currentDensity.density * 0.85f, fontScale = currentDensity.fontScale)) {
-                DatePicker(
-                    state = datePickerState,
-                    showModeToggle = false,
-                    title = null,
-                    headline = null,
-                    colors = customDatePickerColors
+        InlyBottomSheet(
+            expanded = expanded,
+            onDismiss = onDismiss,
+            title = if (showMonthYearPicker) "Month & Year" else "Select Date"
+        ) {
+            if (showMonthYearPicker) {
+                MonthYearPickerContent(
+                    initialMonth = pickerState.viewMonth,
+                    initialYear = pickerState.viewYear,
+                    onBack = { showMonthYearPicker = false },
+                    onConfirm = { month, year ->
+                        pickerState.setMonthYear(month, year)
+                        showMonthYearPicker = false
+                    }
                 )
-            }
+            } else {
+                calendarContent()
 
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp).padding(bottom = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                InlyButtonSecondary(text = "Cancel", onClick = onDismiss, modifier = Modifier.weight(1f))
-                InlyButtonPrimary(text = "Save", onClick = { datePickerState.selectedDateMillis?.let { onConfirm(it) }; onDismiss() }, modifier = Modifier.weight(1f))
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp).padding(bottom = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    InlyButtonSecondary(text = "Cancel", onClick = onDismiss, modifier = Modifier.weight(1f))
+                    InlyButtonPrimary(
+                        text = "Save",
+                        onClick = { onConfirm(pickerState.selectedMillis); onDismiss() },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
         }
     }
@@ -415,21 +691,9 @@ fun MinimalTimePickerDialog(
                     .padding(horizontal = 20.dp, vertical = 12.dp).padding(bottom = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Button(
-                    onClick = { onDismiss() },
-                    modifier = Modifier.weight(1f).height(46.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        contentColor = MaterialTheme.colorScheme.onSurface
-                    ),
-                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
-                ) {
-                    Text("Cancel", style = MaterialTheme.typography.bodyLarge)
-                }
-
-                Button(
+                InlyButtonSecondary(text = "Cancel", onClick = onDismiss, modifier = Modifier.weight(1f))
+                InlyButtonPrimary(
+                    text = "Save",
                     onClick = {
                         val finalHour = when {
                             isAm && hour == 12 -> 0
@@ -439,16 +703,8 @@ fun MinimalTimePickerDialog(
                         onConfirm(finalHour, minute)
                         onDismiss()
                     },
-                    modifier = Modifier.weight(1f).height(46.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
-                    ),
-                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
-                ) {
-                    Text("Save", style = MaterialTheme.typography.bodyLarge)
-                }
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
     }
@@ -462,7 +718,8 @@ fun WheelPicker(
     onItemSelected: (Int) -> Unit,
     selectedSize: Float = 22f,
     unselectedSize: Float = 16f,
-    itemHeight: Dp = 44.dp
+    itemHeight: Dp = 44.dp,
+    itemWidth: Dp = if (isDesktopPlatform) 48.dp else 64.dp
 ) {
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = selectedIndex)
     val snapBehavior = rememberSnapFlingBehavior(lazyListState = listState)
@@ -490,7 +747,7 @@ fun WheelPicker(
         flingBehavior = snapBehavior,
         modifier = Modifier
             .height(itemHeight * 3)
-            .width(if (isDesktopPlatform) 48.dp else 64.dp),
+            .width(itemWidth),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         item { Spacer(Modifier.height(itemHeight)) }
@@ -521,7 +778,9 @@ fun WheelPicker(
                     fontFamily = fontFamilyFor(LocalInlyFontStyle.current),
                     fontSize = animatedFontSize.sp,
                     fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal,
-                    color = animatedColor
+                    color = animatedColor,
+                    maxLines = 1,
+                    softWrap = false
                 )
             }
         }

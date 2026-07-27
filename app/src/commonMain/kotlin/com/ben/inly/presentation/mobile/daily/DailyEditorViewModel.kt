@@ -265,7 +265,7 @@ class DailyEditorViewModel(
                         if (syncedEntityId == currentDateString || syncedEntityId == "global_pinned" || syncedEntityId == "import_complete") {
                             if (syncedEntityId == "import_complete") {
                                 autosaveJob?.cancel()
-                            } else if (autosaveJob?.isActive == true) {
+                            } else if (autosaveJob?.isActive == true || isWithinLocalMutationCooldown()) {
                                 return@collect
                             }
 
@@ -298,6 +298,7 @@ class DailyEditorViewModel(
                     val date = currentDateString ?: return@collect
                     if (_loadedDateString.value != date) return@collect
                     if (autosaveJob?.isActive == true) return@collect
+                    if (isWithinLocalMutationCooldown()) return@collect
 
                     val pinnedContent = repository.getDailyNote("global_pinned")
                     val pinnedBlocks = pinnedContent?.blocks?.filter { !it.isDeleted } ?: emptyList()
@@ -323,6 +324,8 @@ class DailyEditorViewModel(
             val diskBlock = diskById[block.id]
             if (diskBlock != null && diskBlock.isDeleted && !block.isDeleted) diskBlock else block
         }
+
+        if (isWithinLocalMutationCooldown()) return reconciledSnapshot
 
         val externallyAdded = diskBlocks.filter { it.id !in snapshotIds }
         return if (externallyAdded.isEmpty()) reconciledSnapshot else reconciledSnapshot + externallyAdded

@@ -199,6 +199,7 @@ fun NoteBlockItem(
     var showTimePresetMenu by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
+    var isReminderPickerOpening by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val isKeyboardOpen = WindowInsets.ime.getBottom(density) > 0
@@ -615,8 +616,10 @@ fun NoteBlockItem(
 
                     if (block is CheckboxBlock) {
                         val hasReminder = block.reminderTimestamp != null
+                        val isPickerOpen = showPresetMenu || showTimePresetMenu || showDatePicker ||
+                            showTimePicker || isReminderPickerOpening
                         AnimatedVisibility(
-                            visible = isActiveBlock || hasReminder,
+                            visible = isActiveBlock || hasReminder || isPickerOpen,
                             enter = fadeIn() + expandVertically(),
                             exit = fadeOut() + shrinkVertically()
                         ) {
@@ -631,6 +634,7 @@ fun NoteBlockItem(
                                             .clip(RoundedCornerShape(5.dp))
                                             .background(MaterialTheme.colorScheme.surface)
                                             .clickable {
+                                                isReminderPickerOpening = true
                                                 focusManager.clearFocus()
                                                 keyboardController?.hide()
                                                 scope.launch {
@@ -638,6 +642,7 @@ fun NoteBlockItem(
                                                         50L.milliseconds
                                                     )
                                                     showPresetMenu = true
+                                                    isReminderPickerOpening = false
                                                 }
                                             }
                                             .padding(horizontal = 8.dp, vertical = 6.dp),
@@ -670,6 +675,7 @@ fun NoteBlockItem(
                                             .clip(RoundedCornerShape(5.dp))
                                             .background(MaterialTheme.colorScheme.surface)
                                             .clickable {
+                                                isReminderPickerOpening = true
                                                 focusManager.clearFocus()
                                                 keyboardController?.hide()
                                                 scope.launch {
@@ -677,6 +683,7 @@ fun NoteBlockItem(
                                                         50L.milliseconds
                                                     )
                                                     showTimePresetMenu = true
+                                                    isReminderPickerOpening = false
                                                 }
                                             }
                                             .padding(horizontal = 8.dp, vertical = 6.dp),

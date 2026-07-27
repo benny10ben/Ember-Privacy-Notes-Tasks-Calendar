@@ -73,6 +73,7 @@ class NoteEditorViewModel(
                 val currentId = currentMetadata?.noteId
                 if (currentId != null && syncedEntityId == currentId) {
                     if (autosaveJob?.isActive == true) return@collect
+                    if (isWithinLocalMutationCooldown()) return@collect
 
                     val updatedMeta = withContext(Dispatchers.IO) { repository.getNoteById(currentId) }
                     if (updatedMeta != null) {
@@ -105,6 +106,7 @@ class NoteEditorViewModel(
                 .collect { freshContent ->
                     if (_isLoading.value) return@collect
                     if (autosaveJob?.isActive == true) return@collect
+                    if (isWithinLocalMutationCooldown()) return@collect
 
                     val final = recalculateNumberedLists(
                         freshContent.blocks.ifEmpty { listOf(TextBlock(id = java.util.UUID.randomUUID().toString(), text = "")) }
@@ -125,6 +127,8 @@ class NoteEditorViewModel(
             val diskBlock = diskById[block.id]
             if (diskBlock != null && diskBlock.isDeleted && !block.isDeleted) diskBlock else block
         }
+
+        if (isWithinLocalMutationCooldown()) return reconciledSnapshot
 
         val externallyAdded = diskBlocks.filter { it.id !in snapshotIds }
         return if (externallyAdded.isEmpty()) reconciledSnapshot else reconciledSnapshot + externallyAdded
