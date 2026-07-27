@@ -77,6 +77,7 @@ import com.ben.inly.domain.repository.EmojiRepository
 import com.ben.inly.domain.util.showFeedback
 import com.ben.inly.presentation.shared.components.InlyDesktopMenu
 import com.ben.inly.presentation.shared.components.TopBarIconButton
+import com.ben.inly.presentation.shared.StickyNoteWindowBus
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.togetherWith
@@ -100,6 +101,7 @@ import inly.app.generated.resources.image
 import inly.app.generated.resources.share
 import inly.app.generated.resources.ghost_smile
 import inly.app.generated.resources.trash
+import inly.app.generated.resources.square_arrow_out_up_right
 import org.jetbrains.compose.resources.painterResource
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -117,6 +119,7 @@ fun NoteScreen(
     onOpenFile: (filePath: String, mimeType: String) -> Unit = { _, _ -> },
     onNavigateToEditor: (String) -> Unit = {},
     showBackButton: Boolean = true,
+    isStickyNote: Boolean = false,
     onExportMarkdown: (fileName: String, content: String) -> Unit = { _, _ -> },
     onExportPdf: (fileName: String, title: String, blocks: List<NoteBlock>) -> Unit = { _, _, _ -> },
     viewModel: NoteEditorViewModel = koinViewModel(key = noteId)
@@ -549,7 +552,12 @@ fun NoteScreen(
                             onCopyPlain = handleCopyPlain,
                             onCopyMarkdown = handleCopyMarkdown,
                             onDownloadMarkdown = handleDownloadMarkdown,
-                            onDownloadPdf = handleDownloadPdf
+                            onDownloadPdf = handleDownloadPdf,
+                            showStickyNoteOption = !isStickyNote,
+                            onOpenAsStickyNote = {
+                                showOptionsMenu = false
+                                StickyNoteWindowBus.open(noteId)
+                            }
                         )
                     }
                 )
@@ -781,7 +789,7 @@ private fun NoteHeader(
         }
 
         Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = if (isDesktopPlatform) 40.dp else 16.dp)
+            modifier = Modifier.fillMaxWidth().padding(horizontal = if (isDesktopPlatform) 28.dp else 16.dp)
         ) {
             Spacer(modifier = Modifier.height(topPadding))
 
@@ -791,26 +799,45 @@ private fun NoteHeader(
                 val titleStyle = MaterialTheme.typography.titleLarge.let {
                     it.copy(fontSize = it.fontSize * 1.5f, lineHeight = it.lineHeight * 1.2f)
                 }
-                if (noteTitle.isEmpty()) {
-                    Text(
-                        text = "Untitled",
-                        style = titleStyle,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
-                    )
-                }
-                BasicTextField(
-                    value = noteTitle,
-                    onValueChange = { onTitleChange(it) },
-                    textStyle = titleStyle.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onBackground
-                    ),
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.onBackground),
+                NoteTitleField(
+                    noteTitle = noteTitle,
+                    onTitleChange = onTitleChange,
+                    style = titleStyle,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun NoteTitleField(
+    noteTitle: String,
+    onTitleChange: (String) -> Unit,
+    style: TextStyle,
+    modifier: Modifier = Modifier,
+    singleLine: Boolean = false
+) {
+    Box(modifier = modifier) {
+        if (noteTitle.isEmpty()) {
+            Text(
+                text = "Untitled",
+                style = style,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
+            )
+        }
+        BasicTextField(
+            value = noteTitle,
+            onValueChange = { onTitleChange(it) },
+            textStyle = style.copy(
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground
+            ),
+            cursorBrush = SolidColor(MaterialTheme.colorScheme.onBackground),
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = singleLine
+        )
     }
 }
 
@@ -1102,7 +1129,9 @@ fun NoteOptionsDesktopMenu(
     onCopyMarkdown: () -> Unit = {},
     onDownloadMarkdown: () -> Unit = {},
     isEditingTemplate: Boolean = false,
-    onDownloadPdf: () -> Unit = {}
+    onDownloadPdf: () -> Unit = {},
+    showStickyNoteOption: Boolean = true,
+    onOpenAsStickyNote: () -> Unit = {}
 ) {
     var currentMenu by remember { mutableStateOf(MenuLevel.MAIN) }
 
@@ -1131,6 +1160,13 @@ fun NoteOptionsDesktopMenu(
                             painterResource(Res.drawable.image),
                             "Cover Options"
                         ) { currentMenu = MenuLevel.COVER }
+
+                        if (showStickyNoteOption) {
+                            DesktopMenuItem(
+                                painterResource(Res.drawable.square_arrow_out_up_right),
+                                "Open as Sticky Note"
+                            ) { onOpenAsStickyNote() }
+                        }
 
                         val favIcon =
                             if (isFavorite) Icons.Default.Star else Icons.Default.StarBorder

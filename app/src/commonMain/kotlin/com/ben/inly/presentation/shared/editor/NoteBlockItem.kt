@@ -301,7 +301,7 @@ fun NoteBlockItem(
     )
 
     val isTextBased = block !is BookmarkBlock && block !is ImageBlock && block !is DocumentBlock && block !is DatabaseBlock && block !is VoiceBlock && block !is SketchBlock && block !is SolidDividerBlock && block !is ThreeDotDividerBlock && block !is LinkedNoteBlock
-    val desktopExtraPadding = if (isDesktopPlatform) 0.dp else 0.dp
+    val desktopExtraPadding = if (isDesktopPlatform) 16.dp else 0.dp
     val startPadding = when {
         isDatabase -> (block.indentationLevel * 28).dp + desktopExtraPadding
         block is CheckboxBlock -> (18 + (block.indentationLevel * 28)).dp + desktopExtraPadding
@@ -310,7 +310,7 @@ fun NoteBlockItem(
         block is ToggleBlock -> (18 + (block.indentationLevel * 28)).dp + desktopExtraPadding
         else -> (16 + (block.indentationLevel * 28)).dp + desktopExtraPadding
     }
-    val endPadding = (if (isDatabase) 0.dp else 16.dp) + desktopExtraPadding + (if (isDesktopPlatform) 24.dp else 0.dp)
+    val endPadding = (if (isDatabase) 0.dp else 16.dp) + desktopExtraPadding
 
     // INSERT-HOVER LINE (synced with the +above/+below buttons)
     val insertLineZone = if (isDesktopPlatform) gutterZone else 0

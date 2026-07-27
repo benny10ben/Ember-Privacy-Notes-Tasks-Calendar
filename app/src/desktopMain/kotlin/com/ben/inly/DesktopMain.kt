@@ -3,7 +3,10 @@ package com.ben.inly
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
@@ -29,6 +32,8 @@ import com.ben.inly.domain.selfhost.sync.SelfHostSyncScheduler
 import com.ben.inly.domain.sync.SyncRepository
 import com.ben.inly.presentation.InlyApp
 import com.ben.inly.presentation.desktop.DesktopSearchShortcutBus
+import com.ben.inly.presentation.mobile.home.note.NoteScreen
+import com.ben.inly.presentation.shared.StickyNoteWindowBus
 import com.ben.inly.sync.startSyncServer
 import com.ben.inly.ui.theme.FontSizePreference
 import com.ben.inly.ui.theme.FontStylePreference
@@ -46,8 +51,11 @@ import javax.swing.SwingUtilities
 
 fun main() = application {
 
-    startKoin {
-        modules(sharedModule, desktopModule)
+    remember {
+        startKoin {
+            modules(sharedModule, desktopModule)
+        }
+        Unit
     }
 
     setSingletonImageLoaderFactory { context ->
@@ -91,8 +99,11 @@ fun main() = application {
         }
     }
 
+    var isMainWindowOpen by remember { mutableStateOf(true) }
+
+    if (isMainWindowOpen) {
     Window(
-        onCloseRequest = ::exitApplication,
+        onCloseRequest = { isMainWindowOpen = false },
         title = "Inly",
         state = rememberWindowState(width = 1200.dp, height = 800.dp),
         icon = painterResource("app_icon.png"),
@@ -178,6 +189,80 @@ fun main() = application {
                     }
                 }
             )
+        }
+    }
+    }
+
+    StickyNoteWindowBus.openNoteIds.forEach { stickyNoteId ->
+        key(stickyNoteId) {
+            Window(
+                onCloseRequest = { StickyNoteWindowBus.close(stickyNoteId) },
+                title = "Sticky Note",
+                state = rememberWindowState(width = 320.dp, height = 360.dp),
+                icon = painterResource("app_icon.png")
+            ) {
+                val settingsManager = remember { GlobalContext.get().get<SettingsManager>() }
+                val fontSizePreferenceName by settingsManager.fontSizePreferenceFlow.collectAsState(
+                    initial = SyncConstants.DEFAULT_FONT_SIZE_PREFERENCE
+                )
+                val fontSizePreference = runCatching { FontSizePreference.valueOf(fontSizePreferenceName) }
+                    .getOrDefault(FontSizePreference.DEFAULT)
+
+                val fontStylePreferenceName by settingsManager.fontStylePreferenceFlow.collectAsState(
+                    initial = SyncConstants.DEFAULT_FONT_STYLE_PREFERENCE
+                )
+                val fontStylePreference = runCatching { FontStylePreference.valueOf(fontStylePreferenceName) }
+                    .getOrDefault(FontStylePreference.POPPINS)
+
+                val stickyWindow = this.window as Frame
+
+                InlyTheme(fontSizePreference = fontSizePreference, fontStylePreference = fontStylePreference) {
+                    NoteScreen(
+                        noteId = stickyNoteId,
+                        isStickyNote = true,
+                        showBackButton = false,
+                        onNavigateBack = {},
+                        onPickImage = { onPathSelected ->
+                            val dialog = java.awt.FileDialog(stickyWindow, "Select Image", java.awt.FileDialog.LOAD)
+                            dialog.file = "*.png;*.jpg;*.jpeg;*.webp"
+                            dialog.isVisible = true
+                            dialog.files.firstOrNull()?.let { file -> onPathSelected(file.absolutePath) }
+                        },
+                        onPickDocument = { onPathSelected ->
+                            val dialog = java.awt.FileDialog(stickyWindow, "Select Document", java.awt.FileDialog.LOAD)
+                            dialog.isVisible = true
+                            dialog.files.firstOrNull()?.let { file -> onPathSelected(file.absolutePath) }
+                        },
+                        onOpenFile = { path, _ ->
+                            try {
+                                val cleanPath = path.removePrefix("file://")
+                                val originalFile = if (cleanPath.contains("/") || cleanPath.contains("\\")) {
+                                    java.io.File(cleanPath)
+                                } else {
+                                    java.io.File(System.getProperty("user.home"), ".inly/media/$cleanPath")
+                                }
+
+                                val tmpDir = java.io.File(System.getProperty("java.io.tmpdir"), "inly_view").apply { mkdirs() }
+                                val viewFile = java.io.File(tmpDir, originalFile.name)
+
+                                if (!viewFile.exists() || viewFile.length() != originalFile.length()) {
+                                    originalFile.copyTo(viewFile, overwrite = true)
+                                }
+
+                                java.awt.Desktop.getDesktop().open(viewFile)
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        },
+                        onExportMarkdown = { fileName, content ->
+                            Thread { handleExportMarkdown(stickyWindow, fileName, content) }.start()
+                        },
+                        onExportPdf = { fileName, title, blocks ->
+                            Thread { handleExportPdf(stickyWindow, fileName, title, blocks) }.start()
+                        }
+                    )
+                }
+            }
         }
     }
 }
