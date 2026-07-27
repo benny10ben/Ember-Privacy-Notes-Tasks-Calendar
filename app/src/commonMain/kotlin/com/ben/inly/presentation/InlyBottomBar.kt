@@ -15,9 +15,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -86,7 +84,7 @@ fun InlyBottomBar(
     val defaultBgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.65f)
     val defaultContentColor = MaterialTheme.colorScheme.onSurface
 
-    val barSize = 52.dp
+    val barSize = 44.dp
     val navItemHeight = 40.dp
 
     Box(
@@ -96,185 +94,132 @@ fun InlyBottomBar(
             .padding(bottom = 6.dp, start = 16.dp, end = 16.dp),
         contentAlignment = Alignment.BottomCenter
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.Bottom
+        AnimatedVisibility(
+            visible = currentRoute != Screen.Note.route,
+            enter = slideInVertically(
+                initialOffsetY = { it },
+                animationSpec = tween(300, easing = FastOutSlowInEasing)
+            ) + fadeIn(tween(300)),
+            exit = slideOutVertically(
+                targetOffsetY = { it },
+                animationSpec = tween(300, easing = FastOutSlowInEasing)
+            ) + fadeOut(tween(300)),
+            modifier = Modifier.fillMaxWidth()
         ) {
             Surface(
                 shape = CircleShape,
                 color = defaultBgColor,
-                contentColor = defaultContentColor,
                 modifier = Modifier
-                    .size(barSize)
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp)
+                    .height(barSize)
                     .customInlyShadow(CircleShape)
                     .clip(CircleShape)
                     .hazeEffect(hazeState, HazeStyle.Unspecified, null)
-                    .clickable { onAiIconTap() }
                     .border(
                         width = 0.5.dp,
                         color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
                         shape = CircleShape
                     )
             ) {
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                    Icon(painterResource(Res.drawable.astroid), "Ask AI", modifier = Modifier.size(20.dp))
+                Row(
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    BottomNavItem(
+                        icon = painterResource(Res.drawable.calendar),
+                        isSelected = activeTab == Screen.Daily.route,
+                        modifier = Modifier.weight(1f).height(navItemHeight)
+                    ) {
+                        if (currentRoute != Screen.Daily.route) navController.navigate(Screen.Daily.createRoute()) {
+                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
+                    BottomNavItem(
+                        icon = painterResource(Res.drawable.house),
+                        isSelected = activeTab == Screen.Home.route,
+                        modifier = Modifier.weight(1f).height(navItemHeight)
+                    ) {
+                        if (currentRoute != Screen.Home.route) navController.navigate(Screen.Home.route) {
+                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
+                    BottomNavItem(
+                        icon = painterResource(Res.drawable.astroid),
+                        isSelected = false,
+                        modifier = Modifier.weight(1f).height(navItemHeight),
+                        onClick = onAiIconTap
+                    )
+                    BottomNavItem(
+                        icon = painterResource(Res.drawable.search),
+                        isSelected = false,
+                        modifier = Modifier.weight(1f).height(navItemHeight),
+                        onClick = onSearchClick
+                    )
+                    if (!isDesktopPlatform) {
+                        Surface(
+                            shape = CircleShape,
+                            color = if (isListening) defaultContentColor else Color.Transparent,
+                            contentColor = if (isListening) MaterialTheme.colorScheme.background else defaultContentColor.copy(alpha = 0.6f),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(navItemHeight)
+                                .clip(CircleShape)
+                                .clickable { onMicClick() }
+                        ) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                Icon(painterResource(Res.drawable.microphone), "Mic", modifier = Modifier.size(20.dp))
+                            }
+                        }
+                    }
                 }
             }
+        }
 
+        if (!isDesktopPlatform) {
             AnimatedVisibility(
-                visible = currentRoute != Screen.Note.route,
-                enter = slideInVertically(
-                    initialOffsetY = { it },
-                    animationSpec = tween(300, easing = FastOutSlowInEasing)
-                ) + fadeIn(tween(300)),
-                exit = slideOutVertically(
-                    targetOffsetY = { it },
-                    animationSpec = tween(300, easing = FastOutSlowInEasing)
-                ) + fadeOut(tween(300)),
-                modifier = Modifier.weight(1f)
+                visible = isListening || partialText.isNotEmpty(),
+                enter = fadeIn(tween(200)) + expandHorizontally(
+                    expandFrom = Alignment.End,
+                    animationSpec = tween(200)
+                ),
+                exit = fadeOut(tween(200)) + shrinkHorizontally(
+                    shrinkTowards = Alignment.End,
+                    animationSpec = tween(200)
+                ),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .offset(y = -(barSize + 8.dp))
+                    .wrapContentWidth(unbounded = true, align = Alignment.End)
             ) {
-                Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.fillMaxWidth()) {
-                    Spacer(Modifier.width(8.dp))
-
-                    Surface(
-                        shape = CircleShape,
-                        color = defaultBgColor,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(barSize)
-                            .customInlyShadow(CircleShape)
-                            .clip(CircleShape)
-                            .hazeEffect(hazeState, HazeStyle.Unspecified, null)
-                            .border(
-                                width = 0.5.dp,
-                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
-                                shape = CircleShape
-                            )
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            BottomNavItem(
-                                icon = painterResource(Res.drawable.calendar),
-                                isSelected = activeTab == Screen.Daily.route,
-                                modifier = Modifier.weight(1f).height(navItemHeight)
-                            ) {
-                                if (currentRoute != Screen.Daily.route) navController.navigate(Screen.Daily.createRoute()) {
-                                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            }
-                            BottomNavItem(
-                                icon = painterResource(Res.drawable.house),
-                                isSelected = activeTab == Screen.Home.route,
-                                modifier = Modifier.weight(1f).height(navItemHeight)
-                            ) {
-                                if (currentRoute != Screen.Home.route) navController.navigate(Screen.Home.route) {
-                                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(Modifier.width(8.dp))
-
-                    Column(
-                        horizontalAlignment = Alignment.End,
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        if (!isDesktopPlatform) {
-                            Box(contentAlignment = Alignment.CenterEnd, modifier = Modifier.width(barSize)) {
-                                this@Column.AnimatedVisibility(
-                                    visible = isListening || partialText.isNotEmpty(),
-                                    enter = fadeIn(tween(200)) + expandHorizontally(
-                                        expandFrom = Alignment.End,
-                                        animationSpec = tween(200)
-                                    ),
-                                    exit = fadeOut(tween(200)) + shrinkHorizontally(
-                                        shrinkTowards = Alignment.End,
-                                        animationSpec = tween(200)
-                                    ),
-                                    modifier = Modifier
-                                        .offset(x = (-12).dp)
-                                        .padding(end = (barSize + 10.dp))
-                                        .wrapContentWidth(unbounded = true, align = Alignment.End)
-                                ) {
-                                    Surface(
-                                        shape = RoundedCornerShape(100f),
-                                        color = defaultBgColor,
-                                        contentColor = defaultContentColor,
-                                        modifier = Modifier
-                                            .widthIn(max = 240.dp)
-                                            .customInlyShadow(RoundedCornerShape(100f))
-                                            .clip(RoundedCornerShape(100f))
-                                            .hazeEffect(hazeState, HazeStyle.Unspecified, null)
-                                            .border(
-                                                width = 0.5.dp,
-                                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
-                                                shape = CircleShape
-                                            )
-                                    ) {
-                                        Text(
-                                            text = partialText.ifBlank { "Listening..." },
-                                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                                            fontFamily = fontFamilyFor(LocalInlyFontStyle.current),
-                                            fontSize = 14.sp,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-                                }
-                                Surface(
-                                    shape = CircleShape,
-                                    color = if (isListening) defaultContentColor else defaultBgColor,
-                                    contentColor = if (isListening) MaterialTheme.colorScheme.background else defaultContentColor,
-                                    modifier = Modifier
-                                        .size(barSize)
-                                        .customInlyShadow(CircleShape)
-                                        .clip(CircleShape)
-                                        .hazeEffect(hazeState, HazeStyle.Unspecified, null)
-                                        .clickable { onMicClick() }
-                                        .border(
-                                            width = 0.5.dp,
-                                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
-                                            shape = CircleShape
-                                        )
-                                ) {
-                                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                        Icon(painterResource(Res.drawable.microphone), "Mic", modifier = Modifier.size(20.dp))
-                                    }
-                                }
-                            }
-                        }
-
-                        Box(contentAlignment = Alignment.BottomEnd) {
-                            Surface(
-                                shape = CircleShape,
-                                color = defaultBgColor,
-                                contentColor = defaultContentColor,
-                                modifier = Modifier
-                                    .size(barSize)
-                                    .customInlyShadow(CircleShape)
-                                    .clip(CircleShape)
-                                    .hazeEffect(hazeState, HazeStyle.Unspecified, null)
-                                    .clickable { onSearchClick() }
-                                    .border(
-                                        width = 0.5.dp,
-                                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
-                                        shape = CircleShape
-                                    )
-                            ) {
-                                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                    Icon(painterResource(Res.drawable.search), "Search", modifier = Modifier.size(20.dp))
-                                }
-                            }
-                        }
-                    }
+                Surface(
+                    shape = RoundedCornerShape(100f),
+                    color = defaultBgColor,
+                    contentColor = defaultContentColor,
+                    modifier = Modifier
+                        .widthIn(max = 240.dp)
+                        .customInlyShadow(RoundedCornerShape(100f))
+                        .clip(RoundedCornerShape(100f))
+                        .hazeEffect(hazeState, HazeStyle.Unspecified, null)
+                        .border(
+                            width = 0.5.dp,
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                            shape = CircleShape
+                        )
+                ) {
+                    Text(
+                        text = partialText.ifBlank { "Listening..." },
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        fontFamily = fontFamilyFor(LocalInlyFontStyle.current),
+                        fontSize = 14.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
         }
