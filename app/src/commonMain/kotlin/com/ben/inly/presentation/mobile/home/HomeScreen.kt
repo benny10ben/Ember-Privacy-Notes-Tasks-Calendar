@@ -268,30 +268,28 @@ fun HomeScreen(
                     verticalItemSpacing = 10.dp,
                     modifier = Modifier.fillMaxSize().hazeSource(state = hazeState).background(MaterialTheme.colorScheme.background)
                 ) {
-                    if (selectedFolderId == null && !isSelectionMode) {
-                        item {
-                            Box(Modifier.padding(start = HORIZONTAL_PADDING)) {
-                                OverviewCard("Tasks", "$remindersCount left", onClick = { onNavigateToReminders() })
-                            }
+                    item {
+                        Box(Modifier.padding(start = HORIZONTAL_PADDING)) {
+                            OverviewCard("Tasks", "$remindersCount left", onClick = { onNavigateToReminders() })
                         }
-                        item {
-                            Box(Modifier.padding(end = HORIZONTAL_PADDING)) {
-                                OverviewCard("Bookmarks", "$bookmarksCount saved", onClick = { onNavigateToBookmarks() })
-                            }
+                    }
+                    item {
+                        Box(Modifier.padding(end = HORIZONTAL_PADDING)) {
+                            OverviewCard("Bookmarks", "$bookmarksCount saved", onClick = { onNavigateToBookmarks() })
                         }
-                        item {
-                            Box(Modifier.padding(start = HORIZONTAL_PADDING)) {
-                                OverviewCard("Images", "$imagesCount saved", onClick = { onNavigateToImages() })
-                            }
+                    }
+                    item {
+                        Box(Modifier.padding(start = HORIZONTAL_PADDING)) {
+                            OverviewCard("Images", "$imagesCount saved", onClick = { onNavigateToImages() })
                         }
-                        item {
-                            Box(Modifier.padding(end = HORIZONTAL_PADDING)) {
-                                OverviewCard("Documents", "$documentsCount attached", onClick = { onNavigateToDocuments() })
-                            }
+                    }
+                    item {
+                        Box(Modifier.padding(end = HORIZONTAL_PADDING)) {
+                            OverviewCard("Documents", "$documentsCount attached", onClick = { onNavigateToDocuments() })
                         }
                     }
 
-                    if (selectedFolderId == null && favoriteNotes.isNotEmpty() && !isSelectionMode) {
+                    if (favoriteNotes.isNotEmpty()) {
                         item(span = StaggeredGridItemSpan.FullLine) {
                             Row(modifier = Modifier.fillMaxWidth().padding(start = HORIZONTAL_PADDING, end = HORIZONTAL_PADDING, top = 14.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Row(modifier = Modifier.clip(RoundedCornerShape(4.dp)).noRippleClickable { isFavoritesExpanded = !isFavoritesExpanded }.padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -427,6 +425,17 @@ fun HomeScreen(
                             }
                         }
 
+                        if (!isDesktopPlatform && !isSelectionMode && selectedFolderId != null) {
+                            item(span = StaggeredGridItemSpan.FullLine) {
+                                BreadcrumbTrail(
+                                    selectedFolderId = selectedFolderId,
+                                    breadcrumbs = breadcrumbs,
+                                    onNavigate = { viewModel.selectFolder(it) },
+                                    modifier = Modifier.padding(horizontal = HORIZONTAL_PADDING)
+                                )
+                            }
+                        }
+
                         itemsIndexed(notes, key = { _, note -> note.noteId }) { index, note ->
                             val sidePad = if (index % 2 == 0) Modifier.padding(start = HORIZONTAL_PADDING) else Modifier.padding(end = HORIZONTAL_PADDING)
                             Box(modifier = sidePad) {
@@ -442,7 +451,7 @@ fun HomeScreen(
                         }
                     }
 
-                    if (selectedFolderId == null && recentNotes.isNotEmpty() && !isSelectionMode) {
+                    if (recentNotes.isNotEmpty()) {
                         item(span = StaggeredGridItemSpan.FullLine) {
                             Row(modifier = Modifier.fillMaxWidth().padding(start = HORIZONTAL_PADDING, end = HORIZONTAL_PADDING, top = 14.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Row(modifier = Modifier.clip(RoundedCornerShape(4.dp)).noRippleClickable { isRecentsExpanded = !isRecentsExpanded }.padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -537,14 +546,20 @@ fun HomeScreen(
                                         tint = MaterialTheme.colorScheme.onSurface
                                     )
                                 }
+                                BreadcrumbTrail(
+                                    selectedFolderId = selectedFolderId,
+                                    breadcrumbs = breadcrumbs,
+                                    onNavigate = { viewModel.selectFolder(it) },
+                                    modifier = Modifier.weight(1f).offset(x = (-6).dp)
+                                )
+                            } else {
+                                Text(
+                                    "Home",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onBackground
+                                )
                             }
-                            BreadcrumbTrail(
-                                selectedFolderId = selectedFolderId,
-                                breadcrumbs = breadcrumbs,
-                                onNavigate = { viewModel.selectFolder(it) },
-                                modifier = Modifier.weight(1f)
-                                    .offset(x = if (isDesktopPlatform) (-6).dp else 0.dp)
-                            )
                         }
                     }
 
@@ -709,7 +724,17 @@ fun DesktopSortMenu(currentSortType: SortType, currentSortOrder: SortOrder, onDi
 
 @Composable
 private fun DesktopSortOptionItem(text: String, isSelected: Boolean, onClick: () -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 1.dp).clip(RoundedCornerShape(6.dp)).noRippleClickable { onClick() }.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 6.dp, vertical = 1.dp)
+            .clip(RoundedCornerShape(6.dp))
+            .background(if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f) else Color.Transparent)
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
         Text(text, style = MaterialTheme.typography.bodyLarge, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium, color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
         if (isSelected) Icon(Icons.Default.Check, "Selected", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
     }
@@ -731,7 +756,7 @@ fun BreadcrumbTrail(selectedFolderId: String?, breadcrumbs: List<FolderEntity>, 
     LazyRow(verticalAlignment = Alignment.CenterVertically, modifier = modifier.fillMaxWidth().padding(top = 10.dp, bottom = 8.dp)) {
         item {
             val isRoot = selectedFolderId == null
-            Text("Home", style = MaterialTheme.typography.titleLarge, fontWeight = if (isRoot) FontWeight.Bold else FontWeight.Medium, color = if (isRoot) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurface, modifier = Modifier.noRippleClickable { onNavigate(null) })
+            Text("Home", style = MaterialTheme.typography.bodyLarge, fontWeight = if (isRoot) FontWeight.Bold else FontWeight.Medium, color = if (isRoot) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurface, modifier = Modifier.noRippleClickable { onNavigate(null) })
         }
         items(breadcrumbs) { folder ->
             Icon(Icons.Default.ChevronRight, null, modifier = Modifier.padding(horizontal = 6.dp).size(16.dp), tint = MaterialTheme.colorScheme.onSurface)
@@ -1124,7 +1149,17 @@ fun SortBottomSheet(expanded: Boolean, currentSortType: SortType, currentSortOrd
 
 @Composable
 private fun SortOptionItem(text: String, isSelected: Boolean, onClick: () -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth().noRippleClickable { onClick() }.padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 2.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f) else Color.Transparent)
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
         Text(text, style = MaterialTheme.typography.bodyLarge, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
         if (isSelected) Icon(Icons.Default.Check, "Selected", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
     }

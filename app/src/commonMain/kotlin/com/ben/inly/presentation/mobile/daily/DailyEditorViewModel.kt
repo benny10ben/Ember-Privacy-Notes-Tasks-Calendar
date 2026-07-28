@@ -85,7 +85,7 @@ class DailyEditorViewModel(
         val pinnedBlocks = pinnedContent?.blocks?.filter { !it.isDeleted } ?: emptyList()
 
         val content = repository.getDailyNote(dateString)
-        val blocks = content?.blocks ?: emptyList()
+        val blocks = content?.blocks?.filter { !it.isDeleted } ?: emptyList()
 
         var merged = pinnedBlocks + (if (isNoteActuallyEmpty(blocks)) emptyList() else blocks)
         merged = ensureTrailingEmptyBlock(merged, dateString)
@@ -275,8 +275,8 @@ class DailyEditorViewModel(
                                 val pinnedBlocks =
                                     pinnedContent?.blocks?.filter { !it.isDeleted } ?: emptyList()
                                 val content = withContext(Dispatchers.IO) { repository.getDailyNote(dateString) }
-                                val newBlocks = content?.blocks ?: emptyList()
-                                var merged = pinnedBlocks + (if (isNoteActuallyEmpty(newBlocks)) emptyList() else newBlocks)
+                                val newBlocks = content?.blocks?.filter { !it.isDeleted } ?: emptyList()
+                                var merged = preserveNewerLocalBlocks(pinnedBlocks + (if (isNoteActuallyEmpty(newBlocks)) emptyList() else newBlocks))
                                 merged = ensureTrailingEmptyBlock(merged, dateString)
                                 val finalBlocks = recalculateNumberedLists(merged)
                                 if (finalBlocks != _blocks.value) {
@@ -303,7 +303,8 @@ class DailyEditorViewModel(
                     val pinnedContent = repository.getDailyNote("global_pinned")
                     val pinnedBlocks = pinnedContent?.blocks?.filter { !it.isDeleted } ?: emptyList()
 
-                    var merged = pinnedBlocks + (if (isNoteActuallyEmpty(freshContent.blocks)) emptyList() else freshContent.blocks)
+                    val freshBlocks = freshContent.blocks.filter { !it.isDeleted }
+                    var merged = preserveNewerLocalBlocks(pinnedBlocks + (if (isNoteActuallyEmpty(freshBlocks)) emptyList() else freshBlocks))
                     merged = ensureTrailingEmptyBlock(merged, date)
                     val final = recalculateNumberedLists(merged)
 
@@ -322,7 +323,11 @@ class DailyEditorViewModel(
 
         val reconciledSnapshot = snapshot.map { block ->
             val diskBlock = diskById[block.id]
-            if (diskBlock != null && diskBlock.isDeleted && !block.isDeleted) diskBlock else block
+            // A pinned block is deliberately tombstoned in this date's own storage (it now lives in
+            // "global_pinned" instead) - that self-inflicted tombstone must never be adopted here, or
+            // every pin gets undone the moment the user navigates away and this date's disk state is
+            // reconciled against, since the tombstone always looks like an external deletion otherwise.
+            if (diskBlock != null && diskBlock.isDeleted && !block.isDeleted && !block.isPinned) diskBlock else block
         }
 
         if (isWithinLocalMutationCooldown()) return reconciledSnapshot
@@ -339,14 +344,21 @@ class DailyEditorViewModel(
         return try {
             withContext(Dispatchers.IO) {
                 SyncCoordinator.mutex.withLock {
+                    // Re-validate now that the lock is actually held - acquiring it can be delayed for
+                    // as long as a self-host sync pass holds the same mutex, and _blocks always tracks
+                    // whichever date is CURRENTLY loaded, not dateToSave. Without this check, a save
+                    // queued behind a long lock wait would write whatever date the user has since
+                    // switched to into dateToSave's note instead of its own - cross-date contamination.
+                    if (currentDateString != dateToSave) return@withLock false
+
                     val reconciled = reconcileWithDisk(dateToSave, _blocks.value)
                     if (reconciled !== _blocks.value) _blocks.value = reconciled
 
                     repository.saveDailyNote("global_pinned", NoteContent(blocks = reconciled.filter { it.isPinned }))
                     repository.saveDailyNote(dateToSave, NoteContent(blocks = reconciled.filter { !it.isPinned }))
+                    true
                 }
             }
-            true
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -366,7 +378,7 @@ class DailyEditorViewModel(
     private suspend fun refreshBlocksIfStale(dateString: String) {
         if (currentDateString != dateString) return
         val pinnedBlocks = repository.getDailyNote("global_pinned")?.blocks?.filter { !it.isDeleted } ?: emptyList()
-        val existingBlocks = repository.getDailyNote(dateString)?.blocks ?: emptyList()
+        val existingBlocks = repository.getDailyNote(dateString)?.blocks?.filter { !it.isDeleted } ?: emptyList()
         val cleanExistingBlocks = if (isNoteActuallyEmpty(existingBlocks)) emptyList() else existingBlocks
         var mergedBlocks = pinnedBlocks + cleanExistingBlocks
         mergedBlocks = ensureTrailingEmptyBlock(mergedBlocks, dateString)
@@ -394,7 +406,7 @@ class DailyEditorViewModel(
             val pinnedBlocks = pinnedContent?.blocks?.filter { !it.isDeleted } ?: emptyList()
 
             val content = try { repository.getDailyNote(dateString) } catch (e: Exception) { e.printStackTrace(); null }
-            val existingBlocks = content?.blocks ?: emptyList()
+            val existingBlocks = content?.blocks?.filter { !it.isDeleted } ?: emptyList()
 
             try {
                 val targetDate = LocalDate.parse(dateString)

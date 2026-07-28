@@ -84,7 +84,7 @@ fun InlyBottomBar(
     partialText: String = "",
     isCompact: Boolean = false
 ) {
-    val defaultBgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.35f)
+    val defaultBgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.65f)
     val defaultContentColor = MaterialTheme.colorScheme.onSurface
 
     val barAnimationSpec = tween<Dp>(durationMillis = 350, easing = FastOutSlowInEasing)

@@ -88,7 +88,7 @@ class NoteEditorViewModel(
                     }
 
                     val content = withContext(Dispatchers.IO) { repository.getNoteContent(currentId) }
-                    val newBlocks = content?.blocks ?: emptyList()
+                    val newBlocks = preserveNewerLocalBlocks(content?.blocks ?: emptyList())
                     val resolved = recalculateNumberedLists(
                         newBlocks.ifEmpty { listOf(TextBlock(id = java.util.UUID.randomUUID().toString(), text = "")) }
                     )
@@ -109,7 +109,7 @@ class NoteEditorViewModel(
                     if (isWithinLocalMutationCooldown()) return@collect
 
                     val final = recalculateNumberedLists(
-                        freshContent.blocks.ifEmpty { listOf(TextBlock(id = java.util.UUID.randomUUID().toString(), text = "")) }
+                        preserveNewerLocalBlocks(freshContent.blocks).ifEmpty { listOf(TextBlock(id = java.util.UUID.randomUUID().toString(), text = "")) }
                     )
                     if (final != _blocks.value) {
                         _blocks.value = final
@@ -141,6 +141,13 @@ class NoteEditorViewModel(
         return try {
             withContext(Dispatchers.IO) {
                 SyncCoordinator.mutex.withLock {
+                    // Re-validate now that the lock is actually held - acquiring it can be delayed for
+                    // as long as a self-host sync pass holds the same mutex, and _blocks always tracks
+                    // whichever note is CURRENTLY loaded, not meta.noteId. Without this check, a save
+                    // queued behind a long lock wait would write whatever note the user has since
+                    // switched to into meta's note instead of its own - cross-note contamination.
+                    if (currentMetadata?.noteId != meta.noteId) return@withLock false
+
                     val reconciled = reconcileWithDisk(meta.noteId, _blocks.value)
                     if (reconciled !== _blocks.value) _blocks.value = reconciled
 
@@ -157,9 +164,9 @@ class NoteEditorViewModel(
                     _noteUpdatedAt.value = updatedMeta.updatedAt
 
                     repository.saveNote(updatedMeta, NoteContent(blocks = reconciled))
+                    true
                 }
             }
-            true
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

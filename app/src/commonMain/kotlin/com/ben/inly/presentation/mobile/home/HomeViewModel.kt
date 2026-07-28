@@ -335,7 +335,7 @@ class HomeViewModel(
                 SyncCoordinator.mutex.withLock {
                     val meta = repository.getNoteById(noteId) ?: return@withLock
                     val content = repository.getNoteContent(noteId) ?: NoteContent(blocks = emptyList())
-                    repository.saveNote(meta.copy(title = newTitle), content)
+                    repository.saveNote(meta.copy(title = newTitle, updatedAt = System.currentTimeMillis()), content)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -356,7 +356,7 @@ class HomeViewModel(
                 SyncCoordinator.mutex.withLock {
                     val meta = repository.getNoteById(noteId) ?: return@withLock
                     val content = repository.getNoteContent(noteId) ?: NoteContent(blocks = emptyList())
-                    repository.saveNote(meta.copy(trashedAt = System.currentTimeMillis()), content)
+                    repository.saveNote(meta.copy(trashedAt = System.currentTimeMillis(), updatedAt = System.currentTimeMillis()), content)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -415,7 +415,7 @@ class HomeViewModel(
                         val meta = repository.getNoteById(noteId)
                         if (meta != null) {
                             val content = repository.getNoteContent(noteId) ?: NoteContent(blocks = emptyList())
-                            repository.saveNote(meta.copy(trashedAt = now), content)
+                            repository.saveNote(meta.copy(trashedAt = now, updatedAt = now), content)
                         }
                     }
 
@@ -435,7 +435,7 @@ class HomeViewModel(
         val notesInFolder = repository.getNotesInFolder(folderId).first()
         notesInFolder.forEach { note ->
             val content = repository.getNoteContent(note.noteId) ?: NoteContent(blocks = emptyList())
-            repository.saveNote(note.copy(trashedAt = trashTime), content)
+            repository.saveNote(note.copy(trashedAt = trashTime, updatedAt = trashTime), content)
         }
 
         val subFolders = _allFolders.value.filter { it.parentFolderId == folderId }
@@ -678,7 +678,7 @@ class HomeViewModel(
                 SyncCoordinator.mutex.withLock {
                     val meta = repository.getNoteById(noteId) ?: return@withLock
                     val content = repository.getNoteContent(noteId) ?: NoteContent(blocks = emptyList())
-                    repository.saveNote(meta.copy(folderId = targetFolderId), content)
+                    repository.saveNote(meta.copy(folderId = targetFolderId, updatedAt = System.currentTimeMillis()), content)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()

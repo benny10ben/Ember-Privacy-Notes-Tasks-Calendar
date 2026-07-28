@@ -186,6 +186,27 @@ abstract class BaseEditorViewModel(
         }
     }
 
+    // A reactive collector's disk/sync snapshot can legitimately be older than what's already in
+    // _blocks (e.g. it was queued before a just-completed local edit committed, or a self-host sync
+    // pass reconciled a not-yet-pushed prior state) - the LOCAL_MUTATION_COOLDOWN_MS window is a
+    // heuristic, not a guarantee the write has landed everywhere in time. Blindly replacing _blocks
+    // with such a snapshot flips a field like isPinned back momentarily until the next correct
+    // emission reasserts it, which is exactly what shows up as a block un-pinning and re-pinning
+    // itself. Reconciling per-block by updatedAt (the same last-write-wins principle used throughout
+    // the sync/merge code) keeps whichever version - incoming or already in memory - is actually newer.
+    protected fun preserveNewerLocalBlocks(incoming: List<NoteBlock>): List<NoteBlock> {
+        val current = _blocks.value
+        if (current.isEmpty()) return incoming
+        val currentById = current.associateBy { it.id }
+        val reconciled = incoming.map { block ->
+            val existing = currentById[block.id]
+            if (existing != null && existing.updatedAt > block.updatedAt) existing else block
+        }
+        val reconciledIds = reconciled.mapTo(HashSet()) { it.id }
+        val localOnly = current.filter { it.id !in reconciledIds }
+        return if (localOnly.isEmpty()) reconciled else reconciled + localOnly
+    }
+
     protected fun isNoteActuallyEmpty(blocks: List<NoteBlock>): Boolean {
         if (blocks.isEmpty()) return true
         if (blocks.size == 1) {

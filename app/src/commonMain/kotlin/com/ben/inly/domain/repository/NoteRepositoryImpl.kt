@@ -483,14 +483,15 @@ class NoteRepositoryImpl(
             }
         }
 
-    override suspend fun saveNote(metadata: NoteMetadataEntity, content: NoteContent) =
+    override suspend fun saveNote(metadata: NoteMetadataEntity, content: NoteContent, stampUpdatedAt: Boolean) =
         withContext(Dispatchers.IO) {
 
             // Update the cache synchronously before the DB write.
             // Any observer (NoteEditorViewModel) immediately sees the new blocks.
             noteContentCache.update { it + (metadata.noteId to content) }
 
-            noteDao.insertOrUpdateMetadata(metadata.copy(filePath = ""))
+            val stampedMetadata = if (stampUpdatedAt) metadata.copy(updatedAt = System.currentTimeMillis()) else metadata
+            noteDao.insertOrUpdateMetadata(stampedMetadata.copy(filePath = ""))
 
             upsertChangedBlocks(metadata.noteId, content)
 
@@ -517,7 +518,7 @@ class NoteRepositoryImpl(
                 noteId       = metadata.noteId,
                 blocks       = content.blocks,
                 sourceType   = TaskSource.NOTE,
-                noteUpdatedAt = metadata.updatedAt
+                noteUpdatedAt = stampedMetadata.updatedAt
             )
         }
 

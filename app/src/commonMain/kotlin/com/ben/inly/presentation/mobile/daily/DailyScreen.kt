@@ -439,7 +439,7 @@ fun DailyScreen(
                             scrolledPages = if (scrolled) scrolledPages + pageDateString else scrolledPages - pageDateString
                         },
                         topContentPadding = if (isDesktopPlatform) {
-                            if (!isSidebarVisible) 72.dp else 16.dp
+                            if (!isSidebarVisible) 68.dp else 16.dp
                         } else {
                             rememberStableStatusBarsPadding().calculateTopPadding() + 150.dp
                         }

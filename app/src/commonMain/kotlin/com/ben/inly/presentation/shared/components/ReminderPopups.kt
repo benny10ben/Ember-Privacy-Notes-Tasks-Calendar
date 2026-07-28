@@ -64,29 +64,34 @@ fun ReminderPresetMenu(
         ) {
             DropdownMenuItem(
                 text = { Text("Later today", style = MaterialTheme.typography.bodyLarge) },
-                leadingIcon = { painterResource(Res.drawable.calendar_day) },
-                onClick = { onPresetSelected(getDatePresetTime(DatePresetType.LATER_TODAY)); onDismiss() }
+                leadingIcon = { Icon(painter = painterResource(Res.drawable.calendar_day), contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) },
+                onClick = { onPresetSelected(getDatePresetTime(DatePresetType.LATER_TODAY)); onDismiss() },
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp).clip(RoundedCornerShape(12.dp))
             )
             DropdownMenuItem(
                 text = { Text("Tomorrow", style = MaterialTheme.typography.bodyLarge) },
-                leadingIcon = { painterResource(Res.drawable.calendar_day) },
-                onClick = { onPresetSelected(getDatePresetTime(DatePresetType.TOMORROW)); onDismiss() }
+                leadingIcon = { Icon(painter = painterResource(Res.drawable.calendar_day), contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) },
+                onClick = { onPresetSelected(getDatePresetTime(DatePresetType.TOMORROW)); onDismiss() },
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp).clip(RoundedCornerShape(12.dp))
             )
             DropdownMenuItem(
                 text = { Text("This weekend", style = MaterialTheme.typography.bodyLarge) },
-                leadingIcon = { painterResource(Res.drawable.sofa) },
-                onClick = { onPresetSelected(getDatePresetTime(DatePresetType.THIS_WEEKEND)); onDismiss() }
+                leadingIcon = { Icon(painter = painterResource(Res.drawable.sofa), contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) },
+                onClick = { onPresetSelected(getDatePresetTime(DatePresetType.THIS_WEEKEND)); onDismiss() },
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp).clip(RoundedCornerShape(12.dp))
             )
             DropdownMenuItem(
                 text = { Text("Next week", style = MaterialTheme.typography.bodyLarge) },
-                leadingIcon = { painterResource(Res.drawable.square_arrows_right) },
-                onClick = { onPresetSelected(getDatePresetTime(DatePresetType.NEXT_WEEK)); onDismiss() }
+                leadingIcon = { Icon(painter = painterResource(Res.drawable.square_arrows_right), contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) },
+                onClick = { onPresetSelected(getDatePresetTime(DatePresetType.NEXT_WEEK)); onDismiss() },
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp).clip(RoundedCornerShape(12.dp))
             )
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp, horizontal = 12.dp))
             DropdownMenuItem(
                 text = { Text("Custom date...", style = MaterialTheme.typography.bodyLarge) },
-                leadingIcon = { painterResource(Res.drawable.calendar_add3) },
-                onClick = { onCustomSelected(); onDismiss() }
+                leadingIcon = { Icon(painter = painterResource(Res.drawable.calendar_add3), contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) },
+                onClick = { onCustomSelected(); onDismiss() },
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp).clip(RoundedCornerShape(12.dp))
             )
             if (onRemove != null) {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp, horizontal = 12.dp))
@@ -99,7 +104,8 @@ fun ReminderPresetMenu(
                             tint = MaterialTheme.colorScheme.error
                         )
                     },
-                    onClick = { onRemove(); onDismiss() }
+                    onClick = { onRemove(); onDismiss() },
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp).clip(RoundedCornerShape(12.dp))
                 )
             }
         }
@@ -172,29 +178,34 @@ fun TimePresetMenu(
         ) {
             DropdownMenuItem(
                 text = { Text("In 15 mins", style = MaterialTheme.typography.bodyLarge) },
-                leadingIcon = { painterResource(Res.drawable.history2) },
-                onClick = { onPresetSelected(getTimePreset(TimePresetType.IN_15_MINS)); onDismiss() }
+                leadingIcon = { Icon(painter = painterResource(Res.drawable.history2), contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) },
+                onClick = { onPresetSelected(getTimePreset(TimePresetType.IN_15_MINS)); onDismiss() },
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp).clip(RoundedCornerShape(12.dp))
             )
             DropdownMenuItem(
                 text = { Text("In 1 hour", style = MaterialTheme.typography.bodyLarge) },
-                leadingIcon = { painterResource(Res.drawable.history2) },
-                onClick = { onPresetSelected(getTimePreset(TimePresetType.IN_1_HOUR)); onDismiss() }
+                leadingIcon = { Icon(painter = painterResource(Res.drawable.history2), contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) },
+                onClick = { onPresetSelected(getTimePreset(TimePresetType.IN_1_HOUR)); onDismiss() },
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp).clip(RoundedCornerShape(12.dp))
             )
             DropdownMenuItem(
                 text = { Text("In 3 hours", style = MaterialTheme.typography.bodyLarge) },
-                leadingIcon = { painterResource(Res.drawable.history3) },
-                onClick = { onPresetSelected(getTimePreset(TimePresetType.IN_3_HOURS)); onDismiss() }
+                leadingIcon = { Icon(painter = painterResource(Res.drawable.history3), contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) },
+                onClick = { onPresetSelected(getTimePreset(TimePresetType.IN_3_HOURS)); onDismiss() },
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp).clip(RoundedCornerShape(12.dp))
             )
             DropdownMenuItem(
                 text = { Text("This evening", style = MaterialTheme.typography.bodyLarge) },
-                leadingIcon = { painterResource(Res.drawable.moon_cloud) },
-                onClick = { onPresetSelected(getTimePreset(TimePresetType.THIS_EVENING)); onDismiss() }
+                leadingIcon = { Icon(painter = painterResource(Res.drawable.moon_cloud), contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) },
+                onClick = { onPresetSelected(getTimePreset(TimePresetType.THIS_EVENING)); onDismiss() },
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp).clip(RoundedCornerShape(12.dp))
             )
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp, horizontal = 12.dp))
             DropdownMenuItem(
                 text = { Text("Custom time...", style = MaterialTheme.typography.bodyLarge) },
-                leadingIcon = { painterResource(Res.drawable.clock_circle) },
-                onClick = { onCustomSelected(); onDismiss() }
+                leadingIcon = { Icon(painter = painterResource(Res.drawable.clock_circle), contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) },
+                onClick = { onCustomSelected(); onDismiss() },
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp).clip(RoundedCornerShape(12.dp))
             )
         }
     } else {
@@ -245,7 +256,12 @@ private fun PresetSheetItem(icon: Painter, text: String, isDestructive: Boolean 
     val textColor = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
     val iconColor = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
     Row(
-        modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 20.dp, vertical = 12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 2.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(painter = icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(20.dp))

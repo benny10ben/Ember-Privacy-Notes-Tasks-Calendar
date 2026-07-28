@@ -34,7 +34,7 @@ interface NoteRepository {
     fun getAllNotes(): Flow<List<NoteMetadataEntity>>
     fun getNotesInFolder(folderId: String): Flow<List<NoteMetadataEntity>>
     suspend fun getNoteContent(noteId: String): NoteContent?
-    suspend fun saveNote(metadata: NoteMetadataEntity, content: NoteContent)
+    suspend fun saveNote(metadata: NoteMetadataEntity, content: NoteContent, stampUpdatedAt: Boolean = true)
     fun refreshNoteContentCache(noteId: String, content: NoteContent)
     suspend fun refreshProjectionsForNote(metadata: NoteMetadataEntity, blocks: List<NoteBlock>)
     suspend fun deleteNote(noteId: String, filePath: String)

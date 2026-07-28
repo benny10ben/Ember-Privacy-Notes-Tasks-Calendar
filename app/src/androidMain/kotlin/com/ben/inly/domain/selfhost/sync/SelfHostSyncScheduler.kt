@@ -33,6 +33,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.seconds
 
@@ -80,7 +81,14 @@ actual class SelfHostSyncScheduler(
             foregroundSyncPoller.stop()
 
             try {
-                runBlocking { ActiveEditorRegistry.flushAllPending() }
+                // Bounded, not unbounded - flushAllPending() -> performSave() needs SyncCoordinator.mutex,
+                // which a concurrent self-host sync pass can hold for as long as its whole run takes
+                // (many notes/media files over the network). An unbounded runBlocking here freezes the
+                // main thread - every tap, every recomposition - for that entire duration, recoverable
+                // only by force-stopping the app. A few seconds of best-effort flush is an acceptable
+                // trade for never fully hanging the UI; WorkManager's deferred sync below still catches
+                // whatever this timeout didn't get to.
+                runBlocking { withTimeoutOrNull(FLUSH_BEFORE_BACKGROUND_TIMEOUT_MS) { ActiveEditorRegistry.flushAllPending() } }
             } catch (cause: Exception) {
                 SelfHostSyncLog.e("Scheduler: synchronous flush-before-background failed", cause)
             }
@@ -231,5 +239,6 @@ actual class SelfHostSyncScheduler(
         const val WORK_NAME_MANUAL = "InlySelfHostManualSync"
         const val TAG_TEXT_SYNC = "InlySelfHostTextSync"
         const val TAG_MEDIA_SYNC = "InlySelfHostMediaSync"
+        const val FLUSH_BEFORE_BACKGROUND_TIMEOUT_MS = 3000L
     }
 }

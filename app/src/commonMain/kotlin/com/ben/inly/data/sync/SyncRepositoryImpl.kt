@@ -168,7 +168,7 @@ class SyncRepositoryImpl(
                                     val file = File(mediaStorageHelper.getAbsoluteMediaPath(remoteMeta.coverImagePath))
                                     if (!file.exists()) syncClient.downloadMedia(remoteMeta.coverImagePath, file)
                                 }
-                                repository.saveNote(remoteMeta, remoteContent)
+                                repository.saveNote(remoteMeta, remoteContent, stampUpdatedAt = false)
 
                                 // EXPLICIT AI INDEXING CALL
                                 repository.indexNote(remoteMeta, remoteContent)
@@ -177,7 +177,7 @@ class SyncRepositoryImpl(
                             }
                         } else if (envelope.isDeleted && envelope.updatedAt > localMeta.updatedAt) {
                             val trashedMeta = remoteMeta.copy(trashedAt = System.currentTimeMillis())
-                            repository.saveNote(trashedMeta, remoteContent)
+                            repository.saveNote(trashedMeta, remoteContent, stampUpdatedAt = false)
 
                             // EXPLICIT AI INDEXING CALL
                             repository.indexNote(trashedMeta, remoteContent)
@@ -212,7 +212,7 @@ class SyncRepositoryImpl(
                                 } else {
                                     localMeta.copy(updatedAt = resolvedUpdatedAt)
                                 }
-                                repository.saveNote(winningMeta, mergedContent)
+                                repository.saveNote(winningMeta, mergedContent, stampUpdatedAt = false)
 
                                 // EXPLICIT AI INDEXING CALL
                                 repository.indexNote(winningMeta, mergedContent)
