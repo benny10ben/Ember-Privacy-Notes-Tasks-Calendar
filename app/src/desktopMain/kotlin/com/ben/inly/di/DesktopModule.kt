@@ -91,7 +91,7 @@ val desktopModule = module {
     single<SyncDiscoveryManager> { DesktopDiscoveryManager() }
     single<com.ben.inly.domain.sync.SyncClient> { com.ben.inly.domain.sync.SyncClient(get(), get(), get()) }
     single<SyncRepository> { SyncRepositoryImpl(get(), get(), get(), get(), get()) }
-    factory { SyncViewModel(get(), get(), get(), get()) }
+    factory { SyncViewModel(get(), get(), get(), get(), get()) }
 
     // Automatic Backup
     single<BackupRescheduler> { DesktopBackupRescheduler() }

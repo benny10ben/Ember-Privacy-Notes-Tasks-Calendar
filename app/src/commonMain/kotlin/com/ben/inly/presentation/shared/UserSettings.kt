@@ -16,9 +16,7 @@ import com.ben.inly.presentation.shared.components.InlyButtonPrimary
 import com.ben.inly.presentation.shared.components.InlyDesktopMenu
 import inly.app.generated.resources.Res
 import inly.app.generated.resources.cog
-import inly.app.generated.resources.qr_code
 import inly.app.generated.resources.refresh_cw
-import inly.app.generated.resources.scan_line
 import inly.app.generated.resources.trash
 import org.jetbrains.compose.resources.painterResource
 
@@ -33,9 +31,6 @@ fun UserSettings(
     onDismiss: () -> Unit,
     onNavigateToSettings: () -> Unit, // Added new parameter
     onNavigateToTrash: () -> Unit,
-    onShowPairingCode: () -> Unit,
-    onScanPairingCode: () -> Unit,
-    onSyncNow: () -> Unit,
     onNavigateToSelfHostSetup: () -> Unit = {}
 ) {
     if (isDesktopPlatform) {
@@ -47,8 +42,6 @@ fun UserSettings(
                 onDismiss = onDismiss,
                 onNavigateToSettings = onNavigateToSettings,
                 onNavigateToTrash = onNavigateToTrash,
-                onShowPairingCode = onShowPairingCode,
-                onNavigateToSelfHostSetup = onNavigateToSelfHostSetup
             )
         }
     } else {
@@ -56,9 +49,7 @@ fun UserSettings(
             expanded = expanded,
             onDismiss = onDismiss,
             onNavigateToSettings = onNavigateToSettings,
-            onNavigateToTrash = onNavigateToTrash,
-            onScanPairingCode = onScanPairingCode,
-            onSyncNow = onSyncNow
+            onNavigateToTrash = onNavigateToTrash
         )
     }
 }
@@ -69,8 +60,6 @@ private fun UserSettingsDesktopMenu(
     onDismiss: () -> Unit,
     onNavigateToSettings: () -> Unit,
     onNavigateToTrash: () -> Unit,
-    onShowPairingCode: () -> Unit,
-    onNavigateToSelfHostSetup: () -> Unit
 ) {
     Column(modifier = Modifier.width(220.dp).padding(vertical = 4.dp)) {
 
@@ -80,24 +69,6 @@ private fun UserSettingsDesktopMenu(
             onClick = {
                 onDismiss()
                 onNavigateToSettings()
-            }
-        )
-
-        DesktopMenuItem(
-            icon = painterResource(Res.drawable.refresh_cw),
-            text = "Sync & Backup",
-            onClick = {
-                onDismiss()
-                onNavigateToSelfHostSetup()
-            }
-        )
-
-        DesktopMenuItem(
-            icon = painterResource(Res.drawable.qr_code),
-            text = "Pair Mobile Device",
-            onClick = {
-                onDismiss()
-                onShowPairingCode()
             }
         )
 
@@ -153,9 +124,7 @@ private fun UserSettingsBottomSheet(
     expanded: Boolean,
     onDismiss: () -> Unit,
     onNavigateToSettings: () -> Unit,
-    onNavigateToTrash: () -> Unit,
-    onScanPairingCode: () -> Unit,
-    onSyncNow: () -> Unit
+    onNavigateToTrash: () -> Unit
 ) {
     InlyBottomSheet(expanded = expanded, onDismiss = onDismiss, title = null) { closeAnd ->
 
@@ -164,16 +133,6 @@ private fun UserSettingsBottomSheet(
                 "Settings",
                 painterResource(Res.drawable.cog)
             ) { closeAnd { onNavigateToSettings() } }
-
-            BottomSheetItem(
-                "Pair with Desktop",
-                painterResource(Res.drawable.scan_line)
-            ) { closeAnd { onScanPairingCode() } }
-
-            BottomSheetItem(
-                "Sync Now",
-                painterResource(Res.drawable.refresh_cw)
-            ) { closeAnd { onSyncNow() } }
 
             BottomSheetItem(
                 "Trash",

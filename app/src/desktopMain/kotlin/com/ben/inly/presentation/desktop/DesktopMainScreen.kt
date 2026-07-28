@@ -34,7 +34,6 @@ import androidx.compose.ui.zIndex
 import com.ben.inly.data.local.prefs.SettingsManager
 import com.ben.inly.domain.model.NoteBlock
 import com.ben.inly.domain.model.NoteContent
-import com.ben.inly.domain.sync.SyncPairingData
 import com.ben.inly.presentation.settings.SettingsScreen
 import com.ben.inly.presentation.settings.selfhost.SelfHostSetupScreen
 import com.ben.inly.presentation.shared.UserSettings
@@ -43,11 +42,7 @@ import com.ben.inly.presentation.shared.components.InlyButtonPrimary
 import com.ben.inly.presentation.shared.components.InlyButtonSecondary
 import com.ben.inly.presentation.shared.components.InlyDesktopMenu
 import com.ben.inly.presentation.shared.components.InlyTextField
-import com.ben.inly.presentation.sync.SyncPairingDialog
-import com.ben.inly.presentation.sync.SyncScannerDialog
 import com.ben.inly.presentation.sync.SyncViewModel
-import com.ben.inly.presentation.sync.generateSecureToken
-import com.ben.inly.presentation.sync.getLocalNetworkIp
 import com.ben.inly.presentation.calendar.CalendarScreen
 import com.ben.inly.presentation.mobile.daily.CollapsedWeekStrip
 import com.ben.inly.presentation.mobile.daily.DailyEditorPane
@@ -79,7 +74,6 @@ import com.ben.inly.presentation.customInlyShadow
 import com.ben.inly.presentation.search.SearchScreen
 import com.ben.inly.presentation.trash.TrashScreen
 import dev.chrisbanes.haze.HazeState
-import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
@@ -318,12 +312,8 @@ fun DesktopMainScreen(
     }
 
     // Sync
-    var showPairingDialog by remember { mutableStateOf(false) }
-    var activePairingData by remember { mutableStateOf<SyncPairingData?>(null) }
-    var showMobileScannerDialog by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val syncState by syncViewModel.syncStatus.collectAsState()
-    val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(isSidebarVisible) {
         if (isSidebarVisible) isPeeking = false
@@ -381,19 +371,7 @@ fun DesktopMainScreen(
             onDismiss = { showSettingsMenu = false },
             onNavigateToSettings = { showSettingsMenu = false; detail = DetailPane.Settings },
             onNavigateToSelfHostSetup = { showSettingsMenu = false; detail = DetailPane.SelfHostSetup },
-            onNavigateToTrash = { showSettingsMenu = false; detail = DetailPane.Trash },
-            onShowPairingCode = {
-                showSettingsMenu = false
-                val ip = getLocalNetworkIp()
-                val token = generateSecureToken()
-                val key = generateSecureToken() + generateSecureToken()
-                settingsManager.saveSyncAuthToken(token)
-                settingsManager.saveSyncEncryptionKey(key)
-                activePairingData = SyncPairingData(ipAddress = ip, port = 8080, authToken = token, encryptionKey = key)
-                showPairingDialog = true
-            },
-            onScanPairingCode = { showSettingsMenu = false; showMobileScannerDialog = true },
-            onSyncNow = { showSettingsMenu = false; syncViewModel.triggerManualSync() }
+            onNavigateToTrash = { showSettingsMenu = false; detail = DetailPane.Trash }
         )
     }
 
@@ -785,7 +763,8 @@ fun DesktopMainScreen(
                         onNavigateBack = { detail = DetailPane.Daily(selectedDate) },
                         onExportReady = onExportBackup,
                         onImportClick = onImportBackupClick,
-                        onNavigateToSelfHostSetup = { detail = DetailPane.SelfHostSetup }
+                        onNavigateToSelfHostSetup = { detail = DetailPane.SelfHostSetup },
+                        syncViewModel = syncViewModel
                     )
                 }
                 DetailPane.SelfHostSetup -> key("selfhost_setup") {
@@ -976,18 +955,6 @@ fun DesktopMainScreen(
                         }
                     }
                 }
-            }
-
-            // Sync dialogs
-            if (showPairingDialog && activePairingData != null) {
-                SyncPairingDialog(pairingData = activePairingData, onDismiss = { showPairingDialog = false })
-            }
-            if (showMobileScannerDialog) {
-                SyncScannerDialog(onDismiss = { showMobileScannerDialog = false }, onScanned = { pairingData ->
-                    showMobileScannerDialog = false
-                    settingsManager.saveSyncIpAddress(pairingData.ipAddress); settingsManager.saveSyncPort(pairingData.port); settingsManager.saveSyncAuthToken(pairingData.authToken); settingsManager.saveSyncEncryptionKey(pairingData.encryptionKey)
-                    coroutineScope.launch { snackbarHostState.showSnackbar("Paired with ${pairingData.ipAddress}!") }
-                })
             }
 
             // Search dialog: centered modal instead of a full right-panel screen

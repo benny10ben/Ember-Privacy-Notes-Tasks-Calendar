@@ -135,6 +135,8 @@ val sharedModule = module {
     }
     single<TaskExtractor> { HeuristicTaskExtractor() }
 
+    single { com.ben.inly.domain.sync.SyncPairingState(settingsManager = get()) }
+
     single {
         WebDavSyncClient(
             secureSyncKeyStorage = get(),

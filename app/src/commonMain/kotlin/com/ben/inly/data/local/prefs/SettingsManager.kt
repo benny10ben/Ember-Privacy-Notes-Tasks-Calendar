@@ -37,6 +37,8 @@ interface SettingsManager {
     fun getSyncEncryptionKey(): String
     fun saveSyncEncryptionKey(key: String)
 
+    fun clearSyncPairing()
+
     // Automatic Backups
     val autoBackupEnabledFlow: Flow<Boolean>
     val backupFrequencyFlow: Flow<String>

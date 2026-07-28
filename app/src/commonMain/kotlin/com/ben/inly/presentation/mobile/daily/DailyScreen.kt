@@ -12,7 +12,6 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,8 +27,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import org.koin.compose.viewmodel.koinViewModel
-import org.koin.compose.koinInject
-import com.ben.inly.data.local.prefs.SettingsManager
 import com.ben.inly.domain.model.CellData
 import com.ben.inly.domain.model.ColumnType
 import com.ben.inly.domain.model.FilterConfig
@@ -37,7 +34,6 @@ import com.ben.inly.domain.model.GalleryCardSize
 import com.ben.inly.domain.model.NoteBlock
 import com.ben.inly.domain.model.Stroke
 import com.ben.inly.domain.model.ViewType
-import com.ben.inly.domain.sync.SyncPairingData
 import com.ben.inly.domain.util.isDesktopPlatform
 import com.ben.inly.presentation.shared.components.KmpBackHandler
 import com.ben.inly.presentation.shared.components.NotePickerDialog
@@ -67,11 +63,8 @@ import com.ben.inly.presentation.shared.components.TopBarIconButtonGroup
 import com.ben.inly.presentation.shared.components.TopBarIconButtonItem
 import com.ben.inly.presentation.shared.rememberStableStatusBarsPadding
 import com.ben.inly.presentation.shared.stableStatusBarsPadding
-import com.ben.inly.presentation.sync.SyncPairingDialog
-import com.ben.inly.presentation.sync.SyncScannerDialog
 import com.ben.inly.presentation.sync.SyncViewModel
-import com.ben.inly.presentation.sync.generateSecureToken
-import com.ben.inly.presentation.sync.getLocalNetworkIp
+import com.ben.inly.presentation.sync.showSyncToast
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
@@ -79,7 +72,6 @@ import inly.app.generated.resources.Res
 import inly.app.generated.resources.calendar
 import inly.app.generated.resources.ellipsis
 import inly.app.generated.resources.inbox
-import kotlinx.coroutines.launch
 import kotlinx.datetime.toLocalDateTime
 import org.jetbrains.compose.resources.painterResource
 
@@ -108,7 +100,6 @@ fun DailyScreen(
     showAddNoteDialog: Boolean = false,
     dateArg: String? = null,
     viewModel: DailyEditorViewModel = koinViewModel(),
-    settingsManager: SettingsManager = koinInject(),
     syncViewModel: SyncViewModel = koinViewModel()
 ) {
     val hazeState = remember { HazeState() }
@@ -140,12 +131,7 @@ fun DailyScreen(
 
     // User Settings & Sync State
     var showSettingsMenu by remember { mutableStateOf(false) }
-    var showPairingDialog by remember { mutableStateOf(false) }
-    var activePairingData by remember { mutableStateOf<SyncPairingData?>(null) }
-    var showMobileScannerDialog by remember { mutableStateOf(false) }
-    val snackbarHostState = remember { SnackbarHostState() }
     val syncState by syncViewModel.syncStatus.collectAsState()
-    val coroutineScope = rememberCoroutineScope()
 
     val density = LocalDensity.current
     val imeBottom = WindowInsets.ime.getBottom(density)
@@ -177,7 +163,7 @@ fun DailyScreen(
 
     LaunchedEffect(syncState) {
         if (syncState != "Idle" && syncState != "Syncing...") {
-            snackbarHostState.showSnackbar(message = syncState)
+            showSyncToast(syncState)
             syncViewModel.resetSyncStatus()
         }
     }
@@ -582,47 +568,7 @@ fun DailyScreen(
                     onSettingsMenuDismiss = { showSettingsMenu = false },
                     onNavigateToSettings = onNavigateToSettings,
                     onNavigateToTrash = onNavigateToTrash,
-                    onShowPairingCode = {
-                        val currentIp = getLocalNetworkIp()
-                        val newToken = generateSecureToken()
-                        val newEncryptionKey = generateSecureToken() + generateSecureToken()
-                        settingsManager.saveSyncAuthToken(newToken)
-                        settingsManager.saveSyncEncryptionKey(newEncryptionKey)
-                        activePairingData = SyncPairingData(
-                            ipAddress = currentIp,
-                            port = 8080,
-                            authToken = newToken,
-                            encryptionKey = newEncryptionKey
-                        )
-                        showPairingDialog = true
-                    },
-                    onScanPairingCode = { showMobileScannerDialog = true },
-                    onSyncNow = { syncViewModel.triggerManualSync() },
                     modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter).zIndex(2f)
-                )
-            }
-
-            // Sync Dialogs
-            if (showPairingDialog && activePairingData != null) {
-                SyncPairingDialog(
-                    pairingData = activePairingData,
-                    onDismiss = { showPairingDialog = false }
-                )
-            }
-
-            if (showMobileScannerDialog) {
-                SyncScannerDialog(
-                    onDismiss = { showMobileScannerDialog = false },
-                    onScanned = { pairingData ->
-                        showMobileScannerDialog = false
-                        settingsManager.saveSyncIpAddress(pairingData.ipAddress)
-                        settingsManager.saveSyncPort(pairingData.port)
-                        settingsManager.saveSyncAuthToken(pairingData.authToken)
-                        settingsManager.saveSyncEncryptionKey(pairingData.encryptionKey)
-                        coroutineScope.launch {
-                            snackbarHostState.showSnackbar("Paired with ${pairingData.ipAddress}!")
-                        }
-                    }
                 )
             }
 
@@ -693,42 +639,6 @@ fun DailyScreen(
                     )
                 }
             }
-
-            SnackbarHost(
-                hostState = snackbarHostState,
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .stableStatusBarsPadding()
-                    .padding(top = 66.dp)
-            ) { data ->
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.surface,
-                    contentColor = MaterialTheme.colorScheme.onSurface,
-                    shadowElevation = 8.dp,
-                    modifier = Modifier
-                        .padding(horizontal = 24.dp)
-                        .wrapContentWidth()
-                        .clip(CircleShape)
-                        .hazeEffect(state = hazeState, style = HazeStyle.Unspecified, block = null)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Sync,
-                            contentDescription = "Sync",
-                            modifier = Modifier.size(30.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = data.visuals.message,
-                            style = MaterialTheme.typography.labelSmall,
-                        )
-                    }
-                }
-            }
         }
     }
 }
@@ -748,9 +658,6 @@ private fun StaticDateHeader(
     onSettingsMenuDismiss: () -> Unit,
     onNavigateToSettings: () -> Unit,
     onNavigateToTrash: () -> Unit,
-    onShowPairingCode: () -> Unit,
-    onScanPairingCode: () -> Unit,
-    onSyncNow: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -844,10 +751,7 @@ private fun StaticDateHeader(
                         expanded = showSettingsMenu,
                         onDismiss = onSettingsMenuDismiss,
                         onNavigateToSettings = onNavigateToSettings,
-                        onNavigateToTrash = onNavigateToTrash,
-                        onShowPairingCode = onShowPairingCode,
-                        onScanPairingCode = onScanPairingCode,
-                        onSyncNow = onSyncNow
+                        onNavigateToTrash = onNavigateToTrash
                     )
                 }
             }

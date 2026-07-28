@@ -41,7 +41,8 @@ fun startSyncServer(
     settingsManager: SettingsManager,
     syncRepository: SyncRepository,
     hmacSigner: SyncHmacSigner,
-    syncEncryptionManager: SyncEncryptionManager
+    syncEncryptionManager: SyncEncryptionManager,
+    pairingState: SyncPairingState
 ) {
     val port = settingsManager.getSyncPort().let { if (it <= 0) SyncConstants.DEFAULT_PORT else it }
 
@@ -83,6 +84,16 @@ fun startSyncServer(
                     e.printStackTrace()
                     call.respond(io.ktor.http.HttpStatusCode.BadRequest, e.message ?: "Sync push failed")
                 }
+            }
+
+            post(SyncConstants.ROUTE_UNPAIR) {
+                if (!call.hasValidSyncSignature(settingsManager, hmacSigner)) {
+                    call.respond(io.ktor.http.HttpStatusCode.Unauthorized, "Invalid or expired sync signature")
+                    return@post
+                }
+
+                pairingState.unpairLocally()
+                call.respond(io.ktor.http.HttpStatusCode.OK)
             }
 
             get("/sync/media/{fileName}") {

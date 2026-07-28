@@ -118,6 +118,13 @@ class DesktopSettingsManager : SettingsManager {
     override fun getSyncPort(): Int = prefs.getInt(SyncConstants.KEY_SYNC_PORT, SyncConstants.DEFAULT_PORT)
     override fun saveSyncPort(port: Int) = prefs.putInt(SyncConstants.KEY_SYNC_PORT, port)
 
+    override fun clearSyncPairing() {
+        saveSecureString(SyncConstants.KEY_SYNC_AUTH_TOKEN, "")
+        saveSecureString(SyncConstants.KEY_SYNC_ENCRYPTION_KEY, "")
+        prefs.put(SyncConstants.KEY_SYNC_IP_ADDRESS, "")
+        prefs.putInt(SyncConstants.KEY_SYNC_PORT, SyncConstants.DEFAULT_PORT)
+    }
+
     // Automatic Backups
     private val _autoBackupEnabled = MutableStateFlow(prefs.getBoolean("KEY_AUTO_BACKUP", false))
     private val _backupFrequency = MutableStateFlow(prefs.get("KEY_BACKUP_FREQ", "Daily"))

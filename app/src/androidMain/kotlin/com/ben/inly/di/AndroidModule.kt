@@ -134,7 +134,7 @@ val androidModule = module {
     single<SyncDiscoveryManager> { AndroidDiscoveryManager(androidContext()) }
     single<com.ben.inly.domain.sync.SyncClient> { com.ben.inly.domain.sync.SyncClient(get(), get(), get()) }
     single<SyncRepository> { SyncRepositoryImpl(get(), get(), get(), get(), get()) }
-    viewModel { SyncViewModel(get(), get(), get(), get()) }
+    viewModel { SyncViewModel(get(), get(), get(), get(), get()) }
 
     // Automatic backups
     single { com.ben.inly.domain.util.AndroidBackupExporter(androidContext()) }

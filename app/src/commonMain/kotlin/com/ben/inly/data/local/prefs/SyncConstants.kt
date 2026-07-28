@@ -31,6 +31,7 @@ object SyncConstants {
     // API Routes
     const val ROUTE_FETCH = "/sync/fetch"
     const val ROUTE_PUSH = "/sync/push"
+    const val ROUTE_UNPAIR = "/sync/unpair"
     // HMAC Auth
     const val HEADER_SYNC_TIMESTAMP = "X-Sync-Timestamp"
     const val HEADER_SYNC_SIGNATURE = "X-Sync-Signature"

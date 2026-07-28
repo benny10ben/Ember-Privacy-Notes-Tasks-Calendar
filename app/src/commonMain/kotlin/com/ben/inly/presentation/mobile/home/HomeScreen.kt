@@ -39,11 +39,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
-import com.ben.inly.data.local.prefs.SettingsManager
 import com.ben.inly.data.local.room.FolderEntity
 import com.ben.inly.data.local.room.NoteMetadataEntity
 import com.ben.inly.domain.model.NoteContent
-import com.ben.inly.domain.sync.SyncPairingData
 import com.ben.inly.domain.util.isDesktopPlatform
 import com.ben.inly.presentation.mobile.daily.DailyEditorViewModel
 import com.ben.inly.presentation.mobile.daily.TaskDaySection
@@ -53,11 +51,8 @@ import com.ben.inly.presentation.shared.components.InlyDesktopMenu
 import com.ben.inly.presentation.shared.components.KmpBackHandler
 import com.ben.inly.presentation.shared.components.TopBarIconButtonGroup
 import com.ben.inly.presentation.shared.components.TopBarIconButtonItem
-import com.ben.inly.presentation.sync.SyncPairingDialog
-import com.ben.inly.presentation.sync.SyncScannerDialog
 import com.ben.inly.presentation.sync.SyncViewModel
-import com.ben.inly.presentation.sync.generateSecureToken
-import com.ben.inly.presentation.sync.getLocalNetworkIp
+import com.ben.inly.presentation.sync.showSyncToast
 import com.ben.inly.ui.theme.LocalAppIsDark
 import dev.chrisbanes.haze.HazeState
 import kotlinx.coroutines.launch
@@ -124,7 +119,6 @@ private fun Modifier.noRippleClickable(onClick: () -> Unit): Modifier =
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel = koinViewModel(),
-    settingsManager: SettingsManager = koinInject(),
     onSelectionModeChange: (Boolean) -> Unit = {},
     onNavigateToEditor: (String) -> Unit,
     onNavigateToCalendar: () -> Unit = {},
@@ -192,17 +186,11 @@ fun HomeScreen(
 
     val isSelectionMode = selectedNoteIds.isNotEmpty() || selectedFolderIds.isNotEmpty()
 
-    var showPairingDialog by remember { mutableStateOf(false) }
-    var activePairingData by remember { mutableStateOf<SyncPairingData?>(null) }
-    var showMobileScannerDialog by remember { mutableStateOf(false) }
-
-    val snackbarHostState = remember { SnackbarHostState() }
-    val coroutineScope = rememberCoroutineScope()
     val syncState by syncViewModel.syncStatus.collectAsState()
 
     LaunchedEffect(syncState) {
         if (syncState != "Idle" && syncState != "Syncing...") {
-            snackbarHostState.showSnackbar(message = syncState)
+            showSyncToast(syncState)
             syncViewModel.resetSyncStatus()
         }
     }
@@ -592,26 +580,7 @@ fun HomeScreen(
                             onNavigateToSettings = {
                                 onNavigateToSettings(); showNotesMenu = false
                             },
-                            onNavigateToTrash = { onNavigateToTrash(); showNotesMenu = false },
-                            onShowPairingCode = {
-                                showNotesMenu = false
-                                val currentIp = getLocalNetworkIp()
-                                val newToken = generateSecureToken()
-                                val newEncryptionKey = generateSecureToken() + generateSecureToken()
-                                settingsManager.saveSyncAuthToken(newToken)
-                                settingsManager.saveSyncEncryptionKey(newEncryptionKey)
-                                activePairingData = SyncPairingData(
-                                    ipAddress = currentIp,
-                                    port = 8080,
-                                    authToken = newToken,
-                                    encryptionKey = newEncryptionKey
-                                )
-                                showPairingDialog = true
-                            },
-                            onScanPairingCode = {
-                                showNotesMenu = false; showMobileScannerDialog = true
-                            },
-                            onSyncNow = { showNotesMenu = false; syncViewModel.triggerManualSync() }
+                            onNavigateToTrash = { onNavigateToTrash(); showNotesMenu = false }
                         )
                     }
                 }
@@ -644,14 +613,6 @@ fun HomeScreen(
                 )
             }
 
-            if (showPairingDialog && activePairingData != null) { SyncPairingDialog(pairingData = activePairingData, onDismiss = { showPairingDialog = false }) }
-            if (showMobileScannerDialog) {
-                SyncScannerDialog(onDismiss = { showMobileScannerDialog = false }, onScanned = { pairingData ->
-                    showMobileScannerDialog = false
-                    settingsManager.saveSyncIpAddress(pairingData.ipAddress); settingsManager.saveSyncPort(pairingData.port); settingsManager.saveSyncAuthToken(pairingData.authToken); settingsManager.saveSyncEncryptionKey(pairingData.encryptionKey)
-                    coroutineScope.launch { snackbarHostState.showSnackbar("Paired with ${pairingData.ipAddress}!") }
-                })
-            }
 
             if (showScheduledTasksSheet) {
                 val today = remember { Clock.System.todayIn(TimeZone.currentSystemDefault()) }
@@ -690,16 +651,6 @@ fun HomeScreen(
                                 TaskDaySection("Tomorrow", tomorrowTasks, dailyEditorViewModel, onTaskNoteLinkClick)
                             }
                         }
-                    }
-                }
-            }
-
-            SnackbarHost(hostState = snackbarHostState, modifier = Modifier.align(Alignment.TopCenter).stableStatusBarsPadding().padding(top = 66.dp)) { data ->
-                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface, shadowElevation = 6.dp, modifier = Modifier.padding(horizontal = 24.dp).wrapContentWidth()) {
-                    Row(modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(imageVector = Icons.Default.Sync, contentDescription = "Sync", modifier = Modifier.size(30.dp))
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(text = data.visuals.message, style = MaterialTheme.typography.labelSmall)
                     }
                 }
             }

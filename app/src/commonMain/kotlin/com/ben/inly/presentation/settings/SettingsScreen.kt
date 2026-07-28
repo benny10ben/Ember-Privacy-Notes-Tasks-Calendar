@@ -17,18 +17,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import com.ben.inly.domain.sync.SyncPairingData
 import com.ben.inly.domain.util.isDesktopPlatform
 import com.ben.inly.presentation.shared.stableStatusBarsPadding
 import com.ben.inly.presentation.shared.components.InlyBottomSheet
 import com.ben.inly.presentation.shared.components.InlyButtonPrimary
 import com.ben.inly.presentation.shared.components.InlyButtonSecondary
 import com.ben.inly.presentation.shared.components.TopBarIconButton
+import com.ben.inly.presentation.sync.SyncPairingDialog
+import com.ben.inly.presentation.sync.SyncScannerDialog
+import com.ben.inly.presentation.sync.SyncViewModel
+import com.ben.inly.presentation.sync.showSyncToast
 import com.ben.inly.ui.theme.FontStylePreference
 import com.ben.inly.ui.theme.fontFamilyFor
 import dev.chrisbanes.haze.HazeState
@@ -46,7 +52,9 @@ import inly.app.generated.resources.folder_input
 import inly.app.generated.resources.folder_sync
 import inly.app.generated.resources.info
 import inly.app.generated.resources.palette
+import inly.app.generated.resources.qr_code
 import inly.app.generated.resources.refresh_cw
+import inly.app.generated.resources.scan_line
 import inly.app.generated.resources.shield_alert
 import inly.app.generated.resources.sidebar
 import inly.app.generated.resources.timer_reset
@@ -64,11 +72,19 @@ fun SettingsScreen(
     onExportReady: (String) -> Unit = {},
     onRequestBackupFolder: () -> Unit = {},
     onNavigateToSelfHostSetup: () -> Unit = {},
-    viewModel: SettingsViewModel = koinViewModel()
+    viewModel: SettingsViewModel = koinViewModel(),
+    syncViewModel: SyncViewModel = koinViewModel()
 ) {
     val coroutineScope = rememberCoroutineScope()
     var showImportExportSheet by remember { mutableStateOf(false) }
     var isExporting by remember { mutableStateOf(false) }
+
+    val isPaired by syncViewModel.isPaired.collectAsState()
+    val syncStatus by syncViewModel.syncStatus.collectAsState()
+    var showPairingDialog by remember { mutableStateOf(false) }
+    var activePairingData by remember { mutableStateOf<SyncPairingData?>(null) }
+    var showScannerDialog by remember { mutableStateOf(false) }
+    var showUnpairConfirmation by remember { mutableStateOf(false) }
 
     // Backup States
     val autoBackupEnabled by viewModel.autoBackupEnabled.collectAsState()
@@ -86,6 +102,13 @@ fun SettingsScreen(
 
     val subNoteOpenMode by viewModel.subNoteOpenMode.collectAsState()
     var showSubNoteOpenModeSheet by remember { mutableStateOf(false) }
+
+    LaunchedEffect(syncStatus) {
+        if (syncStatus != "Idle" && syncStatus != "Syncing...") {
+            showSyncToast(syncStatus)
+            syncViewModel.resetSyncStatus()
+        }
+    }
 
     val internalHazeState = remember { HazeState() }
     val listState = rememberLazyListState()
@@ -200,6 +223,50 @@ fun SettingsScreen(
                         title = "Self-Host",
                         onClick = onNavigateToSelfHostSetup
                     )
+                }
+            }
+
+            item {
+                SettingsGroup(title = "LAN Sync") {
+                    if (isPaired) {
+                        if (isDesktopPlatform) {
+                            Text(
+                                text = "Paired. This desktop syncs automatically whenever your phone connects over LAN.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 15.dp)
+                            )
+                        } else {
+                            SettingsActionRow(
+                                icon = painterResource(Res.drawable.refresh_cw),
+                                title = "Sync Now",
+                                trailingLabel = syncStatus,
+                                onClick = { syncViewModel.triggerManualSync() }
+                            )
+                        }
+                        SettingsDivider()
+                        SettingsActionRow(
+                            icon = rememberVectorPainter(Icons.Default.LinkOff),
+                            title = if (isDesktopPlatform) "Unpair from Mobile Device" else "Unpair from Desktop",
+                            isDestructive = true,
+                            onClick = { showUnpairConfirmation = true }
+                        )
+                    } else if (isDesktopPlatform) {
+                        SettingsActionRow(
+                            icon = painterResource(Res.drawable.qr_code),
+                            title = "Pair Mobile Device",
+                            onClick = {
+                                activePairingData = syncViewModel.generatePairingData()
+                                showPairingDialog = true
+                            }
+                        )
+                    } else {
+                        SettingsActionRow(
+                            icon = painterResource(Res.drawable.scan_line),
+                            title = "Pair with Desktop",
+                            onClick = { showScannerDialog = true }
+                        )
+                    }
                 }
             }
 
@@ -554,6 +621,89 @@ fun SettingsScreen(
             }
         }
     }
+
+    if (showPairingDialog && activePairingData != null) {
+        SyncPairingDialog(
+            pairingData = activePairingData,
+            onDismiss = { showPairingDialog = false }
+        )
+    }
+
+    if (showScannerDialog) {
+        SyncScannerDialog(
+            onDismiss = { showScannerDialog = false },
+            onScanned = { pairingData ->
+                showScannerDialog = false
+                syncViewModel.applyScannedPairing(pairingData)
+            }
+        )
+    }
+
+    if (showUnpairConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showUnpairConfirmation = false },
+            shape = RoundedCornerShape(12.dp),
+            containerColor = MaterialTheme.colorScheme.surface,
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+            textContentColor = MaterialTheme.colorScheme.onSurface,
+            title = {
+                Text(
+                    text = "Unpair Device?",
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            },
+            text = {
+                Text(
+                    text = if (isDesktopPlatform) {
+                        "This removes the LAN sync credentials stored on this desktop. Your phone won't be notified automatically - unpair from this desktop on your phone as well, or it will keep trying to reach it."
+                    } else {
+                        "This removes the LAN sync credentials stored on this device. Keep the desktop app open so it can be notified - if you can't, unpair from Desktop manually as well, or it will keep thinking it's still paired."
+                    },
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            },
+            confirmButton = {
+                if (isDesktopPlatform) {
+                    InlyButtonPrimary(
+                        text = "Unpair",
+                        onClick = {
+                            showUnpairConfirmation = false
+                            syncViewModel.unpair()
+                        }
+                    )
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        InlyButtonSecondary(
+                            text = "Cancel",
+                            onClick = { showUnpairConfirmation = false },
+                            modifier = Modifier.weight(1f)
+                        )
+                        InlyButtonPrimary(
+                            text = "Unpair",
+                            onClick = {
+                                showUnpairConfirmation = false
+                                syncViewModel.unpair()
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            },
+            dismissButton = if (isDesktopPlatform) {
+                {
+                    InlyButtonSecondary(
+                        text = "Cancel",
+                        onClick = { showUnpairConfirmation = false }
+                    )
+                }
+            } else null
+        )
+    }
 }
 
 @Composable
@@ -668,8 +818,11 @@ fun SettingsActionRow(
     icon: Painter,
     title: String,
     trailingLabel: String? = null,
+    isDestructive: Boolean = false,
     onClick: () -> Unit
 ) {
+    val contentColor = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -681,13 +834,13 @@ fun SettingsActionRow(
             modifier = Modifier
                 .size(36.dp)
                 .clip(RoundedCornerShape(10.dp))
-                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f)),
+                .background(contentColor.copy(alpha = if (isDestructive) 0.12f else 0.07f)),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 icon,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                tint = contentColor.copy(alpha = if (isDestructive) 1f else 0.75f),
                 modifier = Modifier.size(18.dp)
             )
         }
@@ -697,7 +850,8 @@ fun SettingsActionRow(
         Text(
             text = title,
             style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = if (isDestructive) FontWeight.Medium else FontWeight.Normal,
+            color = contentColor,
             modifier = Modifier.weight(1f)
         )
 
@@ -712,12 +866,14 @@ fun SettingsActionRow(
             Spacer(modifier = Modifier.width(4.dp))
         }
 
-        Icon(
-            painterResource(Res.drawable.chevron_right),
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f),
-            modifier = Modifier.size(18.dp)
-        )
+        if (!isDestructive) {
+            Icon(
+                painterResource(Res.drawable.chevron_right),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f),
+                modifier = Modifier.size(18.dp)
+            )
+        }
     }
 }
 

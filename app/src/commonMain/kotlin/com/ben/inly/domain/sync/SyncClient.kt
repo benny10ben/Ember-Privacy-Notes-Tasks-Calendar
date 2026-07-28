@@ -77,6 +77,16 @@ class SyncClient(
         return payload.changes
     }
 
+    suspend fun requestUnpair(): Boolean {
+        return try {
+            val response = client.post("$serverUrl${SyncConstants.ROUTE_UNPAIR}")
+            response.status.value in 200..299
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
     // MEDIA ROUTES - streamed through AES/GCM so a large file is never fully buffered in memory
 
     suspend fun downloadMedia(fileName: String, destinationFile: File): Boolean {

@@ -72,8 +72,9 @@ fun main() = application {
         val syncRepository = koin.get<SyncRepository>()
         val hmacSigner = koin.get<com.ben.inly.core.security.SyncHmacSigner>()
         val syncEncryptionManager = koin.get<com.ben.inly.core.security.SyncEncryptionManager>()
+        val pairingState = koin.get<com.ben.inly.domain.sync.SyncPairingState>()
 
-        startSyncServer(settingsManager, syncRepository, hmacSigner, syncEncryptionManager)
+        startSyncServer(settingsManager, syncRepository, hmacSigner, syncEncryptionManager, pairingState)
 
         val discoveryManager = koin.get<com.ben.inly.domain.sync.discovery.SyncDiscoveryManager>()
         val port = settingsManager.getSyncPort().let { if (it <= 0) 8080 else it }

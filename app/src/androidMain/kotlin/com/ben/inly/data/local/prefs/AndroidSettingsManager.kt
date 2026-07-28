@@ -128,6 +128,15 @@ class AndroidSettingsManager(
         sharedPreferences.edit { putString(SyncConstants.KEY_SYNC_ENCRYPTION_KEY, key) }
     }
 
+    override fun clearSyncPairing() {
+        sharedPreferences.edit {
+            putString(SyncConstants.KEY_SYNC_AUTH_TOKEN, "")
+            putString(SyncConstants.KEY_SYNC_IP_ADDRESS, "")
+            putString(SyncConstants.KEY_SYNC_ENCRYPTION_KEY, "")
+            putInt(SyncConstants.KEY_SYNC_PORT, SyncConstants.DEFAULT_PORT)
+        }
+    }
+
     // Automatic backups
     private val _autoBackupEnabled = MutableStateFlow(sharedPreferences.getBoolean("KEY_AUTO_BACKUP", false))
     private val _backupFrequency = MutableStateFlow(sharedPreferences.getString("KEY_BACKUP_FREQ", "Daily") ?: "Daily")

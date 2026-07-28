@@ -6,26 +6,71 @@ import com.ben.inly.core.security.SyncEncryptionManager
 import com.ben.inly.core.security.SyncHmacSigner
 import com.ben.inly.data.local.prefs.SettingsManager
 import com.ben.inly.domain.sync.SyncClient
+import com.ben.inly.domain.sync.SyncPairingData
+import com.ben.inly.domain.sync.SyncPairingState
 import com.ben.inly.domain.sync.SyncRepository
+import com.ben.inly.domain.util.isDesktopPlatform
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration.Companion.milliseconds
 
 class SyncViewModel(
     private val syncRepository: SyncRepository,
     private val settingsManager: SettingsManager,
     private val hmacSigner: SyncHmacSigner,
-    private val syncEncryptionManager: SyncEncryptionManager
+    private val syncEncryptionManager: SyncEncryptionManager,
+    private val pairingState: SyncPairingState
 ) : ViewModel() {
 
     private val _syncStatus = MutableStateFlow("Idle")
     val syncStatus = _syncStatus.asStateFlow()
 
+    val isPaired = pairingState.isPaired
+
     fun resetSyncStatus() {
         _syncStatus.value = "Idle"
+    }
+
+    fun generatePairingData(): SyncPairingData {
+        val token = generateSecureToken()
+        val encryptionKey = generateSecureToken() + generateSecureToken()
+        settingsManager.saveSyncAuthToken(token)
+        settingsManager.saveSyncEncryptionKey(encryptionKey)
+        pairingState.markPaired()
+        return SyncPairingData(
+            ipAddress = getLocalNetworkIp(),
+            port = settingsManager.getSyncPort(),
+            authToken = token,
+            encryptionKey = encryptionKey
+        )
+    }
+
+    fun applyScannedPairing(pairingData: SyncPairingData) {
+        settingsManager.saveSyncIpAddress(pairingData.ipAddress)
+        settingsManager.saveSyncPort(pairingData.port)
+        settingsManager.saveSyncAuthToken(pairingData.authToken)
+        settingsManager.saveSyncEncryptionKey(pairingData.encryptionKey)
+        pairingState.markPaired()
+    }
+
+    fun unpair() {
+        viewModelScope.launch {
+            val isCurrentlyPaired = settingsManager.getSyncIpAddress().isNotBlank() &&
+                settingsManager.getSyncAuthToken().isNotBlank()
+
+            if (!isDesktopPlatform && isCurrentlyPaired) {
+                withTimeoutOrNull(3_000L) {
+                    SyncClient(settingsManager, hmacSigner, syncEncryptionManager).requestUnpair()
+                }
+            }
+
+            pairingState.unpairLocally()
+            _syncStatus.value = "Idle"
+        }
     }
 
     fun triggerManualSync() {
