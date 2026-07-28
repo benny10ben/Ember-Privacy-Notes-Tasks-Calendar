@@ -1,7 +1,5 @@
-package com.ben.inly.domain.repository
+package com.ben.inly.domain.ai
 
-import com.ben.inly.domain.ai.LocalAiEngine
-import com.ben.inly.domain.ai.resolveModelPath
 import com.inly.database.InlyDatabase
 import com.ben.inly.domain.util.AiEventBus
 import kotlinx.coroutines.Dispatchers

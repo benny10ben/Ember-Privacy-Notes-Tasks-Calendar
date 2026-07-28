@@ -1,4 +1,4 @@
-package com.ben.inly.sync
+package com.ben.inly.domain.sync
 
 import com.ben.inly.domain.model.DatabaseBlock
 import com.ben.inly.domain.model.NoteBlock

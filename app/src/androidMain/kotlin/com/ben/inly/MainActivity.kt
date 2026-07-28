@@ -39,7 +39,7 @@ import java.util.UUID
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.ben.inly.domain.sync.AutoSyncTrigger
-import com.ben.inly.sync.discovery.SyncDiscoveryManager
+import com.ben.inly.domain.sync.discovery.SyncDiscoveryManager
 import com.ben.inly.presentation.sync.SyncViewModel
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.debounce

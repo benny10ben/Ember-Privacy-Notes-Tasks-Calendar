@@ -1,4 +1,4 @@
-package com.ben.inly.sync.discovery
+package com.ben.inly.domain.sync.discovery
 
 import android.content.Context
 import android.net.nsd.NsdManager

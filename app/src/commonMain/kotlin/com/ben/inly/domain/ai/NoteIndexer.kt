@@ -1,7 +1,6 @@
-package com.ben.inly.domain.repository
+package com.ben.inly.domain.ai
 
 import com.ben.inly.data.local.room.NoteMetadataEntity
-import com.ben.inly.domain.ai.LocalAiEngine
 import com.ben.inly.domain.model.*
 import com.inly.database.InlyDatabase
 import java.text.SimpleDateFormat

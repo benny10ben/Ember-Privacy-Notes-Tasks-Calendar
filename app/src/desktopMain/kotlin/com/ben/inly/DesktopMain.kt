@@ -34,7 +34,7 @@ import com.ben.inly.presentation.InlyApp
 import com.ben.inly.presentation.desktop.DesktopSearchShortcutBus
 import com.ben.inly.presentation.mobile.home.note.NoteScreen
 import com.ben.inly.presentation.shared.StickyNoteWindowBus
-import com.ben.inly.sync.startSyncServer
+import com.ben.inly.domain.sync.startSyncServer
 import com.ben.inly.ui.theme.FontSizePreference
 import com.ben.inly.ui.theme.FontStylePreference
 import com.ben.inly.ui.theme.InlyTheme
@@ -75,7 +75,7 @@ fun main() = application {
 
         startSyncServer(settingsManager, syncRepository, hmacSigner, syncEncryptionManager)
 
-        val discoveryManager = koin.get<com.ben.inly.sync.discovery.SyncDiscoveryManager>()
+        val discoveryManager = koin.get<com.ben.inly.domain.sync.discovery.SyncDiscoveryManager>()
         val port = settingsManager.getSyncPort().let { if (it <= 0) 8080 else it }
         discoveryManager.startBroadcasting(port, "Inly Desktop")
     }

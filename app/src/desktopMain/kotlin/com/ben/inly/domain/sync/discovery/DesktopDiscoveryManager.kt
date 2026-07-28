@@ -1,4 +1,4 @@
-package com.ben.inly.sync.discovery
+package com.ben.inly.domain.sync.discovery
 
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

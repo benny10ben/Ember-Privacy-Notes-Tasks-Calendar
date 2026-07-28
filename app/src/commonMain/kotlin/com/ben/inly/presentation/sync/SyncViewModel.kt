@@ -5,8 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.ben.inly.core.security.SyncEncryptionManager
 import com.ben.inly.core.security.SyncHmacSigner
 import com.ben.inly.data.local.prefs.SettingsManager
+import com.ben.inly.domain.sync.SyncClient
 import com.ben.inly.domain.sync.SyncRepository
-import com.ben.inly.sync.SyncClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -78,7 +78,7 @@ class SyncViewModel(
         }
     }
 
-    fun triggerAutoSync(discoveryManager: com.ben.inly.sync.discovery.SyncDiscoveryManager) {
+    fun triggerAutoSync(discoveryManager: com.ben.inly.domain.sync.discovery.SyncDiscoveryManager) {
         viewModelScope.launch {
             val currentAuth = settingsManager.getSyncAuthToken()
             if (currentAuth.isBlank()) return@launch

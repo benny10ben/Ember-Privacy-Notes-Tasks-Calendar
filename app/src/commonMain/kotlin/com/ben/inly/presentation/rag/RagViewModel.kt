@@ -2,7 +2,7 @@ package com.ben.inly.presentation.rag
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.ben.inly.domain.repository.RagRepository
+import com.ben.inly.domain.ai.RagRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

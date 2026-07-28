@@ -21,14 +21,14 @@ import com.ben.inly.data.local.room.ImageBlockDao
 import com.ben.inly.data.local.room.NoteDao
 import com.ben.inly.data.local.room.SelfHostDeletedNoteDao
 import com.ben.inly.data.local.room.TagDao
-import com.ben.inly.data.sync.SyncRepositoryImpl
+import com.ben.inly.domain.sync.SyncRepositoryImpl
 import com.ben.inly.data.worker.AndroidBackupRescheduler
 import com.ben.inly.data.worker.BackupNotifier
 import com.ben.inly.data.worker.BackupScheduler
 import com.ben.inly.data.worker.BackupWorker
 import com.ben.inly.data.worker.BackupRescheduler
 import com.ben.inly.database.DatabaseDriverFactory
-import com.ben.inly.domain.repository.RagRepository
+import com.ben.inly.domain.ai.RagRepository
 import com.ben.inly.domain.selfhost.crypto.KeyDerivationManager
 import com.ben.inly.domain.selfhost.media.LocalMediaReader
 import com.ben.inly.domain.selfhost.crypto.Pbkdf2KeyDerivationManager
@@ -46,8 +46,8 @@ import com.ben.inly.presentation.rag.RagViewModel
 import com.ben.inly.presentation.reminders.AndroidReminderScheduler
 import com.ben.inly.presentation.reminders.ReminderScheduler
 import com.ben.inly.presentation.sync.SyncViewModel
-import com.ben.inly.sync.discovery.AndroidDiscoveryManager
-import com.ben.inly.sync.discovery.SyncDiscoveryManager
+import com.ben.inly.domain.sync.discovery.AndroidDiscoveryManager
+import com.ben.inly.domain.sync.discovery.SyncDiscoveryManager
 import com.inly.database.InlyDatabase
 import net.sqlcipher.database.SupportFactory
 import org.koin.android.ext.koin.androidContext
@@ -132,7 +132,7 @@ val androidModule = module {
     single<SyncEncryptionManager> { AesGcmEncryptionManager() }
     single<com.ben.inly.core.security.SyncHmacSigner> { com.ben.inly.core.security.HmacSha256Signer() }
     single<SyncDiscoveryManager> { AndroidDiscoveryManager(androidContext()) }
-    single<com.ben.inly.sync.SyncClient> { com.ben.inly.sync.SyncClient(get(), get(), get()) }
+    single<com.ben.inly.domain.sync.SyncClient> { com.ben.inly.domain.sync.SyncClient(get(), get(), get()) }
     single<SyncRepository> { SyncRepositoryImpl(get(), get(), get(), get(), get()) }
     viewModel { SyncViewModel(get(), get(), get(), get()) }
 

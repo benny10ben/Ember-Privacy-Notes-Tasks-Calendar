@@ -5,7 +5,7 @@ import org.koin.core.qualifier.named
 import org.koin.dsl.module
 import com.ben.inly.domain.repository.NoteRepository
 import com.ben.inly.domain.repository.NoteRepositoryImpl
-import com.ben.inly.domain.repository.NoteIndexer
+import com.ben.inly.domain.ai.NoteIndexer
 import com.ben.inly.domain.selfhost.sync.ForegroundSyncPoller
 import com.ben.inly.domain.selfhost.sync.SelfHostSyncEngine
 import com.ben.inly.domain.selfhost.webdav.WebDavSyncClient

@@ -1,4 +1,4 @@
-package com.ben.inly.sync
+package com.ben.inly.domain.sync
 
 import com.ben.inly.core.security.SyncEncryptionManager
 import com.ben.inly.core.security.SyncHmacSigner

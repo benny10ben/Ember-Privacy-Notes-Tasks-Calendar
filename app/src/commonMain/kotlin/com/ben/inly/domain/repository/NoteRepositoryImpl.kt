@@ -23,6 +23,7 @@ import com.ben.inly.data.local.room.ImageBlockEntity
 import com.ben.inly.data.local.room.SelfHostDeletedNoteDao
 import com.ben.inly.data.local.room.SelfHostDeletedNoteEntity
 import com.ben.inly.data.local.room.TaskSource
+import com.ben.inly.domain.ai.NoteIndexer
 import com.ben.inly.domain.model.BookmarkBlock
 import com.ben.inly.domain.model.BulletedListBlock
 import com.ben.inly.domain.model.CheckboxBlock
