@@ -19,12 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Notes
-import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -39,31 +34,38 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import com.ben.inly.domain.util.isDesktopPlatform
 import com.ben.inly.presentation.shared.components.InlyBottomSheet
 import com.ben.inly.presentation.shared.components.InlyButtonPrimary
 import com.ben.inly.presentation.shared.components.InlyButtonSecondary
-import com.ben.inly.presentation.shared.components.InlyDesktopMenu
 import com.ben.inly.presentation.shared.components.InlyTextField
 import com.ben.inly.presentation.shared.components.MinimalDatePickerDialog
 import com.ben.inly.presentation.shared.components.MinimalTimePickerDialog
 import com.ben.inly.presentation.shared.components.TopBarIconButtonGroup
 import com.ben.inly.presentation.shared.components.TopBarIconButtonItem
+import com.ben.inly.ui.theme.LocalAppIsDark
+import inly.app.generated.resources.Res
+import inly.app.generated.resources.calendar
+import inly.app.generated.resources.category2
+import inly.app.generated.resources.clock_circle
+import inly.app.generated.resources.doc_text
+import inly.app.generated.resources.link
+import inly.app.generated.resources.pen
+import inly.app.generated.resources.trash
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
+import org.jetbrains.compose.resources.painterResource
 
 private val EventChipTextColor = Color(0xFF1A1A1A)
 
@@ -170,8 +172,7 @@ fun EventEditorSheet(
     onEditClick: () -> Unit,
     onSave: () -> Unit,
     onDelete: (() -> Unit)?,
-    onDismiss: () -> Unit,
-    desktopMenuOffset: DpOffset = DpOffset.Zero
+    onDismiss: () -> Unit
 ) {
     val title = when {
         state == null || state.original == null -> "Add Event"
@@ -179,23 +180,13 @@ fun EventEditorSheet(
         else -> null
     }
 
-    if (isDesktopPlatform) {
-        InlyDesktopMenu(
-            expanded = state != null,
-            onDismissRequest = onDismiss,
-            modifier = Modifier.width(340.dp),
-            offset = desktopMenuOffset
-        ) {
+    InlyBottomSheet(
+        expanded = state != null,
+        onDismiss = onDismiss,
+        title = title,
+    ) { closeAnd ->
+        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp)) {
             if (state != null) {
-                if (title != null) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
-                    )
-                }
                 EventEditorFields(
                     state = state,
                     categories = categories,
@@ -207,36 +198,10 @@ fun EventEditorSheet(
                     onUrlChange = onUrlChange,
                     onDescriptionChange = onDescriptionChange,
                     onEditClick = onEditClick,
-                    onCancel = onDismiss,
-                    onSave = onSave,
-                    onDelete = onDelete
+                    onCancel = { closeAnd(onDismiss) },
+                    onSave = { closeAnd(onSave) },
+                    onDelete = onDelete?.let { delete -> { closeAnd(delete) } }
                 )
-            }
-        }
-    } else {
-        InlyBottomSheet(
-            expanded = state != null,
-            onDismiss = onDismiss,
-            title = title,
-        ) { closeAnd ->
-            Column(modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp)) {
-                if (state != null) {
-                    EventEditorFields(
-                        state = state,
-                        categories = categories,
-                        onNameChange = onNameChange,
-                        onDateChange = onDateChange,
-                        onTimeChange = onTimeChange,
-                        onDurationChange = onDurationChange,
-                        onCategoryChange = onCategoryChange,
-                        onUrlChange = onUrlChange,
-                        onDescriptionChange = onDescriptionChange,
-                        onEditClick = onEditClick,
-                        onCancel = { closeAnd(onDismiss) },
-                        onSave = { closeAnd(onSave) },
-                        onDelete = onDelete?.let { delete -> { closeAnd(delete) } }
-                    )
-                }
             }
         }
     }
@@ -266,7 +231,6 @@ private fun EventEditorFields(
             categories = categories,
             onEditClick = onEditClick,
             onDelete = onDelete,
-            onDismiss = onCancel
         )
         return
     }
@@ -279,7 +243,10 @@ private fun EventEditorFields(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp)
-            .padding(top = 4.dp, bottom = 20.dp),
+            .padding(
+                top = if (isDesktopPlatform) 16.dp else 4.dp,
+                bottom = if (isDesktopPlatform) 0.dp else 20.dp
+            ),
         verticalArrangement = Arrangement.spacedBy(SectionSpacing)
     ) {
         InlyTextField(
@@ -297,7 +264,7 @@ private fun EventEditorFields(
         )
 
         EventFieldRow(
-            icon = Icons.Default.CalendarMonth,
+            icon = painterResource(Res.drawable.calendar),
             label = formatFullDate(state.date),
             onClick = { showDatePicker = true },
             modifier = Modifier.fillMaxWidth()
@@ -323,7 +290,7 @@ private fun EventEditorFields(
             ) {
                 Box(modifier = Modifier.weight(1f)) {
                     EventFieldRow(
-                        icon = Icons.Default.Schedule,
+                        icon = painterResource(Res.drawable.clock_circle),
                         label = formatTimeOfDay(state.hour, state.minute),
                         onClick = { showStartTimePicker = true },
                         modifier = Modifier.fillMaxWidth()
@@ -338,7 +305,7 @@ private fun EventEditorFields(
                 }
                 Box(modifier = Modifier.weight(1f)) {
                     EventFieldRow(
-                        icon = Icons.Default.Schedule,
+                        icon = painterResource(Res.drawable.clock_circle),
                         label = formatTimeOfDay(state.endHour(), state.endMinute()),
                         onClick = { showEndTimePicker = true },
                         modifier = Modifier.fillMaxWidth()
@@ -379,7 +346,7 @@ private fun EventEditorFields(
             ) {
                 CategoryChip(
                     label = "None",
-                    color = MaterialTheme.colorScheme.surface,
+                    color = MaterialTheme.colorScheme.surfaceVariant,
                     hasCategory = false,
                     isSelected = state.categoryId == null,
                     onClick = { onCategoryChange(null) }
@@ -450,7 +417,6 @@ private fun EventViewFields(
     categories: List<CalendarCategory>,
     onEditClick: () -> Unit,
     onDelete: (() -> Unit)?,
-    onDismiss: () -> Unit
 ) {
     val category = categories.firstOrNull { it.id == state.categoryId }
     val accentColor = category?.colorHex?.toCategoryColor() ?: MaterialTheme.colorScheme.primary
@@ -459,7 +425,10 @@ private fun EventViewFields(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp)
-            .padding(top = 4.dp, bottom = if (isDesktopPlatform) 20.dp else 32.dp),
+            .padding(
+                top = if (isDesktopPlatform) 16.dp else 4.dp,
+                bottom = if (isDesktopPlatform) 0.dp else 32.dp
+            ),
         verticalArrangement = Arrangement.spacedBy(SectionSpacing)
     ) {
         // Action row - edit / delete / close, top-right like the reference card. Grouped in a
@@ -472,12 +441,12 @@ private fun EventViewFields(
         ) {
             Box(modifier = Modifier.clip(CircleShape)) {
                 TopBarIconButtonGroup(
-                    bgColor = MaterialTheme.colorScheme.background,
+                    bgColor = if (LocalAppIsDark.current) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.background,
                     tint = MaterialTheme.colorScheme.onSurface,
                     items = buildList {
                         add(
                             TopBarIconButtonItem(
-                                icon = rememberVectorPainter(Icons.Default.Edit),
+                                icon = painterResource(Res.drawable.pen),
                                 contentDescription = "Edit",
                                 onClick = onEditClick
                             )
@@ -485,19 +454,12 @@ private fun EventViewFields(
                         if (onDelete != null) {
                             add(
                                 TopBarIconButtonItem(
-                                    icon = rememberVectorPainter(Icons.Default.Delete),
+                                    icon = painterResource(Res.drawable.trash),
                                     contentDescription = "Delete",
                                     onClick = onDelete
                                 )
                             )
                         }
-                        add(
-                            TopBarIconButtonItem(
-                                icon = rememberVectorPainter(Icons.Default.Close),
-                                contentDescription = "Close",
-                                onClick = onDismiss
-                            )
-                        )
                     }
                 )
             }
@@ -531,19 +493,19 @@ private fun EventViewFields(
         // Plain icon + label rows - no Surface/box background, matching the reference layout.
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             if (category != null) {
-                InfoRow(icon = Icons.Default.CalendarMonth, label = category.name)
+                InfoRow(icon = painterResource(Res.drawable.category2), label = category.name)
             }
             if (state.url.isNotBlank()) {
                 val uriHandler = LocalUriHandler.current
                 InfoRow(
-                    icon = Icons.Default.Link,
+                    icon = painterResource(Res.drawable.link),
                     label = state.url,
                     isLink = true,
                     onClick = { try { uriHandler.openUri(state.url) } catch (_: Exception) {} }
                 )
             }
             if (state.description.isNotBlank()) {
-                InfoRow(icon = Icons.AutoMirrored.Filled.Notes, label = state.description)
+                InfoRow(icon = painterResource(Res.drawable.doc_text), label = state.description)
             }
         }
     }
@@ -553,7 +515,7 @@ private fun EventViewFields(
 // just an optional click target for the URL row.
 @Composable
 private fun InfoRow(
-    icon: ImageVector,
+    icon: Painter,
     label: String,
     isLink: Boolean = false,
     onClick: (() -> Unit)? = null
@@ -565,7 +527,7 @@ private fun InfoRow(
         verticalAlignment = Alignment.Top
     ) {
         Icon(
-            imageVector = icon,
+            painter = icon,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
             modifier = Modifier.size(18.dp)
@@ -582,7 +544,7 @@ private fun InfoRow(
 
 @Composable
 private fun EventFieldRow(
-    icon: ImageVector,
+    icon: Painter,
     label: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -601,7 +563,7 @@ private fun EventFieldRow(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                imageVector = icon,
+                painter = icon,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                 modifier = Modifier.size(16.dp)
@@ -635,7 +597,7 @@ private fun CategoryChip(
             .clickable(onClick = onClick)
             .border(
                 width = if (isSelected) 2.dp else 0.dp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                color = if (isSelected) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f) else Color.Transparent,
                 shape = InteractiveShape
             )
     ) {

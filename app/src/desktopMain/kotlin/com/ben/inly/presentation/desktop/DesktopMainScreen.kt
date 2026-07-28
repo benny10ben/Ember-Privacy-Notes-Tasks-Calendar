@@ -100,6 +100,7 @@ import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.ben.inly.ui.theme.LocalAppIsDark
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
@@ -415,18 +416,18 @@ fun DesktopMainScreen(
                 Spacer(Modifier.weight(1f))
                 Box {
                     TopBarIconButtonGroup(
-                        bgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.45f),
+                        bgColor = if (LocalAppIsDark.current) MaterialTheme.colorScheme.surface.copy(alpha = 0.45f) else MaterialTheme.colorScheme.background.copy(alpha = 0.45f),
                         tint = MaterialTheme.colorScheme.onBackground,
                         items = listOf(
-                            TopBarIconButtonItem(
-                                icon = painterResource(Res.drawable.inbox),
-                                contentDescription = "Upcoming tasks",
-                                onClick = { showScheduledTasksSheet = true }
-                            ),
                             TopBarIconButtonItem(
                                 icon = painterResource(Res.drawable.calendar),
                                 contentDescription = "Calendar",
                                 onClick = { detail = DetailPane.Calendar; isPeeking = false }
+                            ),
+                            TopBarIconButtonItem(
+                                icon = painterResource(Res.drawable.inbox),
+                                contentDescription = "Upcoming tasks",
+                                onClick = { showScheduledTasksSheet = true }
                             ),
                             TopBarIconButtonItem(
                                 icon = painterResource(Res.drawable.ellipsis),
@@ -687,46 +688,30 @@ fun DesktopMainScreen(
         }
 
         // floating search + AI assistant buttons, mirrors mobile's InlyBottomBar circles
-        Row(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = endPadding + 16.dp, bottom = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.background.copy(alpha = 0.25f),
-                contentColor = MaterialTheme.colorScheme.onSurface,
+            Row(
                 modifier = Modifier
-                    .size(52.dp)
-                    .customInlyShadow(CircleShape)
-                    .clip(CircleShape)
-                    .hazeEffect(sidebarHazeState, HazeStyle.Unspecified, null)
-                    .clickable { showSearchDialog = true }
-                    .border(width = 0.5.dp, color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), shape = CircleShape)
+                    .align(Alignment.BottomEnd)
+                    .padding(end = endPadding + 16.dp, bottom = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                    Icon(painterResource(Res.drawable.search), "Search", modifier = Modifier.size(20.dp))
-                }
-            }
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.background.copy(alpha = 0.25f),
-                contentColor = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier
-                    .size(52.dp)
-                    .customInlyShadow(CircleShape)
-                    .clip(CircleShape)
-                    .hazeEffect(sidebarHazeState, HazeStyle.Unspecified, null)
-                    .clickable { onAiIconTap() }
-                    .border(width = 0.5.dp, color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), shape = CircleShape)
-            ) {
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                    Icon(painterResource(Res.drawable.astroid), "Ask AI", modifier = Modifier.size(20.dp))
-                }
+                TopBarIconButton(
+                    icon = painterResource(Res.drawable.search),
+                    contentDescription = "Search",
+                    bgColor = if (LocalAppIsDark.current) MaterialTheme.colorScheme.surface.copy(alpha = 0.45f) else MaterialTheme.colorScheme.background.copy(alpha = 0.45f),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    hazeState = sidebarHazeState,
+                    onClick = { showSearchDialog = true }
+                )
+                TopBarIconButton(
+                    icon = painterResource(Res.drawable.astroid),
+                    contentDescription = "Ask AI",
+                    bgColor = if (LocalAppIsDark.current) MaterialTheme.colorScheme.surface.copy(alpha = 0.45f) else MaterialTheme.colorScheme.background.copy(alpha = 0.45f),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    hazeState = sidebarHazeState,
+                    onClick = onAiIconTap
+                )
             }
         }
-    }
     }
 
     // RIGHT PANEL
@@ -831,7 +816,7 @@ fun DesktopMainScreen(
                         Box(
                             modifier = Modifier
                                 .align(Alignment.TopStart)
-                                .padding(start = 16.dp, top = 16.dp)
+                                .padding(start = 26.dp, top = 16.dp)
                                 .zIndex(10f)
                         ) {
                             TopBarIconButton(

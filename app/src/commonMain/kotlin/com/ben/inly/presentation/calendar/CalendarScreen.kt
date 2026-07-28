@@ -56,17 +56,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.ben.inly.domain.util.isDesktopPlatform
@@ -122,16 +119,6 @@ fun CalendarScreen(
     var topBarHeightPx by remember { mutableFloatStateOf(0f) }
     val topBarHeightDp = with(density) { topBarHeightPx.toDp() }
 
-    var screenRootCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
-    var eventMenuOffset by remember { mutableStateOf(DpOffset.Zero) }
-
-    fun captureEventMenuAnchor(coordinates: LayoutCoordinates, localOffset: Offset) {
-        val root = screenRootCoordinates ?: return
-        val windowPosition = coordinates.localToWindow(localOffset)
-        val localToRoot = root.windowToLocal(windowPosition)
-        eventMenuOffset = with(density) { DpOffset(localToRoot.x.toDp(), localToRoot.y.toDp()) }
-    }
-
     val dayCount = if (viewMode == CalendarViewMode.THREE_DAY) 3 else 7
     val multiDayDates = remember(selectedDate, dayCount) {
         val anchor = if (dayCount == 7) selectedDate.startOfWeek() else selectedDate
@@ -151,7 +138,6 @@ fun CalendarScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
                 .consumeWindowInsets(paddingValues)
-                .onGloballyPositioned { screenRootCoordinates = it }
         ) {
             Column(
                 modifier = Modifier
@@ -159,8 +145,7 @@ fun CalendarScreen(
                     .hazeSource(state = internalHazeState)
                     .background(MaterialTheme.colorScheme.background)
             ) {
-                val onEventClick: (CalendarEvent, LayoutCoordinates, Offset) -> Unit = { event, coordinates, offset ->
-                    captureEventMenuAnchor(coordinates, offset)
+                val onEventClick: (CalendarEvent) -> Unit = { event ->
                     val dt = Instant.fromEpochMilliseconds(event.reminderTimestamp)
                         .toLocalDateTime(TimeZone.currentSystemDefault())
                     eventEditorState = EventEditorState(
@@ -193,8 +178,7 @@ fun CalendarScreen(
                                 slideDirection = AnimatedContentTransitionScope.SlideDirection.Left
                                 selectedDate = selectedDate.plus(1, DateTimeUnit.DAY)
                             },
-                            onHourClick = { hour, coordinates, offset ->
-                                captureEventMenuAnchor(coordinates, offset)
+                            onHourClick = { hour ->
                                 eventEditorState = EventEditorState(
                                     original = null,
                                     name = "",
@@ -254,8 +238,7 @@ fun CalendarScreen(
                                 slideDirection = AnimatedContentTransitionScope.SlideDirection.Left
                                 selectedDate = selectedDate.plus(dayCount.toLong(), DateTimeUnit.DAY)
                             },
-                            onHourClick = { date, hour, coordinates, offset ->
-                                captureEventMenuAnchor(coordinates, offset)
+                            onHourClick = { date, hour ->
                                 eventEditorState = EventEditorState(
                                     original = null,
                                     name = "",
@@ -341,7 +324,6 @@ fun CalendarScreen(
 
     EventEditorSheet(
         state = eventEditorState,
-        desktopMenuOffset = eventMenuOffset,
         categories = categories,
         onNameChange = { name -> eventEditorState = eventEditorState?.copy(name = name) },
         onDateChange = { date -> eventEditorState = eventEditorState?.copy(date = date) },
@@ -583,8 +565,8 @@ private fun CalendarTimeGrid(
     topBarHeightDp: Dp,
     onSwipePreviousDay: () -> Unit,
     onSwipeNextDay: () -> Unit,
-    onHourClick: (hour: Int, coordinates: LayoutCoordinates, offset: Offset) -> Unit,
-    onEventClick: (event: CalendarEvent, coordinates: LayoutCoordinates, offset: Offset) -> Unit,
+    onHourClick: (hour: Int) -> Unit,
+    onEventClick: (event: CalendarEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var accumulatedDragPx by remember { mutableFloatStateOf(0f) }
@@ -644,8 +626,8 @@ private fun DayHourGrid(
     nowMillis: Long,
     scrollState: ScrollState,
     topBarHeightDp: Dp,
-    onHourClick: (hour: Int, coordinates: LayoutCoordinates, offset: Offset) -> Unit,
-    onEventClick: (event: CalendarEvent, coordinates: LayoutCoordinates, offset: Offset) -> Unit
+    onHourClick: (hour: Int) -> Unit,
+    onEventClick: (event: CalendarEvent) -> Unit
 ) {
     val hourHeight = 72.dp
     val hours = remember { 0..23 }
@@ -707,21 +689,17 @@ private fun DayColumnBody(
     events: List<CalendarEvent>,
     categories: List<CalendarCategory>,
     nowMillis: Long,
-    onHourClick: (hour: Int, coordinates: LayoutCoordinates, offset: Offset) -> Unit,
-    onEventClick: (event: CalendarEvent, coordinates: LayoutCoordinates, offset: Offset) -> Unit
+    onHourClick: (hour: Int) -> Unit,
+    onEventClick: (event: CalendarEvent) -> Unit
 ) {
-    var boxCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
-    val density = LocalDensity.current
-
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
             .height(hourHeight * hours.count())
-            .onGloballyPositioned { boxCoordinates = it }
             .pointerInput(hourHeightPx) {
                 detectTapGestures { offset ->
                     val hour = (offset.y / hourHeightPx).toInt().coerceIn(0, 23)
-                    boxCoordinates?.let { onHourClick(hour, it, offset) }
+                    onHourClick(hour)
                 }
             }
     ) {
@@ -757,12 +735,7 @@ private fun DayColumnBody(
                 color = category?.colorHex?.toCategoryColor() ?: MaterialTheme.colorScheme.surface,
                 hasCategory = category != null,
                 height = chipHeight,
-                onClick = {
-                    boxCoordinates?.let { coordinates ->
-                        val chipTopLeft = with(density) { Offset(xOffset.toPx(), topOffset.toPx()) }
-                        onEventClick(event, coordinates, chipTopLeft)
-                    }
-                },
+                onClick = { onEventClick(event) },
                 modifier = Modifier
                     .width(chipWidth)
                     .padding(top = topOffset)
@@ -846,8 +819,8 @@ private fun MultiDayTimeGrid(
     topBarHeightDp: Dp,
     onSwipePrevious: () -> Unit,
     onSwipeNext: () -> Unit,
-    onHourClick: (date: LocalDate, hour: Int, coordinates: LayoutCoordinates, offset: Offset) -> Unit,
-    onEventClick: (event: CalendarEvent, coordinates: LayoutCoordinates, offset: Offset) -> Unit,
+    onHourClick: (date: LocalDate, hour: Int) -> Unit,
+    onEventClick: (event: CalendarEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var accumulatedDragPx by remember { mutableFloatStateOf(0f) }
@@ -910,8 +883,8 @@ private fun MultiDayGridContent(
     nowMillis: Long,
     scrollState: ScrollState,
     topBarHeightDp: Dp,
-    onHourClick: (date: LocalDate, hour: Int, coordinates: LayoutCoordinates, offset: Offset) -> Unit,
-    onEventClick: (event: CalendarEvent, coordinates: LayoutCoordinates, offset: Offset) -> Unit
+    onHourClick: (date: LocalDate, hour: Int) -> Unit,
+    onEventClick: (event: CalendarEvent) -> Unit
 ) {
     val dates = remember(windowStart, dayCount) {
         val anchor = if (dayCount == 7) windowStart.startOfWeek() else windowStart
@@ -951,7 +924,7 @@ private fun MultiDayGridContent(
                     events = eventsByDate[date] ?: emptyList(),
                     categories = categories,
                     nowMillis = nowMillis,
-                    onHourClick = { hour, coordinates, offset -> onHourClick(date, hour, coordinates, offset) },
+                    onHourClick = { hour -> onHourClick(date, hour) },
                     onEventClick = onEventClick
                 )
             }
