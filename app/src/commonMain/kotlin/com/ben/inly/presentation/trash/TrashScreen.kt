@@ -1,12 +1,14 @@
 package com.ben.inly.presentation.trash
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Restore
@@ -16,24 +18,31 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import com.ben.inly.data.local.room.NoteMetadataEntity
 import com.ben.inly.domain.util.isDesktopPlatform
 import com.ben.inly.presentation.shared.components.InlyBottomSheet
 import com.ben.inly.presentation.shared.components.InlyButtonPrimary
+import com.ben.inly.presentation.shared.components.TopBarIconButton
+import com.ben.inly.presentation.shared.stableStatusBarsPadding
 import com.ben.inly.presentation.mobile.home.NoteCard
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
+import inly.app.generated.resources.Res
+import inly.app.generated.resources.chevron_left
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.painterResource
 import org.koin.compose.viewmodel.koinViewModel
+import kotlin.time.Duration.Companion.milliseconds
 
 private val HORIZONTAL_PADDING = 16.dp
 
-/**
- * The shared multiplatform screen for viewing and managing deleted notes.
- * Notes here can be permanently deleted or restored to their original location.
- */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TrashScreen(
     onNavigateBack: () -> Unit,
@@ -43,33 +52,24 @@ fun TrashScreen(
     var selectedNoteToManage by remember { mutableStateOf<NoteMetadataEntity?>(null) }
     var showEmptyTrashConfirm by remember { mutableStateOf(false) }
 
-    Scaffold(
-        containerColor = if (isDesktopPlatform) Color.Transparent else MaterialTheme.colorScheme.background,
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text("Trash", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    if (trashedNotes.isNotEmpty()) {
-                        IconButton(onClick = { showEmptyTrashConfirm = true }) {
-                            Icon(Icons.Default.DeleteSweep, contentDescription = "Empty Trash", tint = MaterialTheme.colorScheme.error)
-                        }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = if (isDesktopPlatform) Color.Transparent else MaterialTheme.colorScheme.background
-                )
-            )
-        }
-    ) { paddingValues ->
+    val hazeState = remember { HazeState() }
+    var isScrolled by remember { mutableStateOf(false) }
+
+    val density = LocalDensity.current
+    var topBarHeightPx by remember { mutableFloatStateOf(0f) }
+    val topBarHeightDp = with(density) { topBarHeightPx.toDp() }
+
+    val backgroundColor = if (isDesktopPlatform) Color.Transparent else MaterialTheme.colorScheme.background
+
+    Box(modifier = Modifier.fillMaxSize()) {
         if (trashedNotes.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(backgroundColor)
+                    .padding(top = topBarHeightDp),
+                contentAlignment = Alignment.Center
+            ) {
                 Text(
                     text = "Trash is empty",
                     style = MaterialTheme.typography.labelSmall,
@@ -77,17 +77,24 @@ fun TrashScreen(
                 )
             }
         } else {
+            val gridState = rememberLazyGridState()
+            reportGridScrollState(gridState) { isScrolled = it }
+
             LazyVerticalGrid(
+                state = gridState,
                 columns = GridCells.Adaptive(minSize = 150.dp),
                 contentPadding = PaddingValues(
-                    top = paddingValues.calculateTopPadding() + if (isDesktopPlatform) 20.dp else 16.dp,
+                    top = topBarHeightDp + 8.dp,
                     bottom = 80.dp,
                     start = HORIZONTAL_PADDING,
                     end = HORIZONTAL_PADDING
                 ),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier
+                    .fillMaxSize()
+                    .hazeSource(state = hazeState)
+                    .background(backgroundColor)
             ) {
                 items(trashedNotes, key = { it.noteId }) { note ->
                     NoteCard(
@@ -98,6 +105,29 @@ fun TrashScreen(
                     )
                 }
             }
+        }
+
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .zIndex(10f)
+                .onGloballyPositioned { coordinates -> topBarHeightPx = coordinates.size.height.toFloat() }
+                .then(
+                    if (isScrolled) {
+                        Modifier
+                            .hazeEffect(state = hazeState, style = HazeStyle.Unspecified, block = null)
+                            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.65f))
+                    } else {
+                        Modifier
+                    }
+                )
+        ) {
+            TrashTopBar(
+                onNavigateBack = onNavigateBack,
+                showEmptyAction = trashedNotes.isNotEmpty(),
+                onEmptyTrashClick = { showEmptyTrashConfirm = true }
+            )
         }
 
         ManageNoteBottomSheet(
@@ -127,6 +157,64 @@ fun TrashScreen(
 }
 
 @Composable
+private fun reportGridScrollState(gridState: LazyGridState, onScrolledChanged: (Boolean) -> Unit) {
+    val isScrolled by remember(gridState) {
+        derivedStateOf { gridState.firstVisibleItemIndex > 0 || gridState.firstVisibleItemScrollOffset > 0 }
+    }
+    LaunchedEffect(isScrolled) { onScrolledChanged(isScrolled) }
+}
+
+@Composable
+private fun TrashTopBar(
+    onNavigateBack: () -> Unit,
+    showEmptyAction: Boolean,
+    onEmptyTrashClick: () -> Unit
+) {
+    val defaultBgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.45f)
+    val defaultContentColor = MaterialTheme.colorScheme.onSurface
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (isDesktopPlatform) Modifier else Modifier.stableStatusBarsPadding())
+            .padding(
+                top = if (isDesktopPlatform) 16.dp else 10.dp,
+                start = 16.dp,
+                end = 16.dp,
+                bottom = 16.dp
+            ),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        TopBarIconButton(
+            icon = painterResource(Res.drawable.chevron_left),
+            contentDescription = "Back",
+            bgColor = defaultBgColor,
+            tint = defaultContentColor,
+            onClick = onNavigateBack
+        )
+
+        Text(
+            text = "Trash",
+            style = MaterialTheme.typography.titleLarge,
+            color = defaultContentColor,
+            modifier = Modifier.align(Alignment.Center)
+        )
+
+        if (showEmptyAction) {
+            Box(modifier = Modifier.align(Alignment.CenterEnd)) {
+                TopBarIconButton(
+                    icon = Icons.Default.DeleteSweep,
+                    contentDescription = "Empty Trash",
+                    bgColor = defaultBgColor,
+                    tint = MaterialTheme.colorScheme.error,
+                    onClick = onEmptyTrashClick
+                )
+            }
+        }
+    }
+}
+
+@Composable
 fun ManageNoteBottomSheet(
     expanded: Boolean,
     onDismiss: () -> Unit,
@@ -141,25 +229,35 @@ fun ManageNoteBottomSheet(
         title = "Manage Note",
         subtitle = "Notes in trash are automatically deleted after 30 days."
     ) { closeAnd ->
-        BottomSheetActionItem(Icons.Default.Restore, "Restore Note") {
-            closeAnd {
-                scope.launch { delay(250); onRestore() }
+
+        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+            BottomSheetActionItem(Icons.Default.Restore, "Restore Note") {
+                closeAnd {
+                    scope.launch { delay(250.milliseconds); onRestore() }
+                }
             }
-        }
 
-        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp, horizontal = 20.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 4.dp, horizontal = 20.dp),
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+            )
 
-        BottomSheetActionItem(Icons.Default.DeleteForever, "Delete Permanently", isDestructive = true) {
-            closeAnd {
-                scope.launch { delay(250); onPermanentlyDelete() }
+            BottomSheetActionItem(
+                Icons.Default.DeleteForever,
+                "Delete Permanently",
+                isDestructive = true
+            ) {
+                closeAnd {
+                    scope.launch { delay(250.milliseconds); onPermanentlyDelete() }
+                }
             }
-        }
 
-        InlyButtonPrimary(
-            text = "Cancel",
-            onClick = { closeAnd(onDismiss) },
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)
-        )
+            InlyButtonPrimary(
+                text = "Cancel",
+                onClick = { closeAnd(onDismiss) },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)
+            )
+        }
     }
 }
 
@@ -177,17 +275,20 @@ fun EmptyTrashBottomSheet(
         title = "Empty Trash?",
         subtitle = "This will permanently delete all notes currently in the trash. This action cannot be undone."
     ) { closeAnd ->
-        BottomSheetActionItem(Icons.Default.DeleteSweep, "Empty Trash", isDestructive = true) {
-            closeAnd {
-                scope.launch { delay(250); onConfirmEmpty() }
-            }
-        }
 
-        InlyButtonPrimary(
-            text = "Cancel",
-            onClick = { closeAnd(onDismiss) },
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)
-        )
+        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+            BottomSheetActionItem(Icons.Default.DeleteSweep, "Empty Trash", isDestructive = true) {
+                closeAnd {
+                    scope.launch { delay(250.milliseconds); onConfirmEmpty() }
+                }
+            }
+
+            InlyButtonPrimary(
+                text = "Cancel",
+                onClick = { closeAnd(onDismiss) },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)
+            )
+        }
     }
 }
 
