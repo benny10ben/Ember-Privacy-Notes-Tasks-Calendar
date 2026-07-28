@@ -2,11 +2,11 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "63e161ea8e9be8097d5ef609a8669d05",
+    "identityHash": "a480e08953808ec0fac8e9cbecb955a5",
     "entities": [
       {
         "tableName": "notes_metadata",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`noteId` TEXT NOT NULL, `title` TEXT NOT NULL, `icon` TEXT, `folderId` TEXT, `isDaily` INTEGER NOT NULL, `dateString` TEXT, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `filePath` TEXT NOT NULL, `snippet` TEXT NOT NULL, `isFavorite` INTEGER NOT NULL, `coverImagePath` TEXT, `trashedAt` INTEGER, `isSubNote` INTEGER NOT NULL, `showWordCount` INTEGER NOT NULL, `sortOrder` INTEGER NOT NULL, `isTemplate` INTEGER NOT NULL, PRIMARY KEY(`noteId`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`noteId` TEXT NOT NULL, `title` TEXT NOT NULL, `icon` TEXT, `folderId` TEXT, `isDaily` INTEGER NOT NULL, `dateString` TEXT, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `filePath` TEXT NOT NULL, `snippet` TEXT NOT NULL, `isFavorite` INTEGER NOT NULL, `coverImagePath` TEXT, `trashedAt` INTEGER, `isSubNote` INTEGER NOT NULL, `showWordCount` INTEGER NOT NULL, `sortOrder` INTEGER NOT NULL, `isTemplate` INTEGER NOT NULL, `selfHostSyncedAt` INTEGER NOT NULL, PRIMARY KEY(`noteId`))",
         "fields": [
           {
             "fieldPath": "noteId",
@@ -102,6 +102,12 @@
           {
             "fieldPath": "isTemplate",
             "columnName": "isTemplate",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "selfHostSyncedAt",
+            "columnName": "selfHostSyncedAt",
             "affinity": "INTEGER",
             "notNull": true
           }
@@ -717,7 +723,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '63e161ea8e9be8097d5ef609a8669d05')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'a480e08953808ec0fac8e9cbecb955a5')"
     ]
   }
 }

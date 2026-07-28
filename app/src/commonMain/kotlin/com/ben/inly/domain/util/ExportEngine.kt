@@ -54,7 +54,7 @@ object ExportEngine {
                     }
                 }
                 is VoiceBlock, is SketchBlock -> { /* Ignored */ }
-                is LinkedNoteBlock -> TODO()
+                is LinkedNoteBlock -> { /* Ignored - only linkedNoteId is available here, no title to render */ }
             }
         }
     }
@@ -141,7 +141,7 @@ object ExportEngine {
                     builder.appendLine()
                 }
                 is VoiceBlock, is SketchBlock -> { /* Ignored */ }
-                is LinkedNoteBlock -> TODO()
+                is LinkedNoteBlock -> { /* Ignored - only linkedNoteId is available here, no title to render */ }
             }
         }
     }

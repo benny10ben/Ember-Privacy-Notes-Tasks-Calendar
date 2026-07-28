@@ -29,6 +29,7 @@ import com.ben.inly.domain.selfhost.webdav.WebDavSyncClient
 import com.ben.inly.domain.selfhost.webdav.WebDavSyncPaths
 import com.ben.inly.domain.util.MediaStorageHelper
 import com.ben.inly.domain.util.SyncCoordinator
+import com.ben.inly.domain.util.withSyncCoordinatorOrSkip
 import java.io.File
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -57,7 +58,7 @@ class SelfHostSyncEngine(
     private val selfHostDeletedNoteDao: SelfHostDeletedNoteDao
 ) {
 
-    private enum class ReconcileOutcome { SYNCED, CONFLICT_SKIPPED, UNCHANGED }
+    private enum class ReconcileOutcome { SYNCED, CONFLICT_SKIPPED, LOCK_BUSY, UNCHANGED }
 
     private val mutex = Mutex()
     private val manifestJson = Json { ignoreUnknownKeys = true; encodeDefaults = true }
@@ -67,25 +68,19 @@ class SelfHostSyncEngine(
     private companion object {
         const val MAX_MANIFEST_UPLOAD_RETRIES = 3
 
-        // A media file with no local block referencing it is only a *candidate* for deletion, not a
-        // certainty - this device might simply not have pulled the note that still needs it yet (a
-        // slow-to-sync device, or a media-only sync running without a fresh text sync just before it).
-        // Requiring the file to have sat unreferenced for a full day gives every other device many
-        // sync cycles to prove it's still needed (by re-referencing and re-uploading it) before this
-        // device ever deletes it from the server.
+        // Unreferenced media files are candidates for deletion.
+        // We wait a full day (grace period) to allow other devices to sync and claim them,
+        // preventing accidental deletion if another device just hasn't synced yet.
         const val MEDIA_ORPHAN_GRACE_PERIOD_MS = 24L * 60 * 60 * 1000
     }
 
+    // wire this up in the app ui so let users know if any self host sync is pending
     suspend fun hasPendingLocalChanges(): Boolean =
-        noteDao.getNotesModifiedSince(settingsManager.getSelfHostLastSyncTimestamp()).isNotEmpty()
+        noteDao.getNotesNeedingSelfHostSync().isNotEmpty()
 
-    // The private `mutex` above only keeps overlapping sync triggers (poller, worker, manual button)
-    // from running this engine's own work twice at once. It says nothing to the editor's own saves -
-    // NoteEditorViewModel/DailyEditorViewModel and SyncRepositoryImpl (LAN sync) all coordinate through
-    // SyncCoordinator.mutex, so without also taking it here, a local save's read-modify-write over
-    // note_blocks can interleave with this engine's own Room writes for the same note at any point,
-    // mid-cycle - e.g. a save's currentEntities read landing between two of this engine's writes and
-    // seeing a transiently inconsistent (even momentarily empty) result for that note.
+    // The local mutex prevents concurrent background syncs, but doesn't block local editor saves.
+    // To prevent saves from reading incomplete data mid-sync, we use `SyncCoordinator.mutex`
+    // to lock each note individually inside `runSyncLocked`.
     suspend fun runSync(): SelfHostSyncResult {
         SelfHostSyncLog.d("runSync() called")
         if (!mutex.tryLock()) {
@@ -93,7 +88,7 @@ class SelfHostSyncEngine(
             return SelfHostSyncResult.AlreadyInProgress
         }
         return try {
-            SyncCoordinator.mutex.withLock { runSyncLocked() }
+            runSyncLocked()
         } finally {
             mutex.unlock()
         }
@@ -119,30 +114,31 @@ class SelfHostSyncEngine(
             return SelfHostSyncResult.AlreadyInProgress
         }
         return try {
-            SyncCoordinator.mutex.withLock {
-                val textResult = runSyncLocked()
+            val textResult = runSyncLocked()
 
-                if (textResult is SelfHostSyncResult.Success) {
-                    try {
-                        when (val mediaResult = syncMediaLocked()) {
-                            is SelfHostSyncResult.Failure -> SelfHostSyncLog.e(
-                                "runBaselineSync(): baseline media sync failed, will retry via background worker: ${mediaResult.cause.message}",
-                                mediaResult.cause
-                            )
-                            else -> SelfHostSyncLog.d("runBaselineSync(): baseline media sync finished with $mediaResult")
-                        }
-                    } catch (cause: Exception) {
-                        SelfHostSyncLog.e(
-                            "runBaselineSync(): baseline media sync threw unexpectedly, will retry via background worker",
-                            cause
+            if (textResult is SelfHostSyncResult.Success) {
+                try {
+                    // Media sync holds SyncCoordinator.mutex for its entire duration.
+                    // It only modifies files on disk and the remote manifest, not note data,
+                    // so a granular per-note lock is unnecessary here.
+                    when (val mediaResult = SyncCoordinator.mutex.withLock { syncMediaLocked() }) {
+                        is SelfHostSyncResult.Failure -> SelfHostSyncLog.e(
+                            "runBaselineSync(): baseline media sync failed, will retry via background worker: ${mediaResult.cause.message}",
+                            mediaResult.cause
                         )
+                        else -> SelfHostSyncLog.d("runBaselineSync(): baseline media sync finished with $mediaResult")
                     }
-                } else {
-                    SelfHostSyncLog.d("runBaselineSync(): skipping baseline media sync, text sync did not succeed ($textResult)")
+                } catch (cause: Exception) {
+                    SelfHostSyncLog.e(
+                        "runBaselineSync(): baseline media sync threw unexpectedly, will retry via background worker",
+                        cause
+                    )
                 }
-
-                textResult
+            } else {
+                SelfHostSyncLog.d("runBaselineSync(): skipping baseline media sync, text sync did not succeed ($textResult)")
             }
+
+            textResult
         } finally {
             mutex.unlock()
         }
@@ -157,18 +153,16 @@ class SelfHostSyncEngine(
             val remoteMediaFileNames = manifestMediaEntries.map { it.entryId }.toSet()
 
             val referencedFileNames = collectReferencedMediaFileNames()
-            // Must check disk presence for every file the manifest tracks, not just the ones this
-            // device's own surviving blocks currently reference - otherwise a file downloaded here
-            // (present on disk, but orphaned from any local block, or only referenced by another
-            // device's note) never gets recognized as "already have it" on the next cycle and gets
-            // redownloaded every single sync, forever.
+            // Check disk presence for all files tracked in the manifest.
+            // This prevents re-downloading files that are already on disk but aren't
+            // referenced by local note blocks yet.
             val existingLocalFileNames = (referencedFileNames + remoteMediaFileNames)
                 .filterTo(mutableSetOf()) { fileExistsLocally(it) }
 
             SelfHostSyncLog.d(
                 "MediaSync: ${referencedFileNames.size} media file(s) referenced locally, " +
-                    "${existingLocalFileNames.size} actually present on disk, " +
-                    "${remoteMediaFileNames.size} tracked on server"
+                        "${existingLocalFileNames.size} actually present on disk, " +
+                        "${remoteMediaFileNames.size} tracked on server"
             )
 
             val toUpload = existingLocalFileNames - remoteMediaFileNames
@@ -218,10 +212,9 @@ class SelfHostSyncEngine(
                 }
             }
 
-            // A file the manifest tracks but no local block references anymore is only a *candidate*
-            // for cleanup, not a certainty - see MEDIA_ORPHAN_GRACE_PERIOD_MS. If any device still
-            // genuinely needs it, that device's own referencedFileNames will include it and it gets
-            // re-uploaded (self-healing) even after this device removes it here.
+            // Filter unreferenced files that have exceeded the grace period.
+            // If another device still needs a deleted file, it will automatically
+            // re-upload it during its next sync cycle.
             val nowMs = Clock.System.now().toEpochMilliseconds()
             val orphanedFileNames = manifestMediaEntries
                 .filter { it.entryId !in referencedFileNames && (nowMs - it.updatedAt) > MEDIA_ORPHAN_GRACE_PERIOD_MS }
@@ -249,7 +242,7 @@ class SelfHostSyncEngine(
 
             SelfHostSyncLog.d(
                 "MediaSync: complete, uploaded=$uploadedCount downloaded=$downloadedCount " +
-                    "deleted=$deletedCount failed=$failedCount"
+                        "deleted=$deletedCount failed=$failedCount"
             )
             SelfHostSyncResult.Success(notesSynced = uploadedCount + downloadedCount, conflicts = failedCount)
         } catch (cause: WebDavConfigurationException) {
@@ -294,7 +287,7 @@ class SelfHostSyncEngine(
 
         SelfHostSyncLog.d(
             "MediaSync: Found $mediaBlockCount local media block(s) to process, " +
-                "${fileNames.size} distinct media file(s) referenced"
+                    "${fileNames.size} distinct media file(s) referenced"
         )
         return fileNames
     }
@@ -309,9 +302,8 @@ class SelfHostSyncEngine(
         val previousMediaEntriesById = previousManifest.entries
             .filter { it.entryType == SelfHostEntryType.MEDIA }
             .associateBy { it.entryId }
-        // Preserve the original upload timestamp for a file that was already tracked - stamping every
-        // still-referenced file with "now" on every cycle would mean the orphan-cleanup grace period
-        // (measured from this same updatedAt) never actually elapses for anything.
+        // Preserve original upload timestamps for tracked files.
+        // Updating this timestamp every cycle would prevent the orphan grace period from ever expiring.
         val mediaEntries = mediaFileNames.map { fileName ->
             SelfHostManifestEntry(
                 entryId = fileName,
@@ -354,85 +346,71 @@ class SelfHostSyncEngine(
             }
 
             val syncStartTimestamp = Clock.System.now().toEpochMilliseconds()
-            val lastSyncTimestamp = settingsManager.getSelfHostLastSyncTimestamp()
             val (manifest, manifestEtag) = downloadManifestWithEtag()
-            val isRemoteManifestEmpty = manifest.entries.isEmpty()
-            val allLocalNotes = noteDao.getAllNotesForBackup()
 
-            // lastSyncTimestamp lives in OS-level Preferences/keyring, entirely separate from the
-            // Room database file - wiping just the app's local data directory (or reinstalling) clears
-            // every local note but leaves that old watermark intact. Without this check, the engine
-            // would trust the stale watermark, see nothing "changed" since it (nothing on the server
-            // actually has changed), do nothing, and then uploadManifest() moments later would rebuild
-            // the note-entries list from the now-empty local database - silently wiping every note out
-            // of the shared manifest while leaving the actual files orphaned on the server. Treat a
-            // non-empty remote manifest paired with an empty local database as "I need a full resync,"
-            // exactly like a brand-new device pairing for the first time.
-            //
-            // "Empty" here deliberately ignores templates - DefaultTemplateSeeder writes the
-            // predefined templates back in on every single launch before this ever runs, so the
-            // local database is never literally empty at first run and this check would otherwise
-            // never trigger for the exact wipe/reinstall scenario it exists for.
-            val isLocalDatabaseEmpty = allLocalNotes.all { it.isTemplate }
-            val effectiveLastSyncTimestamp = if (isLocalDatabaseEmpty && !isRemoteManifestEmpty) 0L else lastSyncTimestamp
-
-            val remoteChangedEntries = manifest.entries
-                .filter { it.entryType != SelfHostEntryType.MEDIA && it.updatedAt > effectiveLastSyncTimestamp }
+            // Sync candidacy is determined per note using its `selfHostSyncedAt` value.
+            // If a local row doesn't exist (e.g., a new note or wiped data), it defaults to 0
+            // and safely syncs as a new entry.
+            val remoteTextEntries = manifest.entries.filter { it.entryType != SelfHostEntryType.MEDIA }
+            val localRowsForRemoteEntries = noteDao.getNotesByIdsIncludingTemplates(remoteTextEntries.map { it.entryId })
+                .associateBy { it.noteId }
+            val remoteChangedEntries = remoteTextEntries
+                .filter { it.updatedAt > (localRowsForRemoteEntries[it.entryId]?.selfHostSyncedAt ?: 0L) }
                 .associateBy { it.entryId }
-
-            val localChangedNotes = if (isRemoteManifestEmpty) {
-                allLocalNotes.associateBy { it.noteId }
-            } else {
-                noteDao.getNotesModifiedSince(effectiveLastSyncTimestamp).associateBy { it.noteId }
-            }
+            val localChangedNotes = noteDao.getNotesNeedingSelfHostSync().associateBy { it.noteId }
             val candidateIds = remoteChangedEntries.keys + localChangedNotes.keys
 
             SelfHostSyncLog.d(
-                "TextSync: lastSyncTimestamp=$lastSyncTimestamp, manifestEmpty=$isRemoteManifestEmpty, " +
-                    "localDatabaseEmpty=$isLocalDatabaseEmpty, effectiveLastSyncTimestamp=$effectiveLastSyncTimestamp, " +
-                    "remoteChanged=${remoteChangedEntries.size}, localChanged=${localChangedNotes.size}, " +
-                    "candidates=${candidateIds.size}"
+                "TextSync: remoteChanged=${remoteChangedEntries.size}, localChanged=${localChangedNotes.size}, " +
+                        "candidates=${candidateIds.size}"
             )
 
             var syncedCount = 0
             var conflictCount = 0
+            var skippedBusyCount = 0
             val conflictedNoteIds = mutableSetOf<String>()
 
             for (noteId in candidateIds) {
-                val outcome = reconcileNote(noteId, remoteEntry = remoteChangedEntries[noteId])
+                // Lock each note individually for reconciliation.
+                // If the lock is busy (e.g., user is editing), we skip it so other notes aren't delayed.
+                // Skipped notes will be retried on the next sync pass.
+                val outcome = withSyncCoordinatorOrSkip {
+                    reconcileNote(noteId, remoteEntry = remoteChangedEntries[noteId])
+                } ?: run {
+                    SelfHostSyncLog.d("TextSync: note=$noteId skipped this cycle, SyncCoordinator.mutex busy - will retry next trigger")
+                    ReconcileOutcome.LOCK_BUSY
+                }
                 SelfHostSyncLog.d("TextSync: note=$noteId outcome=$outcome")
                 when (outcome) {
                     ReconcileOutcome.SYNCED -> syncedCount++
                     ReconcileOutcome.CONFLICT_SKIPPED -> { conflictCount++; conflictedNoteIds += noteId }
+                    ReconcileOutcome.LOCK_BUSY -> skippedBusyCount++
                     ReconcileOutcome.UNCHANGED -> Unit
                 }
             }
 
-            reconcileFolders()
-            reconcileTags()
-            reconcileCategories()
-
-            // Publish the manifest every cycle, conflicts or not - it used to be withheld entirely
-            // whenever ANY single note conflicted, which meant one note fighting over a stale ETag
-            // (exactly what happens when two devices are typing within the same few seconds) stalled
-            // propagation for every OTHER note that synced just fine in the same cycle. uploadManifest
-            // itself keeps a still-conflicted note's entry exactly as downloaded rather than rebuilding
-            // it from local state, since local hasn't actually landed on the server yet.
-            uploadManifest(manifest, conflictedNoteIds, manifestEtag)
-
-            // A conflict-skipped note has already been merged and persisted locally - only the
-            // remote PUT was rejected (another device's write got there first). Its local updatedAt
-            // is therefore always older than syncStartTimestamp, so advancing the watermark here would
-            // drop it out of every future candidate list forever, with no other trigger to push it
-            // again. Leave the watermark untouched so the same note gets a fresh chance to converge
-            // next cycle; everything else already synced this cycle regardless.
-            if (conflictCount == 0) {
-                settingsManager.saveSelfHostLastSyncTimestamp(syncStartTimestamp)
-            } else {
-                SelfHostSyncLog.d("TextSync: $conflictCount note(s) still conflict-skipped, deferring watermark advance to next cycle")
+            if (withSyncCoordinatorOrSkip { reconcileFolders() } == null) {
+                SelfHostSyncLog.d("TextSync: folders skipped this cycle, SyncCoordinator.mutex busy - will retry next trigger")
+            }
+            if (withSyncCoordinatorOrSkip { reconcileTags() } == null) {
+                SelfHostSyncLog.d("TextSync: tags skipped this cycle, SyncCoordinator.mutex busy - will retry next trigger")
+            }
+            if (withSyncCoordinatorOrSkip { reconcileCategories() } == null) {
+                SelfHostSyncLog.d("TextSync: categories skipped this cycle, SyncCoordinator.mutex busy - will retry next trigger")
             }
 
-            SelfHostSyncLog.d("TextSync: complete, synced=$syncedCount conflicts=$conflictCount")
+            // Always publish the manifest, even if some individual notes had conflicts.
+            // Conflicted notes retain their downloaded state until locally resolved and pushed.
+            // This runs without locks to read a fresh, unlocked database snapshot.
+            uploadManifest(manifest, conflictedNoteIds, manifestEtag)
+
+            // Update the global last sync timestamp purely for UI and polling checks.
+            // It's safe to advance this even if some notes had conflicts.
+            settingsManager.saveSelfHostLastSyncTimestamp(syncStartTimestamp)
+
+            SelfHostSyncLog.d(
+                "TextSync: complete, synced=$syncedCount conflicts=$conflictCount skippedBusy=$skippedBusyCount"
+            )
             SelfHostSyncResult.Success(notesSynced = syncedCount, conflicts = conflictCount)
         } catch (cause: WebDavConfigurationException) {
             SelfHostSyncLog.d("TextSync: not configured (${cause.message})")
@@ -443,10 +421,8 @@ class SelfHostSyncEngine(
         }
     }
 
-    // Folders/tags/categories are small, infrequently-changed collections, so unlike notes
-    // (per-note files with block-level diffing) each is synced as a single encrypted JSON file
-    // holding the full list, merged entity-by-entity via last-write-wins on updatedAt - the same
-    // ETag-conditional-PUT conflict handling as pushMergedNote, just at collection granularity.
+    // Folders, tags, and categories sync as single encrypted JSON files since they are small.
+    // We merge them entity-by-entity using a "last-write-wins" approach based on updatedAt.
     private suspend fun reconcileFolders() {
         try {
             val remoteJsonWithEtag = webDavSyncClient.downloadAndDecryptJsonWithEtag(WebDavSyncPaths.FOLDERS_FILE)
@@ -577,10 +553,8 @@ class SelfHostSyncEngine(
                 else -> webDavSyncClient.downloadNoteWithEtag(noteId)
             }
             val remoteJson = remoteJsonWithEtag?.first
-            // Captured from the exact same GET as remoteJson, so it reflects what the merge below was
-            // actually based on - the push at the end of this function must condition on THIS etag,
-            // not a freshly re-read one, or a write from another device landing in between would be
-            // invisible to the If-Match check and get silently overwritten with no conflict detected.
+            // Capture the ETag from the download. The final push must condition on this exact ETag
+            // to detect concurrent writes from other devices and prevent silent overwrites.
             val downloadTimeEtag = remoteJsonWithEtag?.second
             val remoteOps = remoteJson?.let { NoteJsonParser.parseJsonToDatabaseOperations(it) }
 
@@ -593,7 +567,7 @@ class SelfHostSyncEngine(
                 if (!belongsToNote) {
                     SelfHostSyncLog.e(
                         "SelfHostSyncEngine: query for note $noteId returned block ${block.blockId} " +
-                            "belonging to note ${block.noteId}, discarding it"
+                                "belonging to note ${block.noteId}, discarding it"
                     )
                 }
                 belongsToNote
@@ -610,10 +584,9 @@ class SelfHostSyncEngine(
             noteDao.insertOrUpdateMetadata(mergedMetadata.copy(filePath = ""))
             blockDao.insertOrUpdateBlocks(mergedBlocks)
 
-            // mergeBlocks preserves local's pre-merge LinkedHashMap insertion order, not each entity's
-            // possibly-updated displayOrder - Room's own read query re-sorts on the next cold read, but
-            // this in-memory refresh feeds the live UI cache directly, so it must sort explicitly or a
-            // pure reorder never shows up until the app restarts and re-reads Room fresh.
+            // Explicitly sort blocks by displayOrder.
+            // This ensures live UI caches reflect the correct order immediately,
+            // without waiting for a fresh database read.
             val refreshedContent = NoteContent(
                 blocks = mergedBlocks.sortedBy { it.displayOrder }.mapNotNull { entity ->
                     try {
@@ -637,29 +610,26 @@ class SelfHostSyncEngine(
             }
             noteRepository.refreshProjectionsForNote(mergedMetadata, refreshedContent.blocks)
 
-            // The LAN sync path (SyncRepositoryImpl) already emits this after applying a remote
-            // change so an open editor screen reloads title/icon/favorite/cover and, for daily notes,
-            // picks up "global_pinned" edits - WebDAV sync never did, leaving those fields (and pinned
-            // blocks) stale in whatever note happened to be open when a pull landed. Emit unconditionally
-            // here, before the push attempt below, since the merge is already committed to Room/cache
-            // at this point regardless of whether the subsequent push succeeds.
+            // Emit an event so open editors immediately refresh title, cover, and pinned states.
+            // This happens before pushing, since local database/cache merges are already committed.
             com.ben.inly.domain.util.SyncEventBus.emitSyncCompleted(
                 if (mergedMetadata.isDaily) mergedMetadata.dateString ?: noteId else noteId
             )
 
             pushMergedNote(mergedMetadata, mergedBlocks, downloadTimeEtag)
+
+            // Only update `selfHostSyncedAt` if the push succeeds.
+            // If the push fails, the note remains a sync candidate for the next cycle.
+            noteDao.updateSelfHostSyncedAt(noteId, mergedMetadata.updatedAt)
             ReconcileOutcome.SYNCED
         } catch (cause: WebDavConflictException) {
             ReconcileOutcome.CONFLICT_SKIPPED
         }
     }
 
-    // A manifest entry with isDeleted=true means some device permanently deleted this note (Trash's
-    // "delete forever", or a folder delete) and recorded a tombstone instead of just letting the
-    // entry vanish - vanishing entries are indistinguishable from "never existed" to a device that
-    // still has a local copy, which is exactly what let hard-deleted notes silently resurrect before
-    // this tombstone existed. No content download is needed here, unlike the normal merge path -
-    // deletion carries no content to merge.
+    // `isDeleted=true` means another device permanently deleted this note.
+    // We use tombstones to ensure devices with a local copy delete it instead of re-uploading it.
+    // No content download is needed since the note is being removed.
     private suspend fun applyRemoteTombstone(candidateId: String, remoteEntry: SelfHostManifestEntry): ReconcileOutcome {
         val isDaily = remoteEntry.entryType == SelfHostEntryType.DAILY
         val localMetadata = if (isDaily && remoteEntry.dateString != null) {
@@ -673,9 +643,8 @@ class SelfHostSyncEngine(
         }
 
         if (localMetadata.updatedAt > remoteEntry.updatedAt) {
-            // Local was genuinely edited after this tombstone was recorded - someone is actively
-            // using this note in good faith elsewhere. Don't destroy a live edit; the normal merge
-            // path will push it back out and the stale tombstone will lose on the next reconcile.
+            // The local note was edited after the remote tombstone was created.
+            // We preserve the live edit; it will be pushed and clear the tombstone on the next sync.
             return ReconcileOutcome.UNCHANGED
         }
 
@@ -711,12 +680,9 @@ class SelfHostSyncEngine(
         }
     }
 
-    // A missing manifest (raw == null - nothing has ever been uploaded yet) is genuinely empty and
-    // safe to treat as such. A manifest that exists but fails to decode is NOT the same thing - it's
-    // real remote state we just couldn't read this cycle (a transient corruption, a race with another
-    // device's write). Silently downgrading that to "empty" used to let the caller advance its sync
-    // watermark past changes it never actually saw, permanently orphaning them. Let the decode
-    // failure propagate instead, so this cycle fails and retries with a fresh download next time.
+    // Treat a missing manifest as completely empty.
+    // If a manifest exists but fails to decode, allow the error to propagate.
+    // This forces a retry instead of treating corrupted data as empty and orphaning notes.
     private suspend fun downloadManifest(): SelfHostManifest = downloadManifestWithEtag().first
 
     private suspend fun downloadManifestWithEtag(): Pair<SelfHostManifest, String?> {
@@ -732,21 +698,15 @@ class SelfHostSyncEngine(
         previousManifestEtag: String? = null,
         attempt: Int = 0
     ) {
-        // A tombstone must never be dropped by whichever device happens to upload the manifest next -
-        // if it were, a device that hasn't purged its own local copy yet (still catching up, or was
-        // offline when the deletion happened) would have nothing telling it to delete, and its own
-        // later manifest rebuild would resurrect the note for everyone. So every previously-known
-        // tombstone is carried forward here forever, same as how media entries are preserved below,
-        // regardless of which device authored it.
+        // Preserve all existing tombstones in the manifest forever.
+        // This ensures offline or lagging devices eventually see the deletion and don't
+        // accidentally resurrect deleted notes.
         val previousTombstones = previousManifest.entries.filter { it.isDeleted }
         val localTombstones = selfHostDeletedNoteDao.getAllTombstones()
 
-        // The manifest tombstone is what tells other devices to delete their copy - it must live
-        // forever regardless of this. This is the separate, one-time cleanup of the actual remote
-        // note/daily file for a note THIS device permanently deleted, so it doesn't sit on the server
-        // as a storage-leaking orphan forever. remoteFileDeleted is tracked per tombstone so a
-        // successful deletion is never repeated every cycle, but a failed one (offline, server error)
-        // is retried on the next.
+        // Perform a one-time remote file cleanup for notes deleted by this device.
+        // This prevents orphaned files from wasting server storage.
+        // Success is tracked to avoid repeating, and failures are retried next cycle.
         for (tombstone in localTombstones) {
             if (tombstone.remoteFileDeleted) continue
             try {
@@ -788,11 +748,9 @@ class SelfHostSyncEngine(
         val noteEntries = noteDao.getAllNotesForBackup()
             .filter { it.noteId !in tombstoneIds }
             .map { note ->
-                // A conflict means this device's push was rejected - the server's actual content is
-                // whatever the OTHER device successfully wrote, which is exactly what produced this
-                // entry in the manifest we just downloaded. Rebuilding it from local state here would
-                // advertise content that was never actually accepted by the server, potentially with
-                // a timestamp that causes other devices to wrongly skip re-checking this note.
+                // If a note conflicted, its push was rejected.
+                // We preserve the downloaded manifest entry for it, rather than rebuilding it from local state,
+                // because the local state hasn't been successfully accepted by the server yet.
                 if (note.noteId in conflictedNoteIds) {
                     previousEntriesById[note.noteId] ?: SelfHostManifestEntry(
                         entryId = note.noteId,
@@ -814,12 +772,8 @@ class SelfHostSyncEngine(
             entries = noteEntries + mergedTombstonesById.values + preservedMediaEntries
         )
 
-        // The manifest is rewritten wholesale by every device on every cycle - without this If-Match,
-        // two devices syncing within seconds of each other (exactly the concurrent-edit scenario this
-        // sync engine is built for) would blindly stomp whichever one uploaded second, silently
-        // dropping the other's tombstones/media entries with no conflict ever detected. On a 412,
-        // the whole computation above is redone against a fresh download rather than blindly retried,
-        // since it depends entirely on previousManifest's tombstones/media entries.
+        // The If-Match ETag check prevents concurrent manifest uploads from overwriting each other.
+        // On a conflict (412 status), we abort and retry with a fresh download.
         try {
             webDavSyncClient.uploadEncryptedJson(
                 WebDavSyncPaths.MANIFEST_FILE,

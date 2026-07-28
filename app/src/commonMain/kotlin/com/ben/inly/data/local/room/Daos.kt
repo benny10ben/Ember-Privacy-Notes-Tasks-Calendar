@@ -80,6 +80,21 @@ interface NoteDao {
     @Query("SELECT * FROM notes_metadata WHERE updatedAt > :timestamp")
     suspend fun getNotesModifiedSince(timestamp: Long): List<NoteMetadataEntity>
 
+    // Self-host's per-note candidate discovery - comparing each row's own two columns needs no
+    // externally-tracked watermark parameter at all, unlike getNotesModifiedSince above. Deliberately
+    // NOT filtered by isTemplate, same reasoning as getNotesModifiedSince.
+    @Query("SELECT * FROM notes_metadata WHERE updatedAt > selfHostSyncedAt")
+    suspend fun getNotesNeedingSelfHostSync(): List<NoteMetadataEntity>
+
+    // Self-host manifest reconciliation needs to check a remote entry's updatedAt against the
+    // matching local row's own selfHostSyncedAt - getNotesByIds above can't be reused here since it
+    // filters out templates, which self-host sync must still track.
+    @Query("SELECT * FROM notes_metadata WHERE noteId IN (:ids)")
+    suspend fun getNotesByIdsIncludingTemplates(ids: List<String>): List<NoteMetadataEntity>
+
+    @Query("UPDATE notes_metadata SET selfHostSyncedAt = :syncedAt WHERE noteId = :noteId")
+    suspend fun updateSelfHostSyncedAt(noteId: String, syncedAt: Long)
+
     @Query("SELECT COUNT(*) FROM calendar_tasks WHERE isChecked = 0")
     fun getIncompleteTasksCount(): Flow<Int>
 

@@ -6,13 +6,11 @@ import com.ben.inly.core.security.SyncEncryptionManager
 import com.ben.inly.core.security.SyncHmacSigner
 import com.ben.inly.data.local.prefs.SettingsManager
 import com.ben.inly.domain.sync.SyncRepository
-import com.ben.inly.domain.util.SyncCoordinator
 import com.ben.inly.sync.SyncClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -42,43 +40,40 @@ class SyncViewModel(
 
             _syncStatus.value = "Syncing..."
 
-            SyncCoordinator.mutex.withLock {
-                val syncStart = System.currentTimeMillis()
-                val lastSyncTimestamp = settingsManager.getLastSyncTimestamp()
+            // Collecting and transferring changes do not hold SyncCoordinator.mutex.
+            // applyRemoteChanges acquires the mutex individually per envelope when writing to Room.
+            val syncStart = System.currentTimeMillis()
+            val lastSyncTimestamp = settingsManager.getLastSyncTimestamp()
 
-                try {
-                    val client = SyncClient(settingsManager, hmacSigner, syncEncryptionManager)
+            try {
+                val client = SyncClient(settingsManager, hmacSigner, syncEncryptionManager)
 
-                    val localChanges = syncRepository.collectLocalChanges(lastSyncTimestamp)
-                    if (localChanges.isNotEmpty()) {
-                        client.pushChanges(localChanges)
-                    }
-
-                    _syncStatus.value = "Fetching from Desktop..."
-                    val remoteChanges = client.fetchChanges(lastSyncTimestamp)
-                    val appliedCleanly = if (remoteChanges.isNotEmpty()) {
-                        syncRepository.applyRemoteChanges(remoteChanges)
-                    } else true
-
-                    if (appliedCleanly) {
-                        // Only advance past this round if every fetched change actually applied -
-                        // otherwise the failed one(s) would never be resent, since the server now
-                        // answers strictly off this timestamp.
-                        settingsManager.saveLastSyncTimestamp(syncStart)
-                        _syncStatus.value = "Success!"
-
-                        // Only on a manual, user-initiated sync - not the fast background watchdog,
-                        // which would otherwise list+scan every ~1.5s for a cleanup that only ever
-                        // acts once every 24h anyway.
-                        syncRepository.cleanupOrphanedMedia()
-                    } else {
-                        _syncStatus.value = "Partial sync, will retry"
-                    }
-
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    _syncStatus.value = "Failed: ${e.message}"
+                val localChanges = syncRepository.collectLocalChanges(lastSyncTimestamp)
+                if (localChanges.isNotEmpty()) {
+                    client.pushChanges(localChanges)
                 }
+
+                _syncStatus.value = "Fetching from Desktop..."
+                val remoteChanges = client.fetchChanges(lastSyncTimestamp)
+                val appliedCleanly = if (remoteChanges.isNotEmpty()) {
+                    syncRepository.applyRemoteChanges(remoteChanges)
+                } else true
+
+                if (appliedCleanly) {
+                    // Only advance the sync timestamp if all fetched changes were applied successfully.
+                    // If any change failed, keeping the old timestamp ensures it is retried.
+                    settingsManager.saveLastSyncTimestamp(syncStart)
+                    _syncStatus.value = "Success!"
+
+                    // Clean up orphaned media only during manual syncs to avoid unnecessary disk scans in background tasks.
+                    syncRepository.cleanupOrphanedMedia()
+                } else {
+                    _syncStatus.value = "Partial sync, will retry"
+                }
+
+            } catch (e: Exception) {
+                e.printStackTrace()
+                _syncStatus.value = "Failed: ${e.message}"
             }
         }
     }
@@ -106,39 +101,38 @@ class SyncViewModel(
     }
 
     private suspend fun performSilentSync(): Boolean = withContext(Dispatchers.IO) {
-        SyncCoordinator.mutex.withLock {
-            val syncStart = System.currentTimeMillis()
-            val lastSyncTimestamp = settingsManager.getLastSyncTimestamp()
-            return@withContext try {
-                _syncStatus.value = "Auto-Syncing..."
-                val client = SyncClient(settingsManager, hmacSigner, syncEncryptionManager)
+        // Runs network requests un-locked to prevent blocking local editor saves during frequent background polling.
+        val syncStart = System.currentTimeMillis()
+        val lastSyncTimestamp = settingsManager.getLastSyncTimestamp()
+        try {
+            _syncStatus.value = "Auto-Syncing..."
+            val client = SyncClient(settingsManager, hmacSigner, syncEncryptionManager)
 
-                val localChanges = syncRepository.collectLocalChanges(lastSyncTimestamp)
-                if (localChanges.isNotEmpty()) {
-                    client.pushChanges(localChanges)
-                }
+            val localChanges = syncRepository.collectLocalChanges(lastSyncTimestamp)
+            if (localChanges.isNotEmpty()) {
+                client.pushChanges(localChanges)
+            }
 
-                val remoteChanges = client.fetchChanges(lastSyncTimestamp)
-                val appliedCleanly = if (remoteChanges.isNotEmpty()) {
-                    syncRepository.applyRemoteChanges(remoteChanges)
-                } else true
+            val remoteChanges = client.fetchChanges(lastSyncTimestamp)
+            val appliedCleanly = if (remoteChanges.isNotEmpty()) {
+                syncRepository.applyRemoteChanges(remoteChanges)
+            } else true
 
-                if (appliedCleanly) {
-                    settingsManager.saveLastSyncTimestamp(syncStart)
-                    _syncStatus.value = "Synced Successfully"
-                    true
-                } else {
-                    _syncStatus.value = "Partial sync, will retry"
-                    false
-                }
-            } catch (_: java.net.ConnectException) {
-                _syncStatus.value = "Desktop Offline"
-                false
-            } catch (e: Exception) {
-                e.printStackTrace()
-                _syncStatus.value = "Sync Error: ${e.javaClass.simpleName}"
+            if (appliedCleanly) {
+                settingsManager.saveLastSyncTimestamp(syncStart)
+                _syncStatus.value = "Synced Successfully"
+                true
+            } else {
+                _syncStatus.value = "Partial sync, will retry"
                 false
             }
+        } catch (_: java.net.ConnectException) {
+            _syncStatus.value = "Desktop Offline"
+            false
+        } catch (e: Exception) {
+            e.printStackTrace()
+            _syncStatus.value = "Sync Error: ${e.javaClass.simpleName}"
+            false
         }
     }
 

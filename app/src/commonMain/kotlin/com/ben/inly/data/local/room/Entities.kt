@@ -30,7 +30,8 @@ data class NoteMetadataEntity(
     val isSubNote: Boolean = false,
     val showWordCount: Boolean = false,
     val sortOrder: Int = 0,
-    val isTemplate: Boolean = false
+    val isTemplate: Boolean = false,
+    val selfHostSyncedAt: Long = 0L
 )
 
 /**

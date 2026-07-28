@@ -15,15 +15,12 @@ import io.ktor.serialization.kotlinx.json.*
 import com.ben.inly.domain.sync.SyncEnvelope
 import com.ben.inly.domain.sync.SyncPayload
 import com.ben.inly.domain.sync.SyncRepository
-import com.ben.inly.domain.util.SyncCoordinator
 import io.ktor.http.ContentType
 import io.ktor.utils.io.jvm.javaio.toInputStream
-import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import java.security.MessageDigest
 
-// Verifies the X-Sync-Timestamp/X-Sync-Signature headers against a freshly computed HMAC, rejecting
-// stale (replayed) or tampered requests before they reach the sync repository.
+// Verifies request headers against an HMAC signature to reject expired or tampered requests.
 private fun ApplicationCall.hasValidSyncSignature(settingsManager: SettingsManager, hmacSigner: SyncHmacSigner): Boolean {
     val timestampMillis = request.headers[SyncConstants.HEADER_SYNC_TIMESTAMP]?.toLongOrNull() ?: return false
     val signature = request.headers[SyncConstants.HEADER_SYNC_SIGNATURE] ?: return false
@@ -36,7 +33,7 @@ private fun ApplicationCall.hasValidSyncSignature(settingsManager: SettingsManag
         timestampMillis = timestampMillis,
         secretKey = settingsManager.getSyncEncryptionKey()
     )
-    // Constant-time comparison so a timing attack can't leak the signature byte-by-byte.
+    // Uses constant-time comparison to prevent timing attacks.
     return MessageDigest.isEqual(expectedSignature.toByteArray(), signature.toByteArray())
 }
 
@@ -60,18 +57,9 @@ fun startSyncServer(
                     return@get
                 }
 
-                // Computed fresh from the CALLING peer's own cursor rather than a watermark this
-                // server advances itself - a single shared server-side watermark used to (a) starve
-                // a second client device, since whichever one fetched first silently moved the cursor
-                // out from under the other, and (b) advance unconditionally on every fetch with no
-                // idea whether the peer actually received or applied anything, so a dropped
-                // connection or a failed apply meant those changes were never sent again. Each peer
-                // now supplies its own last-successfully-applied timestamp and only advances it after
-                // a confirmed clean apply, making this endpoint idempotent and safely re-callable.
+                // Fetches changes since the client's provided timestamp (idempotent snapshot).
                 val since = call.request.queryParameters["since"]?.toLongOrNull() ?: 0L
-                val changes = SyncCoordinator.mutex.withLock {
-                    syncRepository.collectLocalChanges(since)
-                }
+                val changes = syncRepository.collectLocalChanges(since)
                 call.respond(SyncPayload(changes))
             }
 
@@ -83,10 +71,14 @@ fun startSyncServer(
 
                 try {
                     val payload = call.receive<SyncPayload>()
-                    SyncCoordinator.mutex.withLock {
-                        syncRepository.applyRemoteChanges(payload.changes)
+                    // Applies incoming changes per envelope. If any envelope fails or is skipped due to a lock,
+                    // returns a non-2xx status so the client knows to retry the push.
+                    val appliedCleanly = syncRepository.applyRemoteChanges(payload.changes)
+                    if (appliedCleanly) {
+                        call.respond(io.ktor.http.HttpStatusCode.OK)
+                    } else {
+                        call.respond(io.ktor.http.HttpStatusCode.Conflict, "Some changes could not be applied, retry")
                     }
-                    call.respond(io.ktor.http.HttpStatusCode.OK)
                 } catch (e: Exception) {
                     e.printStackTrace()
                     call.respond(io.ktor.http.HttpStatusCode.BadRequest, e.message ?: "Sync push failed")
@@ -136,8 +128,7 @@ fun startSyncServer(
                 val mediaDir = java.io.File(System.getProperty("user.home"), ".inly/media").apply { mkdirs() }
                 val file = java.io.File(mediaDir, fileName)
 
-                // Streams the encrypted request body through AES/GCM straight onto disk in fixed-size
-                // chunks - the upload is never fully buffered into memory.
+                // Streams and decrypts the upload directly to disk in fixed chunks without buffering the full file into memory.
                 call.receiveChannel().toInputStream().use { encryptedInput ->
                     file.outputStream().use { plainOutput ->
                         syncEncryptionManager.decryptStream(encryptedInput, plainOutput, settingsManager.getSyncEncryptionKey())

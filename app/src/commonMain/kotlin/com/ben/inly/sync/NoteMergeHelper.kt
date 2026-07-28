@@ -14,9 +14,8 @@ object NoteMergeHelper {
     ): NoteContent {
         if (localContent == null) return remoteContent
 
-        // Strictly greater, not >= - on an exact-millisecond tie (two devices editing within the
-        // same debounce window), remote otherwise always won regardless of which edit actually
-        // landed second, silently discarding a local edit that was just as valid.
+        // Determines base content using last-write-wins (strictly greater timestamp).
+        // On exact timestamp ties, local content is preserved.
         val remoteWins = remoteUpdatedAt > localUpdatedAt
         val baseContent  = if (remoteWins) remoteContent else localContent
         val otherContent = if (remoteWins) localContent  else remoteContent
@@ -43,11 +42,9 @@ object NoteMergeHelper {
     }
 
     /**
-     * Walks base's list. For each block:
-     *  - Database: field-level merge with its other-side twin.
-     *  - leaf: pure last-write-wins by updatedAt, deleted or not - a block moved back to a note
-     *    it was previously tombstoned in produces a genuinely newer alive write that must win
-     *    over the stale tombstone, so deletion is never given priority independent of recency.
+     * Rebuilds the block tree:
+     *  - DatabaseBlock: performs field-level merging with its corresponding twin.
+     *  - Other blocks: applies pure last-write-wins based on updatedAt timestamps.
      */
     private fun rebuildTree(
         baseBlocks: List<NoteBlock>,
@@ -62,8 +59,6 @@ object NoteMergeHelper {
                 val other = otherById[baseBlock.id]
                 when {
                     other == null -> baseBlock
-                    // Strictly greater, not >= - ties keep whatever base already resolved to,
-                    // instead of always handing an exact-millisecond tie to the other side.
                     other.updatedAt > baseBlock.updatedAt -> other
                     else -> baseBlock
                 }
@@ -71,20 +66,20 @@ object NoteMergeHelper {
         }
     }
 
-    // database merge (unchanged logic, kept intact)
-
     private fun mergeDatabase(
         localBlock: DatabaseBlock?,
         remoteBlock: DatabaseBlock
     ): DatabaseBlock {
         if (localBlock == null) return remoteBlock
 
-        // Strictly greater throughout this function, not >= - see mergeNoteContent's tie comment.
         val remoteBlockWins = remoteBlock.updatedAt > localBlock.updatedAt
 
         val localColMap  = localBlock.columns.associateBy  { it.id }
         val remoteColMap = remoteBlock.columns.associateBy { it.id }
-        val allColIds    = (localColMap.keys + remoteColMap.keys).distinct()
+        // Orders columns according to the winning block, preserving additional columns from the losing side.
+        val baseColumns  = if (remoteBlockWins) remoteBlock.columns else localBlock.columns
+        val otherColumns = if (remoteBlockWins) localBlock.columns  else remoteBlock.columns
+        val allColIds    = (baseColumns.map { it.id } + otherColumns.map { it.id }).distinct()
 
         val mergedColumns = allColIds.mapNotNull { id ->
             val localCol  = localColMap[id]
@@ -106,7 +101,10 @@ object NoteMergeHelper {
 
         val localRowMap  = localBlock.rows.associateBy  { it.id }
         val remoteRowMap = remoteBlock.rows.associateBy { it.id }
-        val allRowIds    = (localRowMap.keys + remoteRowMap.keys).distinct()
+        // Orders rows according to the winning block.
+        val baseRows     = if (remoteBlockWins) remoteBlock.rows else localBlock.rows
+        val otherRows    = if (remoteBlockWins) localBlock.rows  else remoteBlock.rows
+        val allRowIds    = (baseRows.map { it.id } + otherRows.map { it.id }).distinct()
 
         val mergedRows = allRowIds.mapNotNull { id ->
             val localRow  = localRowMap[id]

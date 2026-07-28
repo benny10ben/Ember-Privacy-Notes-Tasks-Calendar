@@ -278,7 +278,7 @@ class NoteIndexer(
         is SketchBlock   -> null
         is SolidDividerBlock    -> null
         is ThreeDotDividerBlock    -> null
-        is LinkedNoteBlock -> TODO()
+        is LinkedNoteBlock -> null
     }
 
     fun deleteNoteFromIndex(noteId: String) {
