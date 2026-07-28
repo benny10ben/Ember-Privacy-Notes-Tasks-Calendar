@@ -327,7 +327,11 @@ class DailyEditorViewModel(
             // "global_pinned" instead) - that self-inflicted tombstone must never be adopted here, or
             // every pin gets undone the moment the user navigates away and this date's disk state is
             // reconciled against, since the tombstone always looks like an external deletion otherwise.
-            if (diskBlock != null && diskBlock.isDeleted && !block.isDeleted && !block.isPinned) diskBlock else block
+            // The updatedAt check covers the mirror case: right after unpinning, disk may still hold the
+            // OLDER tombstone from when the block was originally pinned (the autosave that would replace
+            // it with a fresh, live row hasn't landed yet) - that stale tombstone must lose to the fresher
+            // in-memory unpin, or unpinning silently undoes itself the moment the user navigates away too.
+            if (diskBlock != null && diskBlock.isDeleted && !block.isDeleted && !block.isPinned && diskBlock.updatedAt > block.updatedAt) diskBlock else block
         }
 
         if (isWithinLocalMutationCooldown()) return reconciledSnapshot
