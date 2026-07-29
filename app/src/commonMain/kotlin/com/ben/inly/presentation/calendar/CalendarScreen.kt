@@ -2,14 +2,18 @@ package com.ben.inly.presentation.calendar
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
-import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -24,12 +28,13 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import com.ben.inly.presentation.shared.stableStatusBarsPadding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -40,6 +45,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
@@ -51,14 +57,17 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
@@ -67,19 +76,19 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.ben.inly.domain.util.isDesktopPlatform
+import com.ben.inly.presentation.customInlyShadow
+import com.ben.inly.presentation.shared.components.InlyBottomSheet
 import com.ben.inly.presentation.shared.components.InlyDesktopMenu
-import com.ben.inly.presentation.shared.components.KmpBackHandler
 import com.ben.inly.presentation.shared.components.TopBarIconButton
-import com.ben.inly.ui.theme.LocalAppIsDark
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import inly.app.generated.resources.Res
 import inly.app.generated.resources.chevron_left
-import inly.app.generated.resources.sidebar
+import inly.app.generated.resources.tablet
+import inly.app.generated.resources.widget2
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.Instant
@@ -96,14 +105,18 @@ import kotlin.time.Duration.Companion.milliseconds
 
 enum class CalendarViewMode { DAY, THREE_DAY, WEEK, MONTH }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun CalendarScreen(
     onNavigateBack: () -> Unit = {},
+    sharedTransitionScope: SharedTransitionScope,
+    bottomBarAnimatedVisibilityScope: AnimatedVisibilityScope,
     viewModel: CalendarViewModel = koinViewModel()
 ) {
     val internalHazeState = remember { HazeState() }
 
-    var isPanelOpen by remember { mutableStateOf(false) }
+    var showViewsSheet by remember { mutableStateOf(false) }
+    var showCategoriesSheet by remember { mutableStateOf(false) }
     val viewMode by viewModel.viewMode.collectAsState()
     var selectedDate by remember { mutableStateOf(Clock.System.todayIn(TimeZone.currentSystemDefault())) }
     val categories by viewModel.categories.collectAsState()
@@ -125,8 +138,31 @@ fun CalendarScreen(
         (0 until dayCount).map { offset -> anchor.plus(offset.toLong(), DateTimeUnit.DAY) }
     }
 
-    KmpBackHandler(enabled = isPanelOpen) {
-        isPanelOpen = false
+    var isBottomBarCompact by remember { mutableStateOf(false) }
+    val bottomBarScrollAccumulator = remember { FloatArray(1) }
+    val bottomBarNestedScrollConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                val delta = available.y
+                if (delta == 0f) return Offset.Zero
+
+                val accumulated = bottomBarScrollAccumulator[0]
+                if ((delta < 0f && accumulated > 0f) || (delta > 0f && accumulated < 0f)) {
+                    bottomBarScrollAccumulator[0] = 0f
+                }
+                bottomBarScrollAccumulator[0] += delta
+
+                val toggleThresholdPx = 60f
+                if (bottomBarScrollAccumulator[0] <= -toggleThresholdPx && !isBottomBarCompact) {
+                    isBottomBarCompact = true
+                    bottomBarScrollAccumulator[0] = 0f
+                } else if (bottomBarScrollAccumulator[0] >= toggleThresholdPx && isBottomBarCompact) {
+                    isBottomBarCompact = false
+                    bottomBarScrollAccumulator[0] = 0f
+                }
+                return Offset.Zero
+            }
+        }
     }
 
     Scaffold(
@@ -138,6 +174,7 @@ fun CalendarScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
                 .consumeWindowInsets(paddingValues)
+                .nestedScroll(bottomBarNestedScrollConnection)
         ) {
             Column(
                 modifier = Modifier
@@ -283,7 +320,6 @@ fun CalendarScreen(
                     viewMode = viewMode,
                     slideDirection = slideDirection,
                     onBackClick = onNavigateBack,
-                    onMenuClick = { isPanelOpen = true },
                     onViewModeChange = viewModel::setViewMode,
                     categories = categories,
                     onAddCategory = viewModel::addCategory,
@@ -307,18 +343,49 @@ fun CalendarScreen(
             }
 
             if (!isDesktopPlatform) {
-                RightSidePanel(
-                    modifier = Modifier.zIndex(11f),
-                    isOpen = isPanelOpen,
-                    onOpenChange = { isPanelOpen = it },
-                    viewMode = viewMode,
-                    onViewModeChange = viewModel::setViewMode,
-                    categories = categories,
-                    onAddCategory = viewModel::addCategory,
-                    onUpdateCategory = viewModel::updateCategory,
-                    onDeleteCategory = viewModel::deleteCategory
+                CalendarBottomBar(
+                    hazeState = internalHazeState,
+                    isCompact = isBottomBarCompact,
+                    sharedTransitionScope = sharedTransitionScope,
+                    bottomBarAnimatedVisibilityScope = bottomBarAnimatedVisibilityScope,
+                    onViewsClick = { showViewsSheet = true },
+                    onCategoriesClick = { showCategoriesSheet = true },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .zIndex(11f)
                 )
             }
+        }
+    }
+
+    InlyBottomSheet(
+        expanded = showViewsSheet,
+        onDismiss = { showViewsSheet = false },
+        title = "View"
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+            ViewModeSection(
+                viewMode = viewMode,
+                onViewModeChange = { mode ->
+                    viewModel.setViewMode(mode)
+                    showViewsSheet = false
+                }
+            )
+        }
+    }
+
+    InlyBottomSheet(
+        expanded = showCategoriesSheet,
+        onDismiss = { showCategoriesSheet = false },
+        title = "Categories"
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+            CategorySection(
+                categories = categories,
+                onAddCategory = viewModel::addCategory,
+                onUpdateCategory = viewModel::updateCategory,
+                onDeleteCategory = viewModel::deleteCategory
+            )
         }
     }
 
@@ -364,7 +431,6 @@ private fun CalendarTopBar(
     viewMode: CalendarViewMode,
     slideDirection: AnimatedContentTransitionScope.SlideDirection,
     onBackClick: () -> Unit,
-    onMenuClick: () -> Unit,
     onViewModeChange: (CalendarViewMode) -> Unit,
     categories: List<CalendarCategory>,
     onAddCategory: (name: String, colorHex: String) -> Unit,
@@ -396,29 +462,39 @@ private fun CalendarTopBar(
                 (slideIntoContainer(slideDirection, tween(300, easing = FastOutSlowInEasing)) + fadeIn(tween(300))) togetherWith
                         (slideOutOfContainer(slideDirection, tween(300, easing = FastOutSlowInEasing)) + fadeOut(tween(300)))
             },
-            label = "CalendarTitleTransition"
+            label = "CalendarTitleTransition",
+            modifier = Modifier.height(72.dp)
         ) { date ->
-            if (viewMode == CalendarViewMode.MONTH) {
-                Text(
-                    text = formatMonthYear(date),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = defaultContentColor,
-                    textAlign = TextAlign.Center
-                )
-            } else {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(
+                modifier = Modifier.fillMaxHeight(),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                if (viewMode == CalendarViewMode.MONTH) {
                     Text(
-                        text = formatSelectedDateTitle(date),
-                        style = MaterialTheme.typography.bodyLarge,
+                        text = formatMonthYear(date),
+                        style = MaterialTheme.typography.titleLarge,
                         color = defaultContentColor,
-                        textAlign = TextAlign.Center
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = 18.dp)
                     )
-                    Text(
-                        text = formatDayOfWeek(date),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = defaultContentColor.copy(alpha = 0.6f),
-                        textAlign = TextAlign.Center
-                    )
+                } else {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(top = 18.dp)
+                    ) {
+                        Text(
+                            text = formatSelectedDateTitle(date),
+                            style = MaterialTheme.typography.titleLarge,
+                            color = defaultContentColor,
+                            textAlign = TextAlign.Center
+                        )
+                        Text(
+                            text = formatDayOfWeek(date),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = defaultContentColor.copy(alpha = 0.6f),
+                            textAlign = TextAlign.Center
+                        )
+                    }
                 }
             }
         }
@@ -462,13 +538,7 @@ private fun CalendarTopBar(
                 }
             }
         } else {
-            TopBarIconButton(
-                icon = painterResource(Res.drawable.sidebar),
-                contentDescription = "Open Menu",
-                bgColor = defaultBgColor,
-                tint = defaultContentColor,
-                onClick = onMenuClick
-            )
+            Box(modifier = Modifier.size(44.dp))
         }
     }
 }
@@ -638,7 +708,7 @@ private fun DayHourGrid(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
-            .padding(top = topBarHeightDp)
+            .padding(top = topBarHeightDp, bottom = if (isDesktopPlatform) 0.dp else 56.dp)
     ) {
         HourLabelColumn(hours = hours, hourHeight = hourHeight)
 
@@ -1021,7 +1091,7 @@ private fun MonthGridContent(
     val eventsByDate = remember(monthEvents) { monthEvents.groupBy { it.dateString } }
     val weekRows = remember(gridDates) { gridDates.chunked(7) }
 
-    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp)) {
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp).padding(bottom = if (isDesktopPlatform) 0.dp else 56.dp)) {
         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
             listOf("S", "M", "T", "W", "T", "F", "S").forEach { label ->
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
@@ -1107,146 +1177,111 @@ private fun MonthDayCell(
     }
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-private fun RightSidePanel(
-    isOpen: Boolean,
-    onOpenChange: (Boolean) -> Unit,
-    viewMode: CalendarViewMode,
-    onViewModeChange: (CalendarViewMode) -> Unit,
-    categories: List<CalendarCategory>,
-    onAddCategory: (name: String, colorHex: String) -> Unit,
-    onUpdateCategory: (id: String, name: String, colorHex: String) -> Unit,
-    onDeleteCategory: (id: String) -> Unit,
+private fun CalendarBottomBar(
+    hazeState: HazeState,
+    isCompact: Boolean,
+    sharedTransitionScope: SharedTransitionScope,
+    bottomBarAnimatedVisibilityScope: AnimatedVisibilityScope,
+    onViewsClick: () -> Unit,
+    onCategoriesClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val panelHazeState = remember { HazeState() }
+    val defaultBgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.65f)
+    val contentColor = MaterialTheme.colorScheme.primary
 
-    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
-        val density = LocalDensity.current
-        val panelWidthFraction = 0.75f
-        val panelWidthPx = with(density) { (maxWidth * panelWidthFraction).toPx() }
-        val scope = rememberCoroutineScope()
+    val barAnimationSpec = tween<Dp>(durationMillis = 350, easing = FastOutSlowInEasing)
+    val barSize by animateDpAsState(
+        targetValue = if (isCompact) 44.dp else 52.dp,
+        animationSpec = barAnimationSpec
+    )
+    val bottomInset by animateDpAsState(
+        targetValue = if (isCompact) 0.dp else 6.dp,
+        animationSpec = barAnimationSpec
+    )
+    val navItemHeight = barSize - 12.dp
 
-        val offsetX = remember { Animatable(panelWidthPx) }
-        var isDragging by remember { mutableStateOf(false) }
-        var dragOffsetPx by remember { mutableFloatStateOf(panelWidthPx) }
-
-        LaunchedEffect(isOpen, panelWidthPx) {
-            val target = if (isOpen) 0f else panelWidthPx
-            if (!isDragging && offsetX.value != target) {
-                offsetX.animateTo(target, tween(durationMillis = 300, easing = FastOutSlowInEasing))
-            }
-        }
-
-        val currentOffset = if (isDragging) dragOffsetPx else offsetX.value
-        val openFraction = if (panelWidthPx > 0f) 1f - (currentOffset / panelWidthPx) else 0f
-        val scrimAlpha = openFraction.coerceIn(0f, 1f) * 0.4f
-
-        fun settle(finalOffset: Float, shouldOpen: Boolean) {
-            isDragging = false
-            scope.launch {
-                offsetX.snapTo(finalOffset)
-                offsetX.animateTo(
-                    targetValue = if (shouldOpen) 0f else panelWidthPx,
-                    animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing)
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(bottom = bottomInset, start = 16.dp, end = 16.dp),
+        contentAlignment = Alignment.BottomCenter
+    ) {
+        val isMorphing = bottomBarAnimatedVisibilityScope.transition.isRunning
+        val shadowElevation by animateDpAsState(
+            targetValue = if (isMorphing) 0.dp else 14.dp,
+            animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing)
+        )
+        Surface(
+            shape = CircleShape,
+            color = defaultBgColor,
+            modifier = Modifier
+                .wrapContentWidth()
+                .height(barSize)
+                .then(
+                    with(sharedTransitionScope) {
+                        Modifier.sharedBounds(
+                            sharedContentState = rememberSharedContentState(key = "calendarBottomBarPill"),
+                            animatedVisibilityScope = bottomBarAnimatedVisibilityScope,
+                            boundsTransform = { _, _ -> tween(durationMillis = 300, easing = FastOutSlowInEasing) }
+                        )
+                    }
+                )
+                .customInlyShadow(CircleShape, elevation = shadowElevation)
+                .clip(CircleShape)
+                .hazeEffect(hazeState, HazeStyle.Unspecified, null)
+                .border(
+                    width = 0.5.dp,
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                    shape = CircleShape
+                )
+        ) {
+            Row(
+                modifier = with(sharedTransitionScope) {
+                    Modifier
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                        .skipToLookaheadSize()
+                },
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CalendarBottomBarItem(
+                    icon = painterResource(Res.drawable.tablet),
+                    contentDescription = "Views",
+                    contentColor = contentColor,
+                    modifier = Modifier.size(navItemHeight),
+                    onClick = onViewsClick
+                )
+                CalendarBottomBarItem(
+                    icon = painterResource(Res.drawable.widget2),
+                    contentDescription = "Categories",
+                    contentColor = contentColor,
+                    modifier = Modifier.size(navItemHeight),
+                    onClick = onCategoriesClick
                 )
             }
-            onOpenChange(shouldOpen)
         }
+    }
+}
 
-        val dragModifier = Modifier.pointerInput(panelWidthPx) {
-            detectHorizontalDragGestures(
-                onDragStart = {
-                    isDragging = true
-                    dragOffsetPx = offsetX.value
-                },
-                onHorizontalDrag = { change, dragAmount ->
-                    change.consume()
-                    dragOffsetPx = (dragOffsetPx + dragAmount).coerceIn(0f, panelWidthPx)
-                },
-                onDragEnd = {
-                    settle(dragOffsetPx, shouldOpen = dragOffsetPx < panelWidthPx / 2f)
-                },
-                onDragCancel = {
-                    settle(dragOffsetPx, shouldOpen = isOpen)
-                }
-            )
-        }
-
-        if (scrimAlpha > 0f) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = scrimAlpha))
-                    .pointerInput(Unit) {
-                        detectTapGestures { onOpenChange(false) }
-                    }
-            )
-        }
-
-        Box(
-            modifier = Modifier
-                .fillMaxHeight()
-                .width(32.dp)
-                .align(Alignment.CenterEnd)
-                .padding(top = 90.dp)
-                .then(dragModifier)
-        )
-
-        Box(
-            modifier = Modifier
-                .fillMaxHeight()
-                .fillMaxWidth(panelWidthFraction)
-                .align(Alignment.CenterEnd)
-                .graphicsLayer { translationX = currentOffset }
-                .background( if (LocalAppIsDark.current) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.background)
-                .then(dragModifier)
-        ) {
-            Box(modifier = Modifier.fillMaxSize()) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .hazeSource(state = panelHazeState)
-                        .background(if (LocalAppIsDark.current) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.background)
-                        .verticalScroll(rememberScrollState())
-                        .padding(bottom = 24.dp, top = 61.dp)
-                ) {
-                    ViewModeSection(
-                        viewMode = viewMode,
-                        onViewModeChange = onViewModeChange
-                    )
-
-                    HorizontalDivider(
-                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
-                    )
-
-                    CategorySection(
-                        categories = categories,
-                        onAddCategory = onAddCategory,
-                        onUpdateCategory = onUpdateCategory,
-                        onDeleteCategory = onDeleteCategory
-                    )
-                }
-
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .then(if (isDesktopPlatform) Modifier else Modifier.stableStatusBarsPadding())
-                        .padding(top = if (isDesktopPlatform) 14.dp else 18.dp, end = 16.dp)
-                        .zIndex(1f)
-                ) {
-                    TopBarIconButton(
-                        icon = painterResource(Res.drawable.sidebar),
-                        contentDescription = "Close Menu",
-                        bgColor = if (isDesktopPlatform) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.background.copy(alpha = 0.25f),
-                        tint = MaterialTheme.colorScheme.onSurface,
-                        hazeState = panelHazeState,
-                        onClick = { onOpenChange(false) }
-                    )
-                }
-            }
-        }
+@Composable
+private fun CalendarBottomBarItem(
+    icon: Painter,
+    contentDescription: String,
+    contentColor: Color,
+    modifier: Modifier = Modifier,
+    iconSize: Dp = 20.dp,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .clip(CircleShape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(icon, contentDescription = contentDescription, tint = contentColor, modifier = Modifier.size(iconSize))
     }
 }
 
@@ -1261,13 +1296,15 @@ private fun ViewModeSection(
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
     ) {
-        Text(
-            text = "View",
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-            modifier = Modifier.padding(bottom = 12.dp)
-        )
+        if (isDesktopPlatform) {
+            Text(
+                text = "View",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
+        }
 
         ViewModeRow(
             label = "Day",
@@ -1304,13 +1341,13 @@ private fun ViewModeRow(
             .clip(RoundedCornerShape(12.dp))
             .background(if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f) else Color.Transparent)
             .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 10.dp),
+            .padding(horizontal = 10.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = label,
             style = MaterialTheme.typography.bodyLarge,
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+            fontWeight = FontWeight.Normal,
             color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f)
         )

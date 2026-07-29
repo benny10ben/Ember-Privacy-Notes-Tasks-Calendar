@@ -13,9 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -36,6 +33,10 @@ import com.ben.inly.presentation.shared.components.InlyButtonPrimary
 import com.ben.inly.presentation.shared.components.InlyButtonSecondary
 import com.ben.inly.presentation.shared.components.InlyDesktopMenu
 import com.ben.inly.presentation.shared.components.InlyTextField
+import inly.app.generated.resources.Res
+import inly.app.generated.resources.pen
+import inly.app.generated.resources.plus
+import org.jetbrains.compose.resources.painterResource
 
 private data class CategoryEditorState(
     val categoryId: String?,
@@ -71,13 +72,15 @@ fun CategorySection(
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
     ) {
-        Text(
-            text = "Categories",
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-            modifier = Modifier.padding(bottom = 12.dp)
-        )
+        if (isDesktopPlatform) {
+            Text(
+                text = "Categories",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
+        }
 
         categories.forEach { category ->
             val state = editorState
@@ -185,10 +188,10 @@ private fun CategoryRow(
                     .padding(start = 12.dp)
             )
             Icon(
-                imageVector = Icons.Default.Edit,
+                painter = painterResource(Res.drawable.pen),
                 contentDescription = "Edit ${category.name}",
                 tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                modifier = Modifier.size(16.dp)
+                modifier = Modifier.size(18.dp)
             )
         }
 
@@ -240,7 +243,7 @@ private fun AddCategoryRow(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                imageVector = Icons.Default.Add,
+                painter = painterResource(Res.drawable.plus),
                 contentDescription = "Add category",
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(18.dp)

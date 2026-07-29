@@ -48,7 +48,7 @@ private val DESKTOP_SIDEBAR_WIDTH = 340.dp
 
 val LocalImageOverlay = staticCompositionLocalOf<( (@Composable () -> Unit)? ) -> Unit> { {} }
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun InlyApp(
     startRoute: String,
@@ -217,12 +217,17 @@ fun InlyApp(
             containerColor = MaterialTheme.colorScheme.background,
             contentWindowInsets = WindowInsets(0)
         ) { innerPadding ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.background)
-                    .nestedScroll(bottomBarNestedScrollConnection)
+            SharedTransitionLayout(
+                modifier = Modifier.fillMaxSize()
             ) {
+                val sharedTransitionScope = this@SharedTransitionLayout
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background)
+                        .nestedScroll(bottomBarNestedScrollConnection)
+                ) {
                 NavHost(
                     navController = navController,
                     startDestination = startRoute, // Updated to use the parameter
@@ -440,6 +445,8 @@ fun InlyApp(
                     ) {
                         com.ben.inly.presentation.calendar.CalendarScreen(
                             onNavigateBack = { navController.popBackStack() },
+                            sharedTransitionScope = sharedTransitionScope,
+                            bottomBarAnimatedVisibilityScope = this,
                         )
                     }
 
@@ -729,6 +736,8 @@ fun InlyApp(
                         InlyBottomBar(
                             navController = navController,
                             hazeState = hazeState,
+                            sharedTransitionScope = sharedTransitionScope,
+                            bottomBarAnimatedVisibilityScope = this,
                             currentRoute = currentRoute,
                             activeTab = activeTab,
                             onAiIconTap = openAiChat,
@@ -759,6 +768,7 @@ fun InlyApp(
                     viewModel = ragViewModel
                 )
                 fullScreenContent?.invoke()
+                }
             }
         }
     }

@@ -1051,7 +1051,7 @@ fun TemplatesDesktopMenu(
 @Composable
 fun SortBottomSheet(expanded: Boolean, currentSortType: SortType, currentSortOrder: SortOrder, onDismiss: () -> Unit, onSortChanged: (SortType, SortOrder) -> Unit) {
     InlyBottomSheet(expanded = expanded, onDismiss = onDismiss, title = null) { closeAnd ->
-        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp, start = 4.dp, end =4.dp)) {
             Text(
                 "Sort by",
                 style = MaterialTheme.typography.bodyLarge,
@@ -1111,7 +1111,7 @@ private fun SortOptionItem(text: String, isSelected: Boolean, onClick: () -> Uni
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(text, style = MaterialTheme.typography.bodyLarge, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+        Text(text, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Normal, color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
         if (isSelected) Icon(Icons.Default.Check, "Selected", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
     }
 }

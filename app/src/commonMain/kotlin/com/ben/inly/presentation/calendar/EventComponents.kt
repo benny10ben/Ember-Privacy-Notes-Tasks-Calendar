@@ -59,6 +59,7 @@ import inly.app.generated.resources.doc_text
 import inly.app.generated.resources.link
 import inly.app.generated.resources.pen
 import inly.app.generated.resources.trash
+import inly.app.generated.resources.widget2
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
@@ -101,8 +102,8 @@ fun EventChip(
         Box(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), contentAlignment = Alignment.TopStart) {
             Text(
                 text = text.ifBlank { "Untitled event" },
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Medium,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Normal,
                 color = textColor,
                 maxLines = 1
             )
@@ -493,7 +494,7 @@ private fun EventViewFields(
         // Plain icon + label rows - no Surface/box background, matching the reference layout.
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             if (category != null) {
-                InfoRow(icon = painterResource(Res.drawable.category2), label = category.name)
+                InfoRow(icon = painterResource(Res.drawable.widget2), label = category.name)
             }
             if (state.url.isNotBlank()) {
                 val uriHandler = LocalUriHandler.current

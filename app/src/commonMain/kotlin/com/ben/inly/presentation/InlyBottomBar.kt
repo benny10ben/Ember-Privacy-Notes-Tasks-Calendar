@@ -1,6 +1,9 @@
 package com.ben.inly.presentation
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
@@ -63,18 +66,21 @@ import inly.app.generated.resources.microphone
 import inly.app.generated.resources.search
 import org.jetbrains.compose.resources.painterResource
 
-internal fun Modifier.customInlyShadow(shape: Shape): Modifier = this.shadow(
-    elevation = 14.dp,
+internal fun Modifier.customInlyShadow(shape: Shape, elevation: Dp = 14.dp): Modifier = this.shadow(
+    elevation = elevation,
     shape = shape,
     spotColor = Color.Black.copy(alpha = 0.35f),
     ambientColor = Color.Black.copy(alpha = 0.20f)
 )
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun InlyBottomBar(
     modifier: Modifier = Modifier,
     navController: NavHostController,
     hazeState: HazeState,
+    sharedTransitionScope: SharedTransitionScope,
+    bottomBarAnimatedVisibilityScope: AnimatedVisibilityScope,
     currentRoute: String?,
     activeTab: String,
     onSearchClick: () -> Unit,
@@ -121,6 +127,11 @@ fun InlyBottomBar(
             ) + fadeOut(tween(300)),
             modifier = Modifier.fillMaxWidth()
         ) {
+            val isMorphing = bottomBarAnimatedVisibilityScope.transition.isRunning
+            val shadowElevation by animateDpAsState(
+                targetValue = if (isMorphing) 0.dp else 14.dp,
+                animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing)
+            )
             Surface(
                 shape = CircleShape,
                 color = defaultBgColor,
@@ -128,7 +139,16 @@ fun InlyBottomBar(
                     .fillMaxWidth()
                     .padding(horizontal = horizontalInset)
                     .height(barSize)
-                    .customInlyShadow(CircleShape)
+                    .then(
+                        with(sharedTransitionScope) {
+                            Modifier.sharedBounds(
+                                sharedContentState = rememberSharedContentState(key = "calendarBottomBarPill"),
+                                animatedVisibilityScope = bottomBarAnimatedVisibilityScope,
+                                boundsTransform = { _, _ -> tween(durationMillis = 300, easing = FastOutSlowInEasing) }
+                            )
+                        }
+                    )
+                    .customInlyShadow(CircleShape, elevation = shadowElevation)
                     .clip(CircleShape)
                     .hazeEffect(hazeState, HazeStyle.Unspecified, null)
                     .border(
@@ -138,7 +158,11 @@ fun InlyBottomBar(
                     )
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
+                    modifier = with(sharedTransitionScope) {
+                        Modifier
+                            .padding(horizontal = 6.dp, vertical = 6.dp)
+                            .skipToLookaheadSize()
+                    },
                     horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
