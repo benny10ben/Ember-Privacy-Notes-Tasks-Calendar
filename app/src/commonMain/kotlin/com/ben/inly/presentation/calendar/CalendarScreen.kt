@@ -11,12 +11,15 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.IndicationNodeFactory
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -41,14 +44,17 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalRippleConfiguration
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -64,6 +70,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.node.DelegatableNode
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -105,12 +112,18 @@ import kotlin.time.Duration.Companion.milliseconds
 
 enum class CalendarViewMode { DAY, THREE_DAY, WEEK, MONTH }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
+private object NoRippleIndicationNodeFactory : IndicationNodeFactory {
+    override fun create(interactionSource: InteractionSource): DelegatableNode = object : Modifier.Node() {}
+    override fun equals(other: Any?) = other === this
+    override fun hashCode(): Int = -1
+}
+
+@OptIn(ExperimentalSharedTransitionApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun CalendarScreen(
     onNavigateBack: () -> Unit = {},
-    sharedTransitionScope: SharedTransitionScope,
-    bottomBarAnimatedVisibilityScope: AnimatedVisibilityScope,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    bottomBarAnimatedVisibilityScope: AnimatedVisibilityScope? = null,
     viewModel: CalendarViewModel = koinViewModel()
 ) {
     val internalHazeState = remember { HazeState() }
@@ -346,8 +359,8 @@ fun CalendarScreen(
                 CalendarBottomBar(
                     hazeState = internalHazeState,
                     isCompact = isBottomBarCompact,
-                    sharedTransitionScope = sharedTransitionScope,
-                    bottomBarAnimatedVisibilityScope = bottomBarAnimatedVisibilityScope,
+                    sharedTransitionScope = sharedTransitionScope!!,
+                    bottomBarAnimatedVisibilityScope = bottomBarAnimatedVisibilityScope!!,
                     onViewsClick = { showViewsSheet = true },
                     onCategoriesClick = { showCategoriesSheet = true },
                     modifier = Modifier
@@ -363,6 +376,10 @@ fun CalendarScreen(
         onDismiss = { showViewsSheet = false },
         title = "View"
     ) {
+      CompositionLocalProvider(
+        LocalIndication provides NoRippleIndicationNodeFactory,
+        LocalRippleConfiguration provides null
+      ) {
         Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
             ViewModeSection(
                 viewMode = viewMode,
@@ -372,6 +389,7 @@ fun CalendarScreen(
                 }
             )
         }
+      }
     }
 
     InlyBottomSheet(
@@ -379,6 +397,10 @@ fun CalendarScreen(
         onDismiss = { showCategoriesSheet = false },
         title = "Categories"
     ) {
+      CompositionLocalProvider(
+        LocalIndication provides NoRippleIndicationNodeFactory,
+        LocalRippleConfiguration provides null
+      ) {
         Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
             CategorySection(
                 categories = categories,
@@ -387,6 +409,7 @@ fun CalendarScreen(
                 onDeleteCategory = viewModel::deleteCategory
             )
         }
+      }
     }
 
     EventEditorSheet(
@@ -514,7 +537,7 @@ private fun CalendarTopBar(
                     onDismissRequest = { showOptionsMenu = false },
                     modifier = Modifier.width(260.dp)
                 ) {
-                    Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                    Column(modifier = Modifier.padding(vertical = 8.dp, horizontal = 8.dp).padding(top = 6.dp)) {
                         ViewModeSection(
                             viewMode = viewMode,
                             onViewModeChange = {
@@ -1294,7 +1317,6 @@ private fun ViewModeSection(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
     ) {
         if (isDesktopPlatform) {
             Text(
@@ -1302,7 +1324,7 @@ private fun ViewModeSection(
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                modifier = Modifier.padding(bottom = 12.dp)
+                modifier = Modifier.padding(bottom = 12.dp).padding(horizontal = 12.dp)
             )
         }
 
@@ -1338,10 +1360,12 @@ private fun ViewModeRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .padding( vertical = 2.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f) else Color.Transparent)
+            .background(Color.Transparent)
             .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 10.dp),
+            .padding(vertical = 10.dp,  horizontal = if (isDesktopPlatform) 12.dp else 0.dp)
+            .padding(end = if (isSelected) 12.dp else 0.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(

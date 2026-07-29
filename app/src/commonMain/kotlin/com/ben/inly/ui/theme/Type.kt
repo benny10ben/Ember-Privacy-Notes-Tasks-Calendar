@@ -39,13 +39,13 @@ data class InlyFontSizes(
 
 // Mobile Profiles
 val MobileFontSizesSmall = InlyFontSizes(bodyLarge = 14.sp, titleLarge = 20.sp, labelSmall = 12.sp)
-val MobileFontSizesDefault = InlyFontSizes(bodyLarge = 15.sp, titleLarge = 21.sp, labelSmall = 12.sp)
-val MobileFontSizesLarge = InlyFontSizes(bodyLarge = 16.sp, titleLarge = 22.sp, labelSmall = 13.sp)
+val MobileFontSizesDefault = InlyFontSizes(bodyLarge = 15.sp, titleLarge = 21.sp, labelSmall = 13.sp)
+val MobileFontSizesLarge = InlyFontSizes(bodyLarge = 16.sp, titleLarge = 22.sp, labelSmall = 14.sp)
 
 // Desktop Profiles (Scaled up slightly)
 val DesktopFontSizesSmall = InlyFontSizes(bodyLarge = 15.sp, titleLarge = 21.sp, labelSmall = 13.sp)
-val DesktopFontSizesDefault = InlyFontSizes(bodyLarge = 16.sp, titleLarge = 22.sp, labelSmall = 13.sp)
-val DesktopFontSizesLarge = InlyFontSizes(bodyLarge = 17.sp, titleLarge = 23.sp, labelSmall = 14.sp)
+val DesktopFontSizesDefault = InlyFontSizes(bodyLarge = 16.sp, titleLarge = 22.sp, labelSmall = 14.sp)
+val DesktopFontSizesLarge = InlyFontSizes(bodyLarge = 17.sp, titleLarge = 23.sp, labelSmall = 15.sp)
 
 val LocalInlyFontSizes = staticCompositionLocalOf { MobileFontSizesDefault }
 

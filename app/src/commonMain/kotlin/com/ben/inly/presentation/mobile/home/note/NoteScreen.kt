@@ -8,8 +8,11 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.foundation.IndicationNodeFactory
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -26,6 +29,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.node.DelegatableNode
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
@@ -82,7 +86,6 @@ import com.ben.inly.presentation.shared.SubNoteOpenMode
 import com.ben.inly.data.local.prefs.SettingsManager
 import com.ben.inly.data.local.prefs.SyncConstants
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
@@ -109,6 +112,12 @@ import org.jetbrains.compose.resources.painterResource
 import kotlin.time.Duration.Companion.milliseconds
 
 enum class MenuLevel { MAIN, EXPORT, ICON, COVER }
+
+private object NoRippleIndicationNodeFactory : IndicationNodeFactory {
+    override fun create(interactionSource: InteractionSource): DelegatableNode = object : Modifier.Node() {}
+    override fun equals(other: Any?) = other === this
+    override fun hashCode(): Int = -1
+}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -679,6 +688,10 @@ fun NoteScreen(
                         onDismiss = { showIconPicker = false },
                         title = "Choose Icon",
                     ) { _ ->
+                      CompositionLocalProvider(
+                        LocalIndication provides NoRippleIndicationNodeFactory,
+                        LocalRippleConfiguration provides null
+                      ) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -692,6 +705,7 @@ fun NoteScreen(
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
+                      }
                     }
                 }
             }
@@ -903,8 +917,7 @@ fun CategorizedEmojiPicker(
     }
 
     Column(modifier = modifier.fillMaxWidth()) {
-
-        Box(modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 4.dp)) {
+        Box(modifier = Modifier.padding(bottom = 4.dp)) {
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
@@ -948,7 +961,7 @@ fun CategorizedEmojiPicker(
                     columns = GridCells.Adaptive(minSize = 44.dp),
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(
-                        start = 12.dp, end = 12.dp, top = 8.dp,
+                        top = 8.dp,
                         bottom = navBarPadding + 16.dp
                     ),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -1004,7 +1017,7 @@ fun CategorizedEmojiPicker(
                     columns = GridCells.Adaptive(minSize = 44.dp),
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(
-                        start = 12.dp, end = 12.dp, top = 12.dp,
+                        top = 12.dp,
                         bottom = navBarPadding + 16.dp
                     ),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -1342,6 +1355,7 @@ private fun DesktopMenuItem(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NoteOptionsBottomSheet(
     expanded: Boolean,
@@ -1365,7 +1379,7 @@ fun NoteOptionsBottomSheet(
 ) {
     var currentMenu by remember { mutableStateOf(MenuLevel.MAIN) }
 
-    // Reset to the main menu after the bottom sheet closes
+    // Reset back to MAIN once everything is fully closed
     LaunchedEffect(expanded) {
         if (!expanded) {
             delay(300.milliseconds)
@@ -1373,126 +1387,149 @@ fun NoteOptionsBottomSheet(
         }
     }
 
+    // --- Main options sheet (always the base layer while `expanded`) ---
     InlyBottomSheet(
         expanded = expanded,
         onDismiss = onDismiss,
-        title = null
+        title = "Note Options",
     ) { closeAnd ->
-        AnimatedContent(
-            targetState = currentMenu,
-            transitionSpec = {
-                // Native Material "Fade Through" transition for Bottom Sheets
-                (fadeIn(animationSpec = tween(220, delayMillis = 90))) togetherWith
-                        fadeOut(animationSpec = tween(90)) using
-                        SizeTransform(clip = false)
-            },
-            label = "MenuTransition"
-        ) { targetMenu ->
+      CompositionLocalProvider(
+        LocalIndication provides NoRippleIndicationNodeFactory,
+        LocalRippleConfiguration provides null
+      ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+            BottomSheetOptionItem(
+                painterResource(Res.drawable.ghost_smile),
+                "Icon Options"
+            ) { currentMenu = MenuLevel.ICON }
 
-            Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
-                when (targetMenu) {
-                    MenuLevel.MAIN -> {
-                        BottomSheetOptionItem(
-                            painterResource(Res.drawable.ghost_smile),
-                            "Icon Options"
-                        ) { currentMenu = MenuLevel.ICON }
-                        BottomSheetOptionItem(
-                            painterResource(Res.drawable.image),
-                            "Cover Options"
-                        ) { currentMenu = MenuLevel.COVER }
+            BottomSheetOptionItem(
+                painterResource(Res.drawable.image),
+                "Cover Options"
+            ) { currentMenu = MenuLevel.COVER }
 
-                        val favIcon =
-                            if (isFavorite) Icons.Default.Star else Icons.Default.StarBorder
-                        val favText =
-                            if (isFavorite) "Remove from Favorites" else "Add to Favorites"
-                        if (!isEditingTemplate) {
-                            BottomSheetOptionItem(favIcon, favText) { closeAnd { onToggleFavorite() } }
-                        }
+            val favIcon = if (isFavorite) Icons.Default.Star else Icons.Default.StarBorder
+            val favText = if (isFavorite) "Remove from Favorites" else "Add to Favorites"
+            if (!isEditingTemplate) {
+                BottomSheetOptionItem(favIcon, favText) { closeAnd { onToggleFavorite() } }
+            }
 
-                        val wordCountText =
-                            if (showWordCount) "Hide Word Count" else "Show Word Count"
-                        BottomSheetOptionItem(
-                            Icons.Default.FormatSize,
-                            wordCountText
-                        ) { closeAnd { onToggleWordCount() } }
+            val wordCountText = if (showWordCount) "Hide Word Count" else "Show Word Count"
+            BottomSheetOptionItem(Icons.Default.FormatSize, wordCountText) {
+                closeAnd { onToggleWordCount() }
+            }
 
-                        if (!isEditingTemplate) {
-                            HorizontalDivider(
-                                modifier = Modifier.padding(vertical = 4.dp, horizontal = 20.dp),
-                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
-                            )
+            if (!isEditingTemplate) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 4.dp, horizontal = 20.dp),
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                )
+                BottomSheetOptionItem(
+                    painterResource(Res.drawable.share),
+                    "Export Note"
+                ) { currentMenu = MenuLevel.EXPORT }
+            }
 
-                            BottomSheetOptionItem(
-                                painterResource(Res.drawable.share),
-                                "Export Note"
-                            ) { currentMenu = MenuLevel.EXPORT }
-                        }
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 4.dp, horizontal = 20.dp),
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+            )
 
-                        HorizontalDivider(
-                            modifier = Modifier.padding(vertical = 4.dp, horizontal = 20.dp),
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
-                        )
+            BottomSheetOptionItem(
+                painterResource(Res.drawable.trash),
+                "Move to Trash",
+                isDestructive = true
+            ) { closeAnd { onMoveToTrash() } }
 
-                        BottomSheetOptionItem(
-                            painterResource(Res.drawable.trash),
-                            "Move to Trash",
-                            isDestructive = true
-                        ) {
-                            closeAnd { onMoveToTrash() }
-                        }
+            InlyButtonPrimary(
+                text = "Close",
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth()
+                    .padding(vertical = 12.dp)
+            )
+        }
+      }
+    }
 
-                        InlyButtonPrimary(
-                            text = "Close",
-                            onClick = onDismiss,
-                            modifier = Modifier.fillMaxWidth()
-                                .padding(horizontal = 20.dp, vertical = 12.dp)
-                        )
-                    }
-
-                    MenuLevel.EXPORT -> {
-                        BottomSheetOptionItem(painterResource(Res.drawable.chevron_left), "Back to Options") { currentMenu = MenuLevel.MAIN }
-                        HorizontalDivider(
-                            modifier = Modifier.padding(vertical = 4.dp, horizontal = 20.dp),
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
-                        )
-                        BottomSheetOptionItem(painterResource(Res.drawable.copy), "Copy Text") { closeAnd { onCopyPlain() } }
-                        BottomSheetOptionItem(painterResource(Res.drawable.code), "Copy as Markdown") { closeAnd { onCopyMarkdown() } }
-                        BottomSheetOptionItem(painterResource(Res.drawable.file_code_corner), "Download .md") { closeAnd { onDownloadMarkdown() } }
-                        BottomSheetOptionItem(painterResource(Res.drawable.file_pdf), "Download PDF") { closeAnd { onDownloadPdf() } }
-                    }
-
-                    MenuLevel.ICON -> {
-                        BottomSheetOptionItem(painterResource(Res.drawable.chevron_left), "Back to Options") { currentMenu = MenuLevel.MAIN }
-                        HorizontalDivider(
-                            modifier = Modifier.padding(vertical = 4.dp, horizontal = 20.dp),
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
-                        )
-                        BottomSheetOptionItem(painterResource(Res.drawable.ghost_smile), if (hasIcon) "Change Icon" else "Add Icon") {
-                            onAddIcon()
-                            onDismiss()
-                        }
-                        if (hasIcon) {
-                            BottomSheetOptionItem(painterResource(Res.drawable.trash), "Remove Icon", isDestructive = true) {
-                                onRemoveIcon()
-                                onDismiss()
-                            }
-                        }
-                    }
-
-                    MenuLevel.COVER -> {
-                        BottomSheetOptionItem(painterResource(Res.drawable.chevron_left), "Back to Options") { currentMenu = MenuLevel.MAIN }
-                        HorizontalDivider(
-                            modifier = Modifier.padding(vertical = 4.dp, horizontal = 20.dp),
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
-                        )
-                        BottomSheetOptionItem(painterResource(Res.drawable.image), if (hasCover) "Change Cover" else "Add Cover") { closeAnd { onAddCover() } }
-                        if (hasCover) {
-                            BottomSheetOptionItem(painterResource(Res.drawable.trash), "Remove Cover", isDestructive = true) { closeAnd { onRemoveCover() } }
-                        }
-                    }
-                }
+    // --- Export sub-sheet, stacked on top ---
+    InlyBottomSheet(
+        expanded = currentMenu == MenuLevel.EXPORT,
+        onDismiss = { currentMenu = MenuLevel.MAIN },
+        title = "Export Options",
+    ) { closeAnd ->
+      CompositionLocalProvider(
+        LocalIndication provides NoRippleIndicationNodeFactory,
+        LocalRippleConfiguration provides null
+      ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+            BottomSheetOptionItem(painterResource(Res.drawable.copy), "Copy Text") {
+                closeAnd { onCopyPlain(); onDismiss() }
+            }
+            BottomSheetOptionItem(painterResource(Res.drawable.code), "Copy as Markdown") {
+                closeAnd { onCopyMarkdown(); onDismiss() }
+            }
+            BottomSheetOptionItem(painterResource(Res.drawable.file_code_corner), "Download .md") {
+                closeAnd { onDownloadMarkdown(); onDismiss() }
+            }
+            BottomSheetOptionItem(painterResource(Res.drawable.file_pdf), "Download PDF") {
+                closeAnd { onDownloadPdf(); onDismiss() }
             }
         }
+      }
+    }
+
+    // --- Icon sub-sheet, stacked on top ---
+    InlyBottomSheet(
+        expanded = currentMenu == MenuLevel.ICON,
+        onDismiss = { currentMenu = MenuLevel.MAIN },
+        title = "Icon Options",
+    ) { closeAnd ->
+      CompositionLocalProvider(
+        LocalIndication provides NoRippleIndicationNodeFactory,
+        LocalRippleConfiguration provides null
+      ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+            BottomSheetOptionItem(
+                painterResource(Res.drawable.ghost_smile),
+                if (hasIcon) "Change Icon" else "Add Icon"
+            ) { closeAnd { onAddIcon(); onDismiss() } }
+
+            if (hasIcon) {
+                BottomSheetOptionItem(
+                    painterResource(Res.drawable.trash),
+                    "Remove Icon",
+                    isDestructive = true
+                ) { closeAnd { onRemoveIcon(); onDismiss() } }
+            }
+        }
+      }
+    }
+
+    // --- Cover sub-sheet, stacked on top ---
+    InlyBottomSheet(
+        expanded = currentMenu == MenuLevel.COVER,
+        onDismiss = { currentMenu = MenuLevel.MAIN },
+        title = "Cover Options",
+    ) { closeAnd ->
+      CompositionLocalProvider(
+        LocalIndication provides NoRippleIndicationNodeFactory,
+        LocalRippleConfiguration provides null
+      ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+            BottomSheetOptionItem(
+                painterResource(Res.drawable.image),
+                if (hasCover) "Change Cover" else "Add Cover"
+            ) { closeAnd { onAddCover(); onDismiss() } }
+
+            if (hasCover) {
+                BottomSheetOptionItem(
+                    painterResource(Res.drawable.trash),
+                    "Remove Cover",
+                    isDestructive = true
+                ) { closeAnd { onRemoveCover(); onDismiss() } }
+            }
+        }
+      }
     }
 }
 
@@ -1510,7 +1547,7 @@ private fun BottomSheetOptionItem(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 12.dp),
+            .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
@@ -1542,7 +1579,7 @@ private fun BottomSheetOptionItem(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 12.dp),
+            .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(

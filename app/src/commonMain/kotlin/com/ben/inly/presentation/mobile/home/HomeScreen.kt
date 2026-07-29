@@ -2,6 +2,8 @@ package com.ben.inly.presentation.mobile.home
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.IndicationNodeFactory
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -9,6 +11,7 @@ import androidx.compose.foundation.gestures.ScrollableState
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -47,6 +50,7 @@ import com.ben.inly.presentation.mobile.daily.DailyEditorViewModel
 import com.ben.inly.presentation.mobile.daily.TaskDaySection
 import com.ben.inly.presentation.shared.UserSettings
 import com.ben.inly.presentation.shared.components.InlyBottomSheet
+import com.ben.inly.presentation.shared.components.InlyBottomSheetAction
 import com.ben.inly.presentation.shared.components.InlyDesktopMenu
 import com.ben.inly.presentation.shared.components.KmpBackHandler
 import com.ben.inly.presentation.shared.components.TopBarIconButtonGroup
@@ -627,7 +631,6 @@ fun HomeScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 20.dp)
                             .padding(bottom = 16.dp),
                         verticalArrangement = Arrangement.spacedBy(24.dp)
                     ) {
@@ -661,15 +664,33 @@ fun HomeScreen(
 @Composable
 fun DesktopSortMenu(currentSortType: SortType, currentSortOrder: SortOrder, onDismiss: () -> Unit, onSortChanged: (SortType, SortOrder) -> Unit) {
     Column(modifier = Modifier.width(200.dp).padding(vertical = 4.dp)) {
-        DesktopSortOptionItem("Last Edited", currentSortType == SortType.LAST_EDITED) { onDismiss(); onSortChanged(SortType.LAST_EDITED, currentSortOrder) }
-        DesktopSortOptionItem("Date Created", currentSortType == SortType.DATE_CREATED) { onDismiss(); onSortChanged(SortType.DATE_CREATED, currentSortOrder) }
-        DesktopSortOptionItem("Name (A-Z)", currentSortType == SortType.NAME) { onDismiss(); onSortChanged(SortType.NAME, currentSortOrder) }
+        DesktopSortOptionItem(
+            "Last Edited",
+            currentSortType == SortType.LAST_EDITED
+        ) { onDismiss(); onSortChanged(SortType.LAST_EDITED, currentSortOrder) }
+        DesktopSortOptionItem(
+            "Date Created",
+            currentSortType == SortType.DATE_CREATED
+        ) { onDismiss(); onSortChanged(SortType.DATE_CREATED, currentSortOrder) }
+        DesktopSortOptionItem(
+            "Name (A-Z)",
+            currentSortType == SortType.NAME
+        ) { onDismiss(); onSortChanged(SortType.NAME, currentSortOrder) }
         DesktopSortOptionItem("Manual", currentSortType == SortType.MANUAL) {
             onDismiss(); onSortChanged(SortType.MANUAL, currentSortOrder)
         }
-        HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp, horizontal = 12.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
-        DesktopSortOptionItem("Ascending", currentSortOrder == SortOrder.ASCENDING) { onDismiss(); onSortChanged(currentSortType, SortOrder.ASCENDING) }
-        DesktopSortOptionItem("Descending", currentSortOrder == SortOrder.DESCENDING) { onDismiss(); onSortChanged(currentSortType, SortOrder.DESCENDING) }
+        HorizontalDivider(
+            modifier = Modifier.padding(vertical = 6.dp, horizontal = 12.dp),
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+        )
+        DesktopSortOptionItem(
+            "Ascending",
+            currentSortOrder == SortOrder.ASCENDING
+        ) { onDismiss(); onSortChanged(currentSortType, SortOrder.ASCENDING) }
+        DesktopSortOptionItem(
+            "Descending",
+            currentSortOrder == SortOrder.DESCENDING
+        ) { onDismiss(); onSortChanged(currentSortType, SortOrder.DESCENDING) }
     }
 }
 
@@ -678,9 +699,9 @@ private fun DesktopSortOptionItem(text: String, isSelected: Boolean, onClick: ()
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 6.dp, vertical = 1.dp)
-            .clip(RoundedCornerShape(6.dp))
-            .background(if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f) else Color.Transparent)
+            .padding(horizontal = 8.dp, vertical = 2.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color.Transparent)
             .clickable { onClick() }
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -736,35 +757,101 @@ fun FolderPill(name: String, isSelected: Boolean, isNewButton: Boolean = false, 
 @Composable
 fun NoteCard(note: NoteMetadataEntity, isSelected: Boolean, onClick: () -> Unit, onLongClick: () -> Unit) {
     val mediaStorageHelper: com.ben.inly.domain.util.MediaStorageHelper = koinInject()
-    val bgColor = when { isSelected -> MaterialTheme.colorScheme.onSurface; isDesktopPlatform -> MaterialTheme.colorScheme.background; else -> MaterialTheme.colorScheme.surface }
-    val titleColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-    val mutedColor = if (isSelected) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.onSurface
-    val coverHeight = 72.dp; val iconOverhang = 12.dp
-    val hasCover = note.coverImagePath != null; val hasIcon = !note.icon.isNullOrEmpty(); val hasHeader = hasCover || hasIcon
+    val bgColor = when {
+        isSelected -> MaterialTheme.colorScheme.onSurface; isDesktopPlatform -> MaterialTheme.colorScheme.background; else -> MaterialTheme.colorScheme.surface
+    }
+    val titleColor =
+        if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+    val mutedColor =
+        if (isSelected) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.onSurface
+    val coverHeight = 72.dp;
+    val iconOverhang = 12.dp
+    val hasCover = note.coverImagePath != null;
+    val hasIcon = !note.icon.isNullOrEmpty();
+    val hasHeader = hasCover || hasIcon
 
-    Box(modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(DefaultCornerShape).background(bgColor).combinedClickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick, onLongClick = onLongClick)) {
+    Box(
+        modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(DefaultCornerShape)
+            .background(bgColor).combinedClickable(
+            interactionSource = remember { MutableInteractionSource() },
+            indication = null,
+            onClick = onClick,
+            onLongClick = onLongClick
+        )
+    ) {
         Column(Modifier.fillMaxSize()) {
             if (hasHeader) {
                 Box(modifier = Modifier.fillMaxWidth().height(coverHeight)) {
                     if (note.coverImagePath != null) {
-                        val absolutePath = mediaStorageHelper.getAbsoluteMediaPath(note.coverImagePath)
+                        val absolutePath =
+                            mediaStorageHelper.getAbsoluteMediaPath(note.coverImagePath)
                         val context = coil3.compose.LocalPlatformContext.current
-                        val request = remember(absolutePath) { coil3.request.ImageRequest.Builder(context).data(absolutePath).memoryCacheKey(absolutePath).diskCacheKey(absolutePath).build() }
-                        AsyncImage(model = request, contentDescription = "Cover", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                        val request = remember(absolutePath) {
+                            coil3.request.ImageRequest.Builder(context).data(absolutePath)
+                                .memoryCacheKey(absolutePath).diskCacheKey(absolutePath).build()
+                        }
+                        AsyncImage(
+                            model = request,
+                            contentDescription = "Cover",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
                     } else {
-                        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.onSurface.copy(alpha = if (isSelected) 0.12f else 0.05f)))
+                        Box(
+                            Modifier.fillMaxSize()
+                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = if (isSelected) 0.12f else 0.05f))
+                        )
                     }
                 }
             }
-            Column(modifier = Modifier.fillMaxWidth().weight(1f).padding(start = 12.dp, end = if (note.isFavorite && !hasHeader) 26.dp else 12.dp, top = if (hasIcon) iconOverhang + 10.dp else 10.dp, bottom = 10.dp)) {
-                Text(note.title.ifEmpty { "Untitled" }, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = titleColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Column(
+                modifier = Modifier.fillMaxWidth().weight(1f).padding(
+                    start = 12.dp,
+                    end = if (note.isFavorite && !hasHeader) 26.dp else 12.dp,
+                    top = if (hasIcon) iconOverhang + 10.dp else 10.dp,
+                    bottom = 10.dp
+                )
+            ) {
+                Text(
+                    note.title.ifEmpty { "Untitled" },
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    color = titleColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
                 Spacer(Modifier.height(4.dp))
-                Text(text = note.snippet.takeIf { it.isNotBlank() } ?: "Empty note...", style = MaterialTheme.typography.labelSmall, color = mutedColor, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                Text(text = note.snippet.takeIf { it.isNotBlank() } ?: "Empty note...",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = mutedColor,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis)
             }
         }
-        if (hasIcon) Text(text = note.icon!!, fontSize = 22.sp, modifier = Modifier.align(Alignment.TopStart).padding(start = 10.dp).offset(y = coverHeight - iconOverhang))
-        if (note.isFavorite) Icon(Icons.Default.Star, "Favorite", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.align(Alignment.TopEnd).padding(8.dp).size(14.dp))
-        if (isSelected) Box(modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).size(22.dp).background(MaterialTheme.colorScheme.onPrimary, CircleShape), contentAlignment = Alignment.Center) { Icon(Icons.Default.Check, "Selected", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp)) }
+        if (hasIcon) Text(
+            text = note.icon!!,
+            fontSize = 22.sp,
+            modifier = Modifier.align(Alignment.TopStart).padding(start = 10.dp)
+                .offset(y = coverHeight - iconOverhang)
+        )
+        if (note.isFavorite) Icon(
+            Icons.Default.Star,
+            "Favorite",
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.align(Alignment.TopEnd).padding(8.dp).size(14.dp)
+        )
+        if (isSelected) Box(
+            modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).size(22.dp)
+                .background(MaterialTheme.colorScheme.onPrimary, CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Default.Check,
+                "Selected",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(14.dp)
+            )
+        }
     }
 }
 
@@ -789,16 +876,16 @@ fun NotesSelectionPill(isVisible: Boolean, selectedCount: Int, onClearSelection:
 @Composable
 fun AddFolderBottomSheet(expanded: Boolean, onDismiss: () -> Unit, onCreate: (String) -> Unit) {
     var folderName by remember { mutableStateOf("") }
-    InlyBottomSheet(expanded = expanded, onDismiss = onDismiss, title = "New Folder", subtitle = "Organize your notes with a new category.") { closeAnd ->
-        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+    InlyBottomSheet(expanded = expanded, onDismiss = onDismiss, title = "New Folder", subtitle = "Organize your notes.") { closeAnd ->
+        Column(modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 16.dp)) {
             InlyTextField(
                 value = folderName,
                 onValueChange = { folderName = it },
                 placeholder = "e.g. Personal, Work...",
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)
+                modifier = Modifier.fillMaxWidth()
             )
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 InlyButtonSecondary(
@@ -819,43 +906,26 @@ fun AddFolderBottomSheet(expanded: Boolean, onDismiss: () -> Unit, onCreate: (St
 @Composable
 fun AddNoteBottomSheet(expanded: Boolean, onDismiss: () -> Unit, onCreate: (String) -> Unit, onOpenTemplates: () -> Unit = {}) {
     var noteTitle by remember { mutableStateOf("") }
-    // title/subtitle passed as null here (instead of via InlyBottomSheet's own params) so we can
-    // slot the Templates icon into the same row as the "New Note" heading.
-    InlyBottomSheet(expanded = expanded, onDismiss = onDismiss, title = null, subtitle = null) { closeAnd ->
-        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
-
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    "New Note",
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Icon(
-                    painter = painterResource(Res.drawable.template),
-                    contentDescription = "Templates",
-                    tint = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.size(24.dp).noRippleClickable { closeAnd(onOpenTemplates) }
-                )
-            }
-            Text(
-                "Give your note a title, or leave it blank.",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(horizontal = 20.dp).padding(bottom = 16.dp)
-            )
+    InlyBottomSheet(
+        expanded = expanded,
+        onDismiss = onDismiss,
+        title = "New Note",
+        subtitle = "Give your note a fresh title.",
+        headerAction = InlyBottomSheetAction(
+            icon = painterResource(Res.drawable.template),
+            contentDescription = "Templates",
+            onClick = onOpenTemplates
+        )
+    ) { closeAnd ->
+        Column(modifier = Modifier.fillMaxWidth().padding(top = 10.dp,bottom = 16.dp)) {
             InlyTextField(
                 value = noteTitle,
                 onValueChange = { noteTitle = it },
                 placeholder = "Note title...",
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)
+                modifier = Modifier.fillMaxWidth()
             )
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 InlyButtonSecondary(
@@ -886,22 +956,22 @@ fun TemplatesMenuContent(
     onEditTemplate: (String) -> Unit,
     onDeleteTemplate: (String) -> Unit,
     onCreateNewTemplate: () -> Unit,
-    horizontalPadding: Dp = 20.dp
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         InlyTextField(
             value = searchQuery,
             onValueChange = onSearchQueryChange,
             placeholder = "Search templates...",
-            modifier = Modifier.fillMaxWidth().padding(horizontal = horizontalPadding).padding(bottom = 4.dp)
+            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp).padding(horizontal = if (isDesktopPlatform) 12.dp else 0.dp, vertical = if (isDesktopPlatform) 12.dp else 0.dp,)
         )
 
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
-                .noRippleClickable(onCreateNewTemplate)
-                .padding(horizontal = horizontalPadding, vertical = 12.dp),
+                .padding(horizontal = if (isDesktopPlatform) 8.dp else 0.dp, vertical = 2.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .clickable {(onCreateNewTemplate())}
+                .padding(horizontal = if (isDesktopPlatform) 12.dp else 0.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
@@ -914,14 +984,14 @@ fun TemplatesMenuContent(
             Text("Create New Template", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.primary)
         }
 
-        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp, horizontal = horizontalPadding), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
 
         if (templates.isEmpty()) {
             Text(
                 text = if (searchQuery.isBlank()) "No templates yet." else "No templates match \"$searchQuery\".",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                modifier = Modifier.padding(horizontal = horizontalPadding, vertical = 14.dp)
+                modifier = Modifier.padding(vertical = 14.dp)
             )
         } else {
             templates.forEach { template ->
@@ -930,7 +1000,6 @@ fun TemplatesMenuContent(
                     onClick = { onTemplateClick(template.noteId) },
                     onEdit = { onEditTemplate(template.noteId) },
                     onDelete = { onDeleteTemplate(template.noteId) },
-                    horizontalPadding = horizontalPadding
                 )
             }
         }
@@ -939,13 +1008,19 @@ fun TemplatesMenuContent(
 }
 
 @Composable
-private fun TemplateRow(template: NoteMetadataEntity, onClick: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit, horizontalPadding: Dp) {
+private fun TemplateRow(
+    template: NoteMetadataEntity,
+    onClick: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .noRippleClickable(onClick)
-            .padding(horizontal = horizontalPadding, vertical = 10.dp),
+            .padding(if (isDesktopPlatform) 8.dp else 0.dp, vertical = 2.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable {(onClick())}
+            .padding(horizontal = if (isDesktopPlatform) 12.dp else 0.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
@@ -1030,7 +1105,7 @@ fun TemplatesDesktopMenu(
     InlyDesktopMenu(expanded = expanded, onDismissRequest = onDismissRequest, modifier = Modifier.width(300.dp)) {
         Column(modifier = Modifier.padding(vertical = 8.dp)) {
             Text(
-                "Templates", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold,
+                "Templates", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
             )
@@ -1042,7 +1117,6 @@ fun TemplatesDesktopMenu(
                 onEditTemplate = { id -> onDismissRequest(); onEditTemplate(id) },
                 onDeleteTemplate = onDeleteTemplate,
                 onCreateNewTemplate = { onDismissRequest(); onCreateNewTemplate() },
-                horizontalPadding = 16.dp
             )
         }
     }
@@ -1050,15 +1124,8 @@ fun TemplatesDesktopMenu(
 
 @Composable
 fun SortBottomSheet(expanded: Boolean, currentSortType: SortType, currentSortOrder: SortOrder, onDismiss: () -> Unit, onSortChanged: (SortType, SortOrder) -> Unit) {
-    InlyBottomSheet(expanded = expanded, onDismiss = onDismiss, title = null) { closeAnd ->
-        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp, start = 4.dp, end =4.dp)) {
-            Text(
-                "Sort by",
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
-            )
+    InlyBottomSheet(expanded = expanded, onDismiss = onDismiss, title = "Sort by") { closeAnd ->
+        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
             SortOptionItem(
                 "Last Edited",
                 currentSortType == SortType.LAST_EDITED
@@ -1075,15 +1142,8 @@ fun SortBottomSheet(expanded: Boolean, currentSortType: SortType, currentSortOrd
                 closeAnd { onSortChanged(SortType.MANUAL, currentSortOrder) }
             }
             HorizontalDivider(
-                modifier = Modifier.padding(vertical = 6.dp, horizontal = 20.dp),
+                modifier = Modifier.padding(vertical = 6.dp),
                 color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
-            )
-            Text(
-                "Order",
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
             )
             SortOptionItem(
                 "Ascending",
@@ -1103,11 +1163,12 @@ private fun SortOptionItem(text: String, isSelected: Boolean, onClick: () -> Uni
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 2.dp)
+            .padding( vertical = 2.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f) else Color.Transparent)
-            .clickable { onClick() }
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .background(Color.Transparent)
+            .noRippleClickable { onClick() }
+            .padding(vertical = 10.dp)
+            .padding(end = if (isSelected) 12.dp else 0.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {

@@ -1,5 +1,6 @@
 package com.ben.inly.presentation.calendar
 
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,15 +18,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Notes
-import androidx.compose.material.icons.filled.Link
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalRippleConfiguration
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,17 +44,18 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.ben.inly.domain.util.isDesktopPlatform
 import com.ben.inly.presentation.shared.components.InlyBottomSheet
+import com.ben.inly.presentation.shared.components.InlyBottomSheetAction
 import com.ben.inly.presentation.shared.components.InlyButtonPrimary
 import com.ben.inly.presentation.shared.components.InlyButtonSecondary
 import com.ben.inly.presentation.shared.components.InlyTextField
 import com.ben.inly.presentation.shared.components.MinimalDatePickerDialog
 import com.ben.inly.presentation.shared.components.MinimalTimePickerDialog
+import com.ben.inly.presentation.shared.components.NoRippleIndicationNodeFactory
 import com.ben.inly.presentation.shared.components.TopBarIconButtonGroup
 import com.ben.inly.presentation.shared.components.TopBarIconButtonItem
 import com.ben.inly.ui.theme.LocalAppIsDark
 import inly.app.generated.resources.Res
 import inly.app.generated.resources.calendar
-import inly.app.generated.resources.category2
 import inly.app.generated.resources.clock_circle
 import inly.app.generated.resources.doc_text
 import inly.app.generated.resources.link
@@ -159,6 +161,7 @@ fun formatDuration(minutes: Int): String {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EventEditorSheet(
     state: EventEditorState?,
@@ -185,7 +188,19 @@ fun EventEditorSheet(
         expanded = state != null,
         onDismiss = onDismiss,
         title = title,
+        headerAction = if (onDelete != null) {
+            InlyBottomSheetAction(
+                icon = painterResource(Res.drawable.trash),
+                contentDescription = "Delete",
+                tint = MaterialTheme.colorScheme.error,
+                onClick = onDelete
+            )
+        } else null,
     ) { closeAnd ->
+      CompositionLocalProvider(
+        LocalIndication provides NoRippleIndicationNodeFactory,
+        LocalRippleConfiguration provides null
+      ) {
         Column(modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp)) {
             if (state != null) {
                 EventEditorFields(
@@ -205,6 +220,7 @@ fun EventEditorSheet(
                 )
             }
         }
+      }
     }
 }
 
@@ -243,9 +259,8 @@ private fun EventEditorFields(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp)
             .padding(
-                top = if (isDesktopPlatform) 16.dp else 4.dp,
+                top = if (isDesktopPlatform) 16.dp else 10.dp,
                 bottom = if (isDesktopPlatform) 0.dp else 20.dp
             ),
         verticalArrangement = Arrangement.spacedBy(SectionSpacing)
@@ -329,15 +344,22 @@ private fun EventEditorFields(
             Text(
                 text = "Duration: ${formatDuration(state.durationMinutes)}",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                modifier = Modifier.padding(top = 8.dp)
             )
         }
+
+        HorizontalDivider(
+            modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+        )
 
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
                 text = "Category",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                modifier = Modifier.padding(bottom = 8.dp)
             )
             Row(
                 modifier = Modifier
@@ -364,11 +386,17 @@ private fun EventEditorFields(
             }
         }
 
+        HorizontalDivider(
+            modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+        )
+
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
                 text = "Description",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                modifier = Modifier.padding(bottom = 8.dp)
             )
             InlyTextField(
                 value = state.description,
@@ -377,16 +405,6 @@ private fun EventEditorFields(
                 singleLine = false,
                 modifier = Modifier.fillMaxWidth()
             )
-        }
-
-        if (onDelete != null) {
-            TextButton(onClick = onDelete) {
-                Text(
-                    text = "Delete event",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.error
-                )
-            }
         }
 
         Row(
@@ -425,9 +443,8 @@ private fun EventViewFields(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp)
             .padding(
-                top = if (isDesktopPlatform) 16.dp else 4.dp,
+                top = if (isDesktopPlatform) 16.dp else 24.dp,
                 bottom = if (isDesktopPlatform) 0.dp else 32.dp
             ),
         verticalArrangement = Arrangement.spacedBy(SectionSpacing)

@@ -70,7 +70,6 @@ fun CategorySection(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
     ) {
         if (isDesktopPlatform) {
             Text(
@@ -78,7 +77,7 @@ fun CategorySection(
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                modifier = Modifier.padding(bottom = 12.dp)
+                modifier = Modifier.padding(bottom = 12.dp).padding(horizontal = 12.dp)
             )
         }
 
@@ -169,9 +168,11 @@ private fun CategoryRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .padding( vertical = 2.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .clickable(onClick = onClick)
-                .padding(horizontal = 8.dp, vertical = 10.dp),
+                .padding(vertical = 10.dp,  horizontal = if (isDesktopPlatform) 12.dp else 0.dp)
+                .padding(end = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
@@ -237,9 +238,10 @@ private fun AddCategoryRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .padding(vertical = 2.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .clickable(onClick = onClick)
-                .padding(horizontal = 8.dp, vertical = 10.dp),
+                .padding(vertical = 10.dp, horizontal = if (isDesktopPlatform) 10.dp else 0.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
@@ -296,7 +298,6 @@ private fun CategoryEditor(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp)
             .padding(bottom = 8.dp)
     ) {
         InlyTextField(

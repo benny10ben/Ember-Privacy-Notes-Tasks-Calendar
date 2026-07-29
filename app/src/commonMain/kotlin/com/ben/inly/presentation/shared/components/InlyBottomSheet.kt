@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -16,13 +18,22 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.ben.inly.domain.util.isDesktopPlatform
+import androidx.compose.ui.graphics.painter.Painter
 import com.ben.inly.presentation.shared.stableStatusBarsPadding
 import com.ben.inly.ui.theme.LocalAppIsDark
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
 
-private val BottomSheetShape = RoundedCornerShape(topEnd = 16.dp, topStart = 16.dp)
+private val BottomSheetShape = RoundedCornerShape(topEnd = 26.dp, topStart = 26.dp)
 private val FloatingDialogShape = RoundedCornerShape(16.dp)
+private val SheetHorizontalPadding = 20.dp
+
+class InlyBottomSheetAction(
+    val icon: Painter,
+    val contentDescription: String,
+    val tint: Color? = null,
+    val onClick: () -> Unit
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -32,6 +43,7 @@ fun InlyBottomSheet(
     title: String? = null,
     subtitle: String? = null,
     applyNavPadding: Boolean = false,
+    headerAction: InlyBottomSheetAction? = null,
     content: @Composable ColumnScope.(closeAnd: (() -> Unit) -> Unit) -> Unit
 ) {
     if (!expanded) return
@@ -41,6 +53,7 @@ fun InlyBottomSheet(
             onDismiss = onDismiss,
             title = title,
             subtitle = subtitle,
+            headerAction = headerAction,
             content = content
         )
     } else {
@@ -49,6 +62,7 @@ fun InlyBottomSheet(
             title = title,
             subtitle = subtitle,
             applyNavPadding = applyNavPadding,
+            headerAction = headerAction,
             content = content
         )
     }
@@ -59,6 +73,7 @@ private fun InlyFloatingDialog(
     onDismiss: () -> Unit,
     title: String?,
     subtitle: String?,
+    headerAction: InlyBottomSheetAction? = null,
     content: @Composable ColumnScope.(closeAnd: (() -> Unit) -> Unit) -> Unit
 ) {
     fun closeAnd(action: () -> Unit) {
@@ -90,14 +105,39 @@ private fun InlyFloatingDialog(
                     .imePadding()
             ) {
                 if (title != null) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
-                            .padding(top = 8.dp)
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f)
+                                .padding(horizontal = SheetHorizontalPadding, vertical = 8.dp)
+                        )
+                        if (headerAction != null) {
+                            Box(modifier = Modifier.padding(end = 4.dp)) {
+                                TopBarIconButton(
+                                    icon = headerAction.icon,
+                                    contentDescription = headerAction.contentDescription,
+                                    bgColor = Color.Transparent,
+                                    tint = headerAction.tint ?: MaterialTheme.colorScheme.onSurface,
+                                    onClick = headerAction.onClick
+                                )
+                            }
+                        }
+                        Box(modifier = Modifier.padding(end = SheetHorizontalPadding)) {
+                            TopBarIconButton(
+                                icon = Icons.Default.Close,
+                                contentDescription = "Close",
+                                bgColor = Color.Transparent,
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                onClick = onDismiss
+                            )
+                        }
+                    }
                 }
 
                 if (subtitle != null) {
@@ -105,7 +145,7 @@ private fun InlyFloatingDialog(
                         text = subtitle,
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(horizontal = 20.dp).padding(bottom = 16.dp)
+                        modifier = Modifier.padding(horizontal = SheetHorizontalPadding).padding(bottom = 16.dp)
                     )
                 }
 
@@ -114,6 +154,7 @@ private fun InlyFloatingDialog(
                         .fillMaxWidth()
                         .heightIn(max = 560.dp)
                         .verticalScroll(rememberScrollState())
+                        .padding(horizontal = SheetHorizontalPadding)
                         .padding(bottom = 20.dp)
                 ) {
                     content { action -> closeAnd(action) }
@@ -130,6 +171,7 @@ private fun InlyModalBottomSheet(
     title: String?,
     subtitle: String?,
     applyNavPadding: Boolean,
+    headerAction: InlyBottomSheetAction? = null,
     content: @Composable ColumnScope.(closeAnd: (() -> Unit) -> Unit) -> Unit
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -188,23 +230,40 @@ private fun InlyModalBottomSheet(
                     .imePadding()
                     .then(if (applyNavPadding) Modifier.padding(bottom = 16.dp) else Modifier)
             ) {
-                Box(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    BottomSheetDefaults.DragHandle(
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
-                    )
-                }
-
                 if (title != null) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 26.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f)
+                                .padding(horizontal = SheetHorizontalPadding, vertical = 8.dp)
+                        )
+                        if (headerAction != null) {
+                            Box(modifier = Modifier.padding(end = 4.dp)) {
+                                TopBarIconButton(
+                                    icon = headerAction.icon,
+                                    contentDescription = headerAction.contentDescription,
+                                    bgColor = Color.Transparent,
+                                    tint = headerAction.tint ?: MaterialTheme.colorScheme.onSurface,
+                                    onClick = headerAction.onClick
+                                )
+                            }
+                        }
+                        Box(modifier = Modifier.padding(end = SheetHorizontalPadding)) {
+                            TopBarIconButton(
+                                icon = Icons.Default.Close,
+                                contentDescription = "Close",
+                                bgColor = Color.Transparent,
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                onClick = onDismiss
+                            )
+                        }
+                    }
                 }
 
                 if (subtitle != null) {
@@ -212,7 +271,14 @@ private fun InlyModalBottomSheet(
                         text = subtitle,
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(horizontal = 20.dp).padding(bottom = 16.dp)
+                        modifier = Modifier.padding(horizontal = SheetHorizontalPadding).padding(bottom = 8.dp)
+                    )
+                }
+
+                if (title != null || subtitle != null) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = SheetHorizontalPadding, vertical = 12.dp),
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
                     )
                 }
 
@@ -221,6 +287,7 @@ private fun InlyModalBottomSheet(
                         .fillMaxWidth()
                         .weight(1f, fill = false)
                         .verticalScroll(rememberScrollState())
+                        .padding(horizontal = SheetHorizontalPadding)
                 ) {
                     content { action -> closeAnd(action) }
                 }

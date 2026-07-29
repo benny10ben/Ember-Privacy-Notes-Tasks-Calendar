@@ -5,6 +5,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
@@ -117,6 +118,7 @@ import inly.app.generated.resources.files
 import inly.app.generated.resources.folder_plus
 import inly.app.generated.resources.images
 import inly.app.generated.resources.inbox
+import inly.app.generated.resources.notes2
 import inly.app.generated.resources.search
 import inly.app.generated.resources.template
 import org.jetbrains.compose.resources.painterResource
@@ -190,14 +192,19 @@ private fun OverviewRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 2.dp)
             .clip(shape)
             .background(if (isSelected || isHovered) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f) else Color.Transparent)
             .noRippleClickable(interactionSource, onClick)
-            .padding(horizontal = 8.dp, vertical = 10.dp),
+            .heightIn(min = 42.dp)
+            .padding(start = 4.dp, end = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.70f), modifier = Modifier.size(iconSize))
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(8.dp))
+        Box(Modifier.width(24.dp), contentAlignment = Alignment.Center) {
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.70f), modifier = Modifier.size(iconSize))
+        }
+        Spacer(Modifier.width(10.dp))
         Text(title, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
         Text(subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.60f))
     }
@@ -209,7 +216,9 @@ private val MIN_RAG_PANEL_WIDTH = 320.dp
 private val MAX_RAG_PANEL_WIDTH = 640.dp
 private val DEFAULT_RAG_PANEL_WIDTH = 400.dp
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class,
+    ExperimentalSharedTransitionApi::class
+)
 @Composable
 fun DesktopMainScreen(
     homeViewModel: HomeViewModel = koinViewModel(),
@@ -371,7 +380,6 @@ fun DesktopMainScreen(
             expanded = showSettingsMenu,
             onDismiss = { showSettingsMenu = false },
             onNavigateToSettings = { showSettingsMenu = false; detail = DetailPane.Settings },
-            onNavigateToSelfHostSetup = { showSettingsMenu = false; detail = DetailPane.SelfHostSetup },
             onNavigateToTrash = { showSettingsMenu = false; detail = DetailPane.Trash }
         )
     }
@@ -403,291 +411,430 @@ fun DesktopMainScreen(
         }
 
         Box(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxSize().padding(start = startPadding, end = endPadding)) {
+            Column(modifier = Modifier.fillMaxSize().padding(start = startPadding, end = endPadding)) {
 
-            // top: icon row
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = onToggleSidebar) {
-                    Icon(painterResource(Res.drawable.sidebar), "Collapse sidebar", tint = MaterialTheme.colorScheme.onSurface)
-                }
-                Spacer(Modifier.weight(1f))
-                Box {
-                    TopBarIconButtonGroup(
-                        bgColor = if (LocalAppIsDark.current) MaterialTheme.colorScheme.surface.copy(alpha = 0.45f) else MaterialTheme.colorScheme.background.copy(alpha = 0.45f),
-                        tint = MaterialTheme.colorScheme.onBackground,
-                        items = listOf(
-                            TopBarIconButtonItem(
-                                icon = painterResource(Res.drawable.calendar),
-                                contentDescription = "Calendar",
-                                onClick = { detail = DetailPane.Calendar; isPeeking = false }
-                            ),
-                            TopBarIconButtonItem(
-                                icon = painterResource(Res.drawable.inbox),
-                                contentDescription = "Upcoming tasks",
-                                onClick = { showScheduledTasksSheet = true }
-                            ),
-                            TopBarIconButtonItem(
-                                icon = painterResource(Res.drawable.ellipsis),
-                                contentDescription = "Settings",
-                                onClick = { showSettingsMenu = true }
+                // top: icon row
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onToggleSidebar) {
+                        Icon(painterResource(Res.drawable.sidebar), "Collapse sidebar", tint = MaterialTheme.colorScheme.onSurface)
+                    }
+                    Spacer(Modifier.weight(1f))
+                    Box {
+                        TopBarIconButtonGroup(
+                            bgColor = if (LocalAppIsDark.current) MaterialTheme.colorScheme.surface.copy(alpha = 0.45f) else MaterialTheme.colorScheme.background.copy(alpha = 0.45f),
+                            tint = MaterialTheme.colorScheme.onBackground,
+                            items = listOf(
+                                TopBarIconButtonItem(
+                                    icon = painterResource(Res.drawable.calendar),
+                                    contentDescription = "Calendar",
+                                    onClick = { detail = DetailPane.Calendar; isPeeking = false }
+                                ),
+                                TopBarIconButtonItem(
+                                    icon = painterResource(Res.drawable.inbox),
+                                    contentDescription = "Upcoming tasks",
+                                    onClick = { showScheduledTasksSheet = true }
+                                ),
+                                TopBarIconButtonItem(
+                                    icon = painterResource(Res.drawable.ellipsis),
+                                    contentDescription = "Settings",
+                                    onClick = { showSettingsMenu = true }
+                                )
                             )
                         )
-                    )
-                    settingsMenuSlot()
+                        settingsMenuSlot()
+                    }
                 }
-            }
 
-            // calendar strip
-            CollapsedWeekStrip(
-                selectedDate = selectedDate,
-                today = today,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp).padding(top = 8.dp),
-                onDateSelected = { openDaily(it) }
-            )
+                // calendar strip
+                CollapsedWeekStrip(
+                    selectedDate = selectedDate,
+                    today = today,
+                    modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 20.dp, bottom = 12.dp),
+                    onDateSelected = { openDaily(it) }
+                )
 
-            // Scrolling: overview rows + favorites + notes tree + recents
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .hazeSource(sidebarHazeState)
-                    .background(if (isSidebarVisible) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.surface)
-                    .sidebarDragTracker(
-                        dragState = dragState,
-                        listState = sidebarListState,
-                        rowKeys = rowKeys,
-                        rowHeightPx = rowHeightPx,
-                        payloadForKey = { key ->
-                            when {
-                                key == null -> null
-                                key.startsWith("sb_folder_") -> "$DRAG_PREFIX_FOLDER${key.removePrefix("sb_folder_")}"
-                                key.startsWith("sb_note_") -> "$DRAG_PREFIX_NOTE${key.removePrefix("sb_note_")}"
-                                key.startsWith("sb_fav_") -> "$DRAG_PREFIX_NOTE${key.removePrefix("sb_fav_")}"
-                                key.startsWith("sb_recent_") -> "$DRAG_PREFIX_NOTE${key.removePrefix("sb_recent_")}"
-                                else -> null
-                            }
-                        },
-                        isDropTarget = { key, payload ->
-                            if (key == null) false
-                            else when {
-                                key.startsWith("sb_fav_") -> false
-                                key.startsWith("sb_recent_") -> false
-                                key.startsWith("sb_folder_") &&
-                                        payload == "$DRAG_PREFIX_FOLDER${key.removePrefix("sb_folder_")}" -> false
-                                else -> true
-                            }
-                        },
-                        onDrop = { payload, targetKey, insertBefore ->
-                            when {
-                                targetKey == DROP_KEY_ROOT -> when {
-                                    payload.startsWith(DRAG_PREFIX_NOTE) -> homeViewModel.moveNote(payload.removePrefix(DRAG_PREFIX_NOTE), null)
-                                    payload.startsWith(DRAG_PREFIX_FOLDER) -> homeViewModel.moveFolder(payload.removePrefix(DRAG_PREFIX_FOLDER), null)
+                // Scrolling: overview rows + favorites + notes tree + recents
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .hazeSource(sidebarHazeState)
+                        .background(if (isSidebarVisible) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.surface)
+                        .sidebarDragTracker(
+                            dragState = dragState,
+                            listState = sidebarListState,
+                            rowKeys = rowKeys,
+                            rowHeightPx = rowHeightPx,
+                            payloadForKey = { key ->
+                                when {
+                                    key == null -> null
+                                    key.startsWith("sb_folder_") -> "$DRAG_PREFIX_FOLDER${key.removePrefix("sb_folder_")}"
+                                    key.startsWith("sb_note_") -> "$DRAG_PREFIX_NOTE${key.removePrefix("sb_note_")}"
+                                    key.startsWith("sb_fav_") -> "$DRAG_PREFIX_NOTE${key.removePrefix("sb_fav_")}"
+                                    key.startsWith("sb_recent_") -> "$DRAG_PREFIX_NOTE${key.removePrefix("sb_recent_")}"
+                                    else -> null
                                 }
-                                !insertBefore && targetKey.startsWith("sb_folder_") &&
-                                        dragState.dropPosition == DropInsertPosition.INTO -> {
-                                    val folderId = targetKey.removePrefix("sb_folder_")
-                                    when {
-                                        payload.startsWith(DRAG_PREFIX_NOTE) -> homeViewModel.moveNote(payload.removePrefix(DRAG_PREFIX_NOTE), folderId)
-                                        payload.startsWith(DRAG_PREFIX_FOLDER) -> homeViewModel.moveFolder(payload.removePrefix(DRAG_PREFIX_FOLDER), folderId)
+                            },
+                            isDropTarget = { key, payload ->
+                                if (key == null) false
+                                else when {
+                                    key.startsWith("sb_fav_") -> false
+                                    key.startsWith("sb_recent_") -> false
+                                    key.startsWith("sb_folder_") &&
+                                            payload == "$DRAG_PREFIX_FOLDER${key.removePrefix("sb_folder_")}" -> false
+                                    else -> true
+                                }
+                            },
+                            onDrop = { payload, targetKey, insertBefore ->
+                                when {
+                                    targetKey == DROP_KEY_ROOT -> when {
+                                        payload.startsWith(DRAG_PREFIX_NOTE) -> homeViewModel.moveNote(payload.removePrefix(DRAG_PREFIX_NOTE), null)
+                                        payload.startsWith(DRAG_PREFIX_FOLDER) -> homeViewModel.moveFolder(payload.removePrefix(DRAG_PREFIX_FOLDER), null)
+                                    }
+                                    !insertBefore && targetKey.startsWith("sb_folder_") &&
+                                            dragState.dropPosition == DropInsertPosition.INTO -> {
+                                        val folderId = targetKey.removePrefix("sb_folder_")
+                                        when {
+                                            payload.startsWith(DRAG_PREFIX_NOTE) -> homeViewModel.moveNote(payload.removePrefix(DRAG_PREFIX_NOTE), folderId)
+                                            payload.startsWith(DRAG_PREFIX_FOLDER) -> homeViewModel.moveFolder(payload.removePrefix(DRAG_PREFIX_FOLDER), folderId)
+                                        }
+                                    }
+                                    else -> {
+                                        val draggedKey = when {
+                                            payload.startsWith(DRAG_PREFIX_NOTE) -> "sb_note_${payload.removePrefix(DRAG_PREFIX_NOTE)}"
+                                            payload.startsWith(DRAG_PREFIX_FOLDER) -> "sb_folder_${payload.removePrefix(DRAG_PREFIX_FOLDER)}"
+                                            else -> return@sidebarDragTracker
+                                        }
+                                        homeViewModel.reorderItems(
+                                            draggedKey = draggedKey,
+                                            targetKey = targetKey,
+                                            insertBefore = insertBefore,
+                                            orderedKeys = treeRows.map { it.key }
+                                        )
                                     }
                                 }
-                                else -> {
-                                    val draggedKey = when {
-                                        payload.startsWith(DRAG_PREFIX_NOTE) -> "sb_note_${payload.removePrefix(DRAG_PREFIX_NOTE)}"
-                                        payload.startsWith(DRAG_PREFIX_FOLDER) -> "sb_folder_${payload.removePrefix(DRAG_PREFIX_FOLDER)}"
-                                        else -> return@sidebarDragTracker
-                                    }
-                                    homeViewModel.reorderItems(
-                                        draggedKey = draggedKey,
-                                        targetKey = targetKey,
-                                        insertBefore = insertBefore,
-                                        orderedKeys = treeRows.map { it.key }
+                            }
+                        )
+                ) {
+                    LazyColumn(
+                        state = sidebarListState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(bottom = 80.dp)
+                    ) {
+                        item {
+                            Column(modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)) {
+                                OverviewRow(painterResource(Res.drawable.check_square), "Tasks", "$remindersCount left", isSelected = detail == DetailPane.Reminders) { detail = DetailPane.Reminders; isPeeking = false }
+                                OverviewRow(painterResource(Res.drawable.bookmark), "Bookmarks", "$bookmarksCount saved", isSelected = detail == DetailPane.Bookmarks) { detail = DetailPane.Bookmarks; isPeeking = false }
+                                OverviewRow(painterResource(Res.drawable.images), "Images", "$imagesCount saved", isSelected = detail == DetailPane.Images) { detail = DetailPane.Images; isPeeking = false }
+                                OverviewRow(painterResource(Res.drawable.notes2), "Documents", "$documentsCount attached", isSelected = detail == DetailPane.Documents) { detail = DetailPane.Documents; isPeeking = false }
+                            }
+                        }
+
+                        if (!isSelectionMode && favoriteNotes.isNotEmpty()) {
+                            item { SidebarSectionHeader("Favorites", isFavoritesExpanded, { isFavoritesExpanded = !isFavoritesExpanded }) }
+                            if (isFavoritesExpanded) {
+                                items(favoriteNotes, key = { "sb_fav_${it.noteId}" }) { note ->
+                                    SidebarNoteRow(
+                                        note = note, level = 0,
+                                        isActive = (detail as? DetailPane.Note)?.noteId == note.noteId,
+                                        isSelected = selectedNoteIds.contains(note.noteId),
+                                        dragState = dragState,
+                                        onClick = { openNote(note.noteId) },
+                                        onRename = { newTitle -> homeViewModel.renameNote(note.noteId, newTitle) },
+                                        onDelete = { homeViewModel.trashNote(note.noteId) },
+                                        rowKey = "sb_fav_${note.noteId}"
                                     )
                                 }
                             }
                         }
-                    )
-            ) {
-                LazyColumn(
-                    state = sidebarListState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 80.dp)
-                ) {
-                    item {
-                        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
-                            OverviewRow(painterResource(Res.drawable.check_square), "Tasks", "$remindersCount left", isSelected = detail == DetailPane.Reminders) { detail = DetailPane.Reminders; isPeeking = false }
-                            OverviewRow(painterResource(Res.drawable.bookmark), "Bookmarks", "$bookmarksCount saved", isSelected = detail == DetailPane.Bookmarks) { detail = DetailPane.Bookmarks; isPeeking = false }
-                            OverviewRow(painterResource(Res.drawable.images), "Images", "$imagesCount saved", isSelected = detail == DetailPane.Images) { detail = DetailPane.Images; isPeeking = false }
-                            OverviewRow(painterResource(Res.drawable.files), "Documents", "$documentsCount attached", isSelected = detail == DetailPane.Documents) { detail = DetailPane.Documents; isPeeking = false }
-                        }
-                    }
 
-                    if (!isSelectionMode && favoriteNotes.isNotEmpty()) {
-                        item { SidebarSectionHeader("Favorites", isFavoritesExpanded, { isFavoritesExpanded = !isFavoritesExpanded }) }
-                        if (isFavoritesExpanded) {
-                            items(favoriteNotes, key = { "sb_fav_${it.noteId}" }) { note ->
-                                SidebarNoteRow(
-                                    note = note, level = 0,
-                                    isActive = (detail as? DetailPane.Note)?.noteId == note.noteId,
-                                    isSelected = selectedNoteIds.contains(note.noteId),
-                                    dragState = dragState,
-                                    onClick = { openNote(note.noteId) },
-                                    onRename = { newTitle -> homeViewModel.renameNote(note.noteId, newTitle) },
-                                    onDelete = { homeViewModel.trashNote(note.noteId) },
-                                    rowKey = "sb_fav_${note.noteId}"
-                                )
-                            }
-                        }
-                    }
-
-                    item {
-                        SidebarSectionHeader(
-                            title = "Notes", isExpanded = isNotesExpanded,
-                            onToggle = { isNotesExpanded = !isNotesExpanded },
-                            trailing = if (isSelectionMode) null else {
-                                {
-                                    Box {
-                                        Icon(painterResource(Res.drawable.arrow_up_down), "Sort", modifier = Modifier.size(19.dp).noRippleClickable { showSortMenu = true }, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
-                                        InlyDesktopMenu(expanded = showSortMenu, onDismissRequest = { showSortMenu = false }) {
-                                            DesktopSortMenu(currentSortType = currentSortType, currentSortOrder = currentSortOrder, onDismiss = { showSortMenu = false }, onSortChanged = { type, order -> homeViewModel.updateSort(type, order); showSortMenu = false })
-                                        }
-                                    }
-                                    Box {
-                                        Icon(painterResource(Res.drawable.pen_square), "New note", modifier = Modifier.size(20.dp).noRippleClickable { addNoteInput = ""; showAddNotePopup = true }, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
-                                        InlyDesktopMenu(expanded = showAddNotePopup, onDismissRequest = { showAddNotePopup = false }, modifier = Modifier.width(280.dp)) {
-                                            Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                                                Row(Modifier.fillMaxWidth().padding(bottom = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                                                    Text("New Note", style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurface)
-                                                    Icon(
-                                                        painter = painterResource(Res.drawable.template),
-                                                        contentDescription = "Templates",
-                                                        tint = MaterialTheme.colorScheme.onSurface,
-                                                        modifier = Modifier.size(22.dp).noRippleClickable { handleOpenTemplates() }
-                                                    )
-                                                }
-                                                InlyTextField(value = addNoteInput, onValueChange = { addNoteInput = it }, placeholder = "Note title...", modifier = Modifier.fillMaxWidth())
-                                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                    InlyButtonSecondary(text = "Cancel", onClick = { showAddNotePopup = false }, modifier = Modifier.weight(1f))
-                                                    InlyButtonPrimary(text = "Create", onClick = { if (addNoteInput.isNotBlank()) { handleCreateNote(addNoteInput.trim()); showAddNotePopup = false } }, modifier = Modifier.weight(1f))
-                                                }
+                        item {
+                            SidebarSectionHeader(
+                                title = "Notes", isExpanded = isNotesExpanded,
+                                onToggle = { isNotesExpanded = !isNotesExpanded },
+                                trailing = if (isSelectionMode) null else {
+                                    {
+                                        Box {
+                                            Icon(
+                                                painterResource(Res.drawable.arrow_up_down),
+                                                "Sort",
+                                                modifier = Modifier.size(20.dp)
+                                                    .noRippleClickable { showSortMenu = true },
+                                                tint = MaterialTheme.colorScheme.onSurface.copy(
+                                                    alpha = 0.7f
+                                                )
+                                            )
+                                            InlyDesktopMenu(
+                                                expanded = showSortMenu,
+                                                onDismissRequest = { showSortMenu = false }) {
+                                                DesktopSortMenu(
+                                                    currentSortType = currentSortType,
+                                                    currentSortOrder = currentSortOrder,
+                                                    onDismiss = { showSortMenu = false },
+                                                    onSortChanged = { type, order ->
+                                                        homeViewModel.updateSort(
+                                                            type,
+                                                            order
+                                                        ); showSortMenu = false
+                                                    })
                                             }
                                         }
-                                        // Anchored to the same Box as the New Note icon, since that's the
-                                        // only entry point that opens this menu on this screen.
-                                        TemplatesDesktopMenu(
-                                            expanded = showTemplatesMenu,
-                                            templates = templates,
-                                            searchQuery = templateSearchQuery,
-                                            onSearchQueryChange = { homeViewModel.updateTemplateSearchQuery(it) },
-                                            onDismissRequest = { showTemplatesMenu = false },
-                                            onTemplateClick = { id -> showTemplatesMenu = false; handleTemplateClick(id) },
-                                            onEditTemplate = { id -> showTemplatesMenu = false; handleEditTemplate(id) },
-                                            onDeleteTemplate = { id -> homeViewModel.deleteTemplate(id) },
-                                            onCreateNewTemplate = { showTemplatesMenu = false; handleCreateNewTemplate() }
-                                        )
-                                    }
-                                    Box {
-                                        Icon(painterResource(Res.drawable.folder_plus), "New folder", modifier = Modifier.size(22.dp).noRippleClickable { addFolderInput = ""; showAddFolderPopup = true }, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
-                                        InlyDesktopMenu(expanded = showAddFolderPopup, onDismissRequest = { showAddFolderPopup = false }, modifier = Modifier.width(280.dp)) {
-                                            Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                                                Text("New Folder", style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(bottom = 10.dp))
-                                                InlyTextField(value = addFolderInput, onValueChange = { addFolderInput = it }, placeholder = "e.g. Personal, Work...", modifier = Modifier.fillMaxWidth())
-                                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                    InlyButtonSecondary(text = "Cancel", onClick = { showAddFolderPopup = false }, modifier = Modifier.weight(1f))
-                                                    InlyButtonPrimary(text = "Create", onClick = { if (addFolderInput.isNotBlank()) { handleCreateFolder(addFolderInput.trim()); showAddFolderPopup = false } }, modifier = Modifier.weight(1f))
+                                        Box {
+                                            Icon(
+                                                painterResource(Res.drawable.pen_square),
+                                                "New note",
+                                                modifier = Modifier.size(20.dp).noRippleClickable {
+                                                    addNoteInput = ""; showAddNotePopup = true
+                                                },
+                                                tint = MaterialTheme.colorScheme.onSurface.copy(
+                                                    alpha = 0.7f
+                                                )
+                                            )
+                                            InlyDesktopMenu(
+                                                expanded = showAddNotePopup,
+                                                onDismissRequest = { showAddNotePopup = false },
+                                                modifier = Modifier.width(280.dp)
+                                            ) {
+                                                Column(
+                                                    Modifier.padding(
+                                                        horizontal = 16.dp,
+                                                        vertical = 12.dp
+                                                    )
+                                                ) {
+                                                    Row(
+                                                        Modifier.fillMaxWidth()
+                                                            .padding(bottom = 18.dp),
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.SpaceBetween
+                                                    ) {
+                                                        Text(
+                                                            "New Note",
+                                                            style = MaterialTheme.typography.bodyLarge.copy(
+                                                                fontWeight = FontWeight.Bold
+                                                            ),
+                                                            color = MaterialTheme.colorScheme.onSurface
+                                                        )
+                                                        Icon(
+                                                            painter = painterResource(Res.drawable.template),
+                                                            contentDescription = "Templates",
+                                                            tint = MaterialTheme.colorScheme.onSurface,
+                                                            modifier = Modifier.size(22.dp)
+                                                                .noRippleClickable { handleOpenTemplates() }
+                                                        )
+                                                    }
+                                                    InlyTextField(
+                                                        value = addNoteInput,
+                                                        onValueChange = { addNoteInput = it },
+                                                        placeholder = "Note title...",
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    )
+                                                    Row(
+                                                        Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                                                        horizontalArrangement = Arrangement.spacedBy(
+                                                            8.dp
+                                                        )
+                                                    ) {
+                                                        InlyButtonSecondary(
+                                                            text = "Cancel",
+                                                            onClick = { showAddNotePopup = false },
+                                                            modifier = Modifier.weight(1f)
+                                                        )
+                                                        InlyButtonPrimary(
+                                                            text = "Create",
+                                                            onClick = {
+                                                                if (addNoteInput.isNotBlank()) {
+                                                                    handleCreateNote(addNoteInput.trim()); showAddNotePopup =
+                                                                        false
+                                                                }
+                                                            },
+                                                            modifier = Modifier.weight(1f)
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                            TemplatesDesktopMenu(
+                                                expanded = showTemplatesMenu,
+                                                templates = templates,
+                                                searchQuery = templateSearchQuery,
+                                                onSearchQueryChange = {
+                                                    homeViewModel.updateTemplateSearchQuery(
+                                                        it
+                                                    )
+                                                },
+                                                onDismissRequest = { showTemplatesMenu = false },
+                                                onTemplateClick = { id ->
+                                                    showTemplatesMenu = false; handleTemplateClick(
+                                                    id
+                                                )
+                                                },
+                                                onEditTemplate = { id ->
+                                                    showTemplatesMenu =
+                                                        false; handleEditTemplate(id)
+                                                },
+                                                onDeleteTemplate = { id ->
+                                                    homeViewModel.deleteTemplate(
+                                                        id
+                                                    )
+                                                },
+                                                onCreateNewTemplate = {
+                                                    showTemplatesMenu =
+                                                        false; handleCreateNewTemplate()
+                                                }
+                                            )
+                                        }
+                                        Box {
+                                            Icon(
+                                                painterResource(Res.drawable.folder_plus),
+                                                "New folder",
+                                                modifier = Modifier.size(20.dp).noRippleClickable {
+                                                    addFolderInput = ""; showAddFolderPopup = true
+                                                },
+                                                tint = MaterialTheme.colorScheme.onSurface.copy(
+                                                    alpha = 0.7f
+                                                )
+                                            )
+                                            InlyDesktopMenu(
+                                                expanded = showAddFolderPopup,
+                                                onDismissRequest = { showAddFolderPopup = false },
+                                                modifier = Modifier.width(280.dp)
+                                            ) {
+                                                Column(
+                                                    Modifier.padding(
+                                                        horizontal = 16.dp,
+                                                        vertical = 12.dp
+                                                    )
+                                                ) {
+                                                    Text(
+                                                        "New Folder",
+                                                        style = MaterialTheme.typography.bodyLarge.copy(
+                                                            fontWeight = FontWeight.Bold
+                                                        ),
+                                                        color = MaterialTheme.colorScheme.onSurface,
+                                                        modifier = Modifier.padding(bottom = 18.dp)
+                                                    )
+                                                    InlyTextField(
+                                                        value = addFolderInput,
+                                                        onValueChange = { addFolderInput = it },
+                                                        placeholder = "e.g. Personal, Work...",
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    )
+                                                    Row(
+                                                        Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                                                        horizontalArrangement = Arrangement.spacedBy(
+                                                            8.dp
+                                                        )
+                                                    ) {
+                                                        InlyButtonSecondary(
+                                                            text = "Cancel",
+                                                            onClick = {
+                                                                showAddFolderPopup = false
+                                                            },
+                                                            modifier = Modifier.weight(1f)
+                                                        )
+                                                        InlyButtonPrimary(
+                                                            text = "Create",
+                                                            onClick = {
+                                                                if (addFolderInput.isNotBlank()) {
+                                                                    handleCreateFolder(
+                                                                        addFolderInput.trim()
+                                                                    ); showAddFolderPopup = false
+                                                                }
+                                                            },
+                                                            modifier = Modifier.weight(1f)
+                                                        )
+                                                    }
                                                 }
                                             }
                                         }
                                     }
                                 }
+                            )
+                        }
+
+                        item(key = DROP_KEY_ROOT) { SidebarRootDropZone(dragState = dragState) }
+
+                        if (isNotesExpanded) {
+                            items(treeRows, key = { it.key }) { row ->
+                                when (row) {
+                                    is SidebarTreeRow.Folder -> SidebarFolderRow(
+                                        modifier = Modifier.animateItem(
+                                            fadeInSpec = tween(220, easing = FastOutSlowInEasing),
+                                            fadeOutSpec = tween(180, easing = FastOutSlowInEasing),
+                                            placementSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                                        ),
+                                        folder = row.folder,
+                                        level = row.level,
+                                        isExpanded = expandedFolderIds.contains(row.folder.folderId),
+                                        isSelected = selectedFolderIds.contains(row.folder.folderId),
+                                        dragState = dragState,
+                                        onClick = { homeViewModel.toggleFolderExpansion(row.folder.folderId) },
+                                        onAddNote = { homeViewModel.createNoteInParent(row.folder.folderId, autoExpand = true) { newId -> openNote(newId) } },
+                                        onAddSubfolder = { name -> homeViewModel.createFolderInParent(row.folder.folderId, name = name, autoExpand = true) },
+                                        onRename = { newName -> homeViewModel.renameFolder(row.folder.folderId, newName) },
+                                        onDelete = { homeViewModel.trashFolder(row.folder.folderId) }
+                                    )
+                                    is SidebarTreeRow.Note -> SidebarNoteRow(
+                                        modifier = Modifier.animateItem(
+                                            fadeInSpec = tween(220, easing = FastOutSlowInEasing),
+                                            fadeOutSpec = tween(180, easing = FastOutSlowInEasing),
+                                            placementSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                                        ),
+                                        note = row.note,
+                                        level = row.level,
+                                        isActive = (detail as? DetailPane.Note)?.noteId == row.note.noteId,
+                                        isSelected = selectedNoteIds.contains(row.note.noteId),
+                                        dragState = dragState,
+                                        onClick = { openNote(row.note.noteId) },
+                                        onRename = { newTitle -> homeViewModel.renameNote(row.note.noteId, newTitle) },
+                                        onDelete = { homeViewModel.trashNote(row.note.noteId) }
+                                    )
+                                }
                             }
-                        )
-                    }
+                        }
 
-                    item(key = DROP_KEY_ROOT) { SidebarRootDropZone(dragState = dragState) }
-
-                    if (isNotesExpanded) {
-                        items(treeRows, key = { it.key }) { row ->
-                            when (row) {
-                                is SidebarTreeRow.Folder -> SidebarFolderRow(
-                                    modifier = Modifier.animateItem(
-                                        fadeInSpec = tween(220, easing = FastOutSlowInEasing),
-                                        fadeOutSpec = tween(180, easing = FastOutSlowInEasing),
-                                        placementSpec = spring(stiffness = Spring.StiffnessMediumLow)
-                                    ),
-                                    folder = row.folder,
-                                    level = row.level,
-                                    isExpanded = expandedFolderIds.contains(row.folder.folderId),
-                                    isSelected = selectedFolderIds.contains(row.folder.folderId),
-                                    dragState = dragState,
-                                    onClick = { homeViewModel.toggleFolderExpansion(row.folder.folderId) },
-                                    onAddNote = { homeViewModel.createNoteInParent(row.folder.folderId, autoExpand = true) { newId -> openNote(newId) } },
-                                    onAddSubfolder = { name -> homeViewModel.createFolderInParent(row.folder.folderId, name = name, autoExpand = true) },
-                                    onRename = { newName -> homeViewModel.renameFolder(row.folder.folderId, newName) },
-                                    onDelete = { homeViewModel.trashFolder(row.folder.folderId) }
-                                )
-                                is SidebarTreeRow.Note -> SidebarNoteRow(
-                                    modifier = Modifier.animateItem(
-                                        fadeInSpec = tween(220, easing = FastOutSlowInEasing),
-                                        fadeOutSpec = tween(180, easing = FastOutSlowInEasing),
-                                        placementSpec = spring(stiffness = Spring.StiffnessMediumLow)
-                                    ),
-                                    note = row.note,
-                                    level = row.level,
-                                    isActive = (detail as? DetailPane.Note)?.noteId == row.note.noteId,
-                                    isSelected = selectedNoteIds.contains(row.note.noteId),
-                                    dragState = dragState,
-                                    onClick = { openNote(row.note.noteId) },
-                                    onRename = { newTitle -> homeViewModel.renameNote(row.note.noteId, newTitle) },
-                                    onDelete = { homeViewModel.trashNote(row.note.noteId) }
-                                )
+                        if (!isSelectionMode && recentNotes.isNotEmpty()) {
+                            item { SidebarSectionHeader("Recents", isRecentsExpanded, { isRecentsExpanded = !isRecentsExpanded }) }
+                            if (isRecentsExpanded) {
+                                items(recentNotes, key = { "sb_recent_${it.noteId}" }) { note ->
+                                    SidebarNoteRow(
+                                        note = note, level = 0,
+                                        isActive = (detail as? DetailPane.Note)?.noteId == note.noteId,
+                                        isSelected = selectedNoteIds.contains(note.noteId),
+                                        dragState = dragState,
+                                        onClick = { openNote(note.noteId) },
+                                        onRename = { newTitle -> homeViewModel.renameNote(note.noteId, newTitle) },
+                                        onDelete = { homeViewModel.trashNote(note.noteId) },
+                                        rowKey = "sb_recent_${note.noteId}"
+                                    )
+                                }
                             }
                         }
                     }
 
-                    if (!isSelectionMode && recentNotes.isNotEmpty()) {
-                        item { SidebarSectionHeader("Recents", isRecentsExpanded, { isRecentsExpanded = !isRecentsExpanded }) }
-                        if (isRecentsExpanded) {
-                            items(recentNotes, key = { "sb_recent_${it.noteId}" }) { note ->
-                                SidebarNoteRow(
-                                    note = note, level = 0,
-                                    isActive = (detail as? DetailPane.Note)?.noteId == note.noteId,
-                                    isSelected = selectedNoteIds.contains(note.noteId),
-                                    dragState = dragState,
-                                    onClick = { openNote(note.noteId) },
-                                    onRename = { newTitle -> homeViewModel.renameNote(note.noteId, newTitle) },
-                                    onDelete = { homeViewModel.trashNote(note.noteId) },
-                                    rowKey = "sb_recent_${note.noteId}"
-                                )
+                    SidebarDragChip(
+                        dragState = dragState,
+                        labelForPayload = { payload ->
+                            when {
+                                payload.startsWith(DRAG_PREFIX_NOTE) -> {
+                                    val id = payload.removePrefix(DRAG_PREFIX_NOTE)
+                                    notesByFolder.values.flatten().find { it.noteId == id }?.title?.ifEmpty { "Untitled" } ?: "Note"
+                                }
+                                payload.startsWith(DRAG_PREFIX_FOLDER) -> {
+                                    val id = payload.removePrefix(DRAG_PREFIX_FOLDER)
+                                    foldersByParent.values.flatten().find { it.folderId == id }?.name ?: "Folder"
+                                }
+                                else -> ""
                             }
                         }
-                    }
+                    )
                 }
 
-                SidebarDragChip(
-                    dragState = dragState,
-                    labelForPayload = { payload ->
-                        when {
-                            payload.startsWith(DRAG_PREFIX_NOTE) -> {
-                                val id = payload.removePrefix(DRAG_PREFIX_NOTE)
-                                notesByFolder.values.flatten().find { it.noteId == id }?.title?.ifEmpty { "Untitled" } ?: "Note"
-                            }
-                            payload.startsWith(DRAG_PREFIX_FOLDER) -> {
-                                val id = payload.removePrefix(DRAG_PREFIX_FOLDER)
-                                foldersByParent.values.flatten().find { it.folderId == id }?.name ?: "Folder"
-                            }
-                            else -> ""
-                        }
-                    }
-                )
             }
 
-        }
-
-        // floating search + AI assistant buttons, mirrors mobile's InlyBottomBar circles
+            // floating search + AI assistant buttons, mirrors mobile's InlyBottomBar circles
             Row(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
@@ -931,7 +1078,7 @@ fun DesktopMainScreen(
                 val todayTasks = calendarTaskMap[today] ?: emptyList()
                 val tomorrowTasks = calendarTaskMap[today.plus(1, DateTimeUnit.DAY)] ?: emptyList()
                 InlyBottomSheet(expanded = true, onDismiss = { showScheduledTasksSheet = false }, title = "Upcoming Tasks") { _ ->
-                    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+                    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
                         if (todayTasks.isEmpty() && tomorrowTasks.isEmpty()) {
                             Text("No tasks scheduled for today or tomorrow.", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                         } else {

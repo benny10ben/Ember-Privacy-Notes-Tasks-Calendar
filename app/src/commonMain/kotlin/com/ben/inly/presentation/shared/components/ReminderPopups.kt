@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
+
 package com.ben.inly.presentation.shared.components
 
 import androidx.compose.animation.animateColorAsState
@@ -6,6 +8,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -47,7 +50,6 @@ import java.util.Calendar
 import kotlin.math.abs
 
 private val DesktopMenuWidth = 240.dp
-
 @Composable
 fun ReminderPresetMenu(
     expanded: Boolean,
@@ -111,6 +113,10 @@ fun ReminderPresetMenu(
         }
     } else {
         InlyBottomSheet(expanded = expanded, onDismiss = onDismiss, title = "Date") {
+          CompositionLocalProvider(
+            LocalIndication provides NoRippleIndicationNodeFactory,
+            LocalRippleConfiguration provides null
+          ) {
             Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
                 PresetSheetItem(painterResource(Res.drawable.calendar_day), "Later today") {
                     onPresetSelected(
@@ -133,7 +139,7 @@ fun ReminderPresetMenu(
                     ); onDismiss()
                 }
                 HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 4.dp, horizontal = 20.dp),
+                    modifier = Modifier.padding(vertical = 4.dp),
                     color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
                 )
                 PresetSheetItem(
@@ -142,10 +148,8 @@ fun ReminderPresetMenu(
                 ) { onCustomSelected(); onDismiss() }
                 if (onRemove != null) {
                     HorizontalDivider(
-                        modifier = Modifier.padding(
-                            vertical = 4.dp,
-                            horizontal = 20.dp
-                        ), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                        modifier = Modifier.padding(vertical = 4.dp),
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
                     )
                     PresetSheetItem(
                         painterResource(Res.drawable.bell_off2),
@@ -156,9 +160,10 @@ fun ReminderPresetMenu(
                 InlyButtonPrimary(
                     text = "Close",
                     onClick = onDismiss,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)
                 )
             }
+          }
         }
     }
 }
@@ -210,6 +215,10 @@ fun TimePresetMenu(
         }
     } else {
         InlyBottomSheet(expanded = expanded, onDismiss = onDismiss, title = "Time") {
+          CompositionLocalProvider(
+            LocalIndication provides NoRippleIndicationNodeFactory,
+            LocalRippleConfiguration provides null
+          ) {
             Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
                 PresetSheetItem(painterResource(Res.drawable.history2), "In 15 mins") {
                     onPresetSelected(
@@ -234,7 +243,7 @@ fun TimePresetMenu(
                     ); onDismiss()
                 }
                 HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 4.dp, horizontal = 20.dp),
+                    modifier = Modifier.padding(vertical = 4.dp),
                     color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
                 )
                 PresetSheetItem(
@@ -244,9 +253,10 @@ fun TimePresetMenu(
                 InlyButtonPrimary(
                     text = "Close",
                     onClick = onDismiss,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)
                 )
             }
+          }
         }
     }
 }
@@ -258,10 +268,10 @@ private fun PresetSheetItem(icon: Painter, text: String, isDestructive: Boolean 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 2.dp)
+            .padding(vertical = 2.dp)
             .clip(RoundedCornerShape(12.dp))
             .clickable { onClick() }
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(painter = icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(20.dp))
@@ -597,36 +607,52 @@ fun MinimalDatePickerDialog(
             }
         }
     } else {
+        // the month/year picker is its own stacked InlyBottomSheet, so opening it slides a
+        // fresh sheet in on top instead of swapping this sheet's content in place
         InlyBottomSheet(
             expanded = expanded,
             onDismiss = onDismiss,
-            title = if (showMonthYearPicker) "Month & Year" else "Select Date"
+            title = "Select Date"
         ) {
-            if (showMonthYearPicker) {
-                MonthYearPickerContent(
-                    initialMonth = pickerState.viewMonth,
-                    initialYear = pickerState.viewYear,
-                    onBack = { showMonthYearPicker = false },
-                    onConfirm = { month, year ->
-                        pickerState.setMonthYear(month, year)
-                        showMonthYearPicker = false
-                    }
-                )
-            } else {
-                calendarContent()
+          CompositionLocalProvider(
+            LocalIndication provides NoRippleIndicationNodeFactory,
+            LocalRippleConfiguration provides null
+          ) {
+            calendarContent()
 
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp).padding(bottom = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    InlyButtonSecondary(text = "Cancel", onClick = onDismiss, modifier = Modifier.weight(1f))
-                    InlyButtonPrimary(
-                        text = "Save",
-                        onClick = { onConfirm(pickerState.selectedMillis); onDismiss() },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp).padding(bottom = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                InlyButtonSecondary(text = "Cancel", onClick = onDismiss, modifier = Modifier.weight(1f))
+                InlyButtonPrimary(
+                    text = "Save",
+                    onClick = { onConfirm(pickerState.selectedMillis); onDismiss() },
+                    modifier = Modifier.weight(1f)
+                )
             }
+          }
+        }
+
+        InlyBottomSheet(
+            expanded = showMonthYearPicker,
+            onDismiss = { showMonthYearPicker = false },
+            title = "Month & Year"
+        ) {
+          CompositionLocalProvider(
+            LocalIndication provides NoRippleIndicationNodeFactory,
+            LocalRippleConfiguration provides null
+          ) {
+            MonthYearPickerContent(
+                initialMonth = pickerState.viewMonth,
+                initialYear = pickerState.viewYear,
+                onBack = { showMonthYearPicker = false },
+                onConfirm = { month, year ->
+                    pickerState.setMonthYear(month, year)
+                    showMonthYearPicker = false
+                }
+            )
+          }
         }
     }
 }
@@ -714,11 +740,15 @@ fun MinimalTimePickerDialog(
         }
     } else {
         InlyBottomSheet(expanded = expanded, onDismiss = onDismiss, title = "Select Time") {
+          CompositionLocalProvider(
+            LocalIndication provides NoRippleIndicationNodeFactory,
+            LocalRippleConfiguration provides null
+          ) {
             content()
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 12.dp).padding(bottom = 16.dp),
+                    .padding(vertical = 12.dp).padding(bottom = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 InlyButtonSecondary(text = "Cancel", onClick = onDismiss, modifier = Modifier.weight(1f))
@@ -736,6 +766,7 @@ fun MinimalTimePickerDialog(
                     modifier = Modifier.weight(1f)
                 )
             }
+          }
         }
     }
 }

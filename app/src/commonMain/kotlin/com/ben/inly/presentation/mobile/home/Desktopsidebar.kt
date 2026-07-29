@@ -358,7 +358,7 @@ fun SidebarFolderRow(
                     contentDescription = null,
                     tint = if (isIntoTarget) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
-                    modifier = Modifier.size(ROW_ICON_SIZE + 6.dp)
+                    modifier = Modifier.size(ROW_ICON_SIZE)
                 )
             }
             Spacer(Modifier.width(10.dp))
@@ -672,7 +672,7 @@ fun SidebarSectionHeader(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 14.dp)
+            .padding(start = 20.dp, end = 20.dp)
             .padding(top = 20.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
@@ -681,7 +681,7 @@ fun SidebarSectionHeader(
             modifier = Modifier
                 .clip(RoundedCornerShape(6.dp))
                 .sidebarNoRippleClickable { onToggle() }
-                .padding(vertical = 2.dp, horizontal = 2.dp),
+                .padding(vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(

@@ -20,18 +20,12 @@ import inly.app.generated.resources.refresh_cw
 import inly.app.generated.resources.trash
 import org.jetbrains.compose.resources.painterResource
 
-/**
- * A platform-aware settings menu.
- * On desktop, it renders a DropdownMenu popup.
- * On Android/iOS, it renders a BottomSheet dialog.
- */
 @Composable
 fun UserSettings(
     expanded: Boolean,
     onDismiss: () -> Unit,
-    onNavigateToSettings: () -> Unit, // Added new parameter
+    onNavigateToSettings: () -> Unit,
     onNavigateToTrash: () -> Unit,
-    onNavigateToSelfHostSetup: () -> Unit = {}
 ) {
     if (isDesktopPlatform) {
         InlyDesktopMenu(
@@ -126,7 +120,7 @@ private fun UserSettingsBottomSheet(
     onNavigateToSettings: () -> Unit,
     onNavigateToTrash: () -> Unit
 ) {
-    InlyBottomSheet(expanded = expanded, onDismiss = onDismiss, title = null) { closeAnd ->
+    InlyBottomSheet(expanded = expanded, onDismiss = onDismiss, title = "More") { closeAnd ->
 
         Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
             BottomSheetItem(
@@ -142,7 +136,7 @@ private fun UserSettingsBottomSheet(
             InlyButtonPrimary(
                 text = "Close",
                 onClick = { closeAnd(onDismiss) },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)
+                modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)
             )
         }
     }
@@ -151,7 +145,7 @@ private fun UserSettingsBottomSheet(
 @Composable
 private fun BottomSheetItem(text: String, icon: Painter, onClick: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 20.dp, vertical = 14.dp),
+        modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(icon, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))

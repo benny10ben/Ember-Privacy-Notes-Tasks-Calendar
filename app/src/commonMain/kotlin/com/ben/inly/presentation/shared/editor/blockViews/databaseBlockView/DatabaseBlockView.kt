@@ -3,6 +3,8 @@ package com.ben.inly.presentation.shared.editor.blockViews.databaseBlockView
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.IndicationNodeFactory
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -11,6 +13,7 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,7 +34,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.filled.Check
@@ -76,12 +78,12 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.node.DelegatableNode
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
@@ -130,6 +132,8 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Subject
 import androidx.compose.animation.animateContentSize
+import androidx.compose.material3.LocalRippleConfiguration
+import androidx.compose.material3.ripple
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import com.ben.inly.presentation.shared.components.InlyButtonPrimary
@@ -152,7 +156,6 @@ import inly.app.generated.resources.files
 import inly.app.generated.resources.funnel
 import inly.app.generated.resources.group
 import inly.app.generated.resources.hash
-import inly.app.generated.resources.images
 import inly.app.generated.resources.link
 import inly.app.generated.resources.list_sort_descending
 import inly.app.generated.resources.maximize_2
@@ -172,6 +175,7 @@ import inly.app.generated.resources.square_arrow_out_up_right
 import inly.app.generated.resources.square_check
 import inly.app.generated.resources.square_kanban
 import inly.app.generated.resources.table
+import inly.app.generated.resources.transfer_h
 import inly.app.generated.resources.trash
 import inly.app.generated.resources.widget
 import inly.app.generated.resources.x
@@ -179,6 +183,12 @@ import org.jetbrains.compose.resources.painterResource
 import kotlin.time.Duration.Companion.milliseconds
 
 enum class DbSheetType { NONE, COLUMN_OPTIONS, RENAME, RENAME_VIEW, FORMULA, FILTER, SORT, GROUP_BY, CELL_OPTIONS, TAG_SELECTION, FILE_OPTIONS, PRIORITY_SELECTION, STATUS_SELECTION, AGGREGATION, CURRENCY_SELECTION, SAVE_AS_TEMPLATE, ADD_VIEW, TABLE_SETTINGS, CARD_SIZE }
+
+private object NoRippleIndicationNodeFactory : IndicationNodeFactory {
+    override fun create(interactionSource: InteractionSource): DelegatableNode = object : Modifier.Node() {}
+    override fun equals(other: Any?) = other === this
+    override fun hashCode(): Int = -1
+}
 
 @Composable
 fun DbOptionRow(
@@ -191,11 +201,12 @@ fun DbOptionRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 2.dp)
+            .padding(vertical = 2.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f) else Color.Transparent)
+            .background(Color.Transparent)
             .clickable { onClick() }
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(vertical = 10.dp).padding(horizontal = if (isDesktopPlatform) 12.dp else 0.dp)
+            .padding(end = if (selected) 12.dp else 0.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(icon, null, tint = color, modifier = Modifier.size(20.dp))
@@ -212,6 +223,7 @@ fun DbOptionRow(
  * "+" quick-add). Lets them start blank or reuse a saved schema (columns + views, never rows)
  * instead of always starting from a single blank "Name" column.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DatabaseTemplatePickerSheet(
     expanded: Boolean,
@@ -221,6 +233,10 @@ fun DatabaseTemplatePickerSheet(
     onSelectTemplate: (DatabaseTemplateEntity) -> Unit
 ) {
     InlyBottomSheet(expanded = expanded, onDismiss = onDismiss, title = "Add Database") { _ ->
+    CompositionLocalProvider(
+        LocalIndication provides if (isDesktopPlatform) ripple() else NoRippleIndicationNodeFactory,
+        LocalRippleConfiguration provides if (isDesktopPlatform) LocalRippleConfiguration.current else null,
+    ) {
         Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
             DbOptionRow(icon = painterResource(Res.drawable.hash), text = "Create Blank Database") {
                 onDismiss()
@@ -229,15 +245,15 @@ fun DatabaseTemplatePickerSheet(
 
             if (templates.isNotEmpty()) {
                 HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
-                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                    modifier = Modifier.padding(vertical = 12.dp),
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
                 )
                 Text(
                     text = "Saved Templates",
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.outline,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    modifier = Modifier.padding(vertical = 6.dp)
                 )
                 templates.forEach { template ->
                     DbOptionRow(icon = painterResource(Res.drawable.files), text = template.name) {
@@ -247,6 +263,7 @@ fun DatabaseTemplatePickerSheet(
                 }
             }
         }
+      }
     }
 }
 
@@ -265,7 +282,8 @@ fun DatabaseBlockView(
     val scope = rememberCoroutineScope()
     val coroutineScope = rememberCoroutineScope()
 
-    var currentSheet by remember { mutableStateOf(DbSheetType.NONE) }
+    val sheetStack = remember { mutableStateListOf<DbSheetType>() }
+    val currentSheet = sheetStack.lastOrNull() ?: DbSheetType.NONE
     var activeColId by remember { mutableStateOf<String?>(null) }
     var activeRowId by remember { mutableStateOf<String?>(null) }
     var renamingViewId by remember { mutableStateOf<String?>(null) }
@@ -291,7 +309,7 @@ fun DatabaseBlockView(
         }
     }
 
-    fun closeSheet() {
+    fun stopFileOptionsSideEffects() {
         if (isRecording && activeRowId != null && activeColId != null) {
             isRecording = false
             actions.onStopDbAudioRecording(block.id, activeRowId!!, activeColId!!, true)
@@ -300,10 +318,28 @@ fun DatabaseBlockView(
             playingFileUri = null
             actions.onStopAudio()
         }
-        currentSheet = DbSheetType.NONE
+    }
+
+    fun closeSheet() {
+        stopFileOptionsSideEffects()
+        sheetStack.clear()
         activeRowId = null
         renamingViewId = null
         aggregationExpandedSection = null
+    }
+
+    fun openSheet(sheet: DbSheetType) {
+        sheetStack.add(sheet)
+    }
+
+    fun popSheet() {
+        if (currentSheet == DbSheetType.FILE_OPTIONS) stopFileOptionsSideEffects()
+        if (sheetStack.isNotEmpty()) sheetStack.removeAt(sheetStack.lastIndex)
+        if (sheetStack.isEmpty()) {
+            activeRowId = null
+            renamingViewId = null
+            aggregationExpandedSection = null
+        }
     }
 
     val visibleColumns = remember(block.columns) {
@@ -411,61 +447,70 @@ fun DatabaseBlockView(
         result
     }
 
+    fun sheetTitleFor(sheet: DbSheetType): String? = when (sheet) {
+        DbSheetType.CELL_OPTIONS -> "Cell Actions"
+        DbSheetType.COLUMN_OPTIONS -> visibleColumns.find { it.id == activeColId }?.name
+            ?: "Column Options"
+        DbSheetType.RENAME -> "Rename Column"
+        DbSheetType.RENAME_VIEW -> "Rename View"
+        DbSheetType.FORMULA -> "Edit Formula"
+        DbSheetType.CURRENCY_SELECTION -> "Select Currency"
+        DbSheetType.SORT -> "Sort by"
+        DbSheetType.FILTER -> "Filter"
+        DbSheetType.GROUP_BY -> "Group By"
+        DbSheetType.CARD_SIZE -> "Card Size"
+        DbSheetType.FILE_OPTIONS -> "Attached Files"
+        DbSheetType.PRIORITY_SELECTION -> "Set Priority"
+        DbSheetType.STATUS_SELECTION -> "Set Status"
+        DbSheetType.AGGREGATION -> "Calculate"
+        DbSheetType.TAG_SELECTION -> "Select Tag"
+        DbSheetType.SAVE_AS_TEMPLATE -> "Save as Template"
+        DbSheetType.ADD_VIEW -> "Add View"
+        DbSheetType.TABLE_SETTINGS -> "Table Settings"
+        else -> null
+    }
+
+    fun desktopBackTargetFor(sheet: DbSheetType): DbSheetType? = when (sheet) {
+        DbSheetType.RENAME, DbSheetType.FORMULA, DbSheetType.CURRENCY_SELECTION ->
+            DbSheetType.COLUMN_OPTIONS
+        DbSheetType.FILTER, DbSheetType.SAVE_AS_TEMPLATE, DbSheetType.ADD_VIEW,
+        DbSheetType.GROUP_BY, DbSheetType.CARD_SIZE ->
+            DbSheetType.TABLE_SETTINGS
+        else -> null
+    }
+
     val sheetContent = @Composable { targetSheet: DbSheetType ->
+        CompositionLocalProvider(
+            LocalIndication provides if (isDesktopPlatform) ripple() else NoRippleIndicationNodeFactory,
+            LocalRippleConfiguration provides if (isDesktopPlatform) LocalRippleConfiguration.current else null,
+        ) {
         Column(modifier = Modifier.fillMaxWidth()) {
 
-            // title lives inside the animated content so it fades in with it
-            val title = when (targetSheet) {
-                DbSheetType.CELL_OPTIONS -> "Cell Actions"
-                DbSheetType.COLUMN_OPTIONS -> visibleColumns.find { it.id == activeColId }?.name
-                    ?: "Column Options"
-
-                DbSheetType.RENAME_VIEW -> "Rename View"
-                DbSheetType.SORT -> "Sort by"
-                DbSheetType.FILTER -> "Filter"
-                DbSheetType.GROUP_BY -> "Group By"
-                DbSheetType.CARD_SIZE -> "Card Size"
-                DbSheetType.FILE_OPTIONS -> "Attached Files"
-                DbSheetType.PRIORITY_SELECTION -> "Set Priority"
-                DbSheetType.STATUS_SELECTION -> "Set Status"
-                DbSheetType.AGGREGATION -> "Calculate"
-                DbSheetType.TAG_SELECTION -> "Select Tag"
-                DbSheetType.SAVE_AS_TEMPLATE -> "Save as Template"
-                DbSheetType.ADD_VIEW -> "Add View"
-                DbSheetType.TABLE_SETTINGS -> "Table Settings"
-                else -> ""
-            }
-
-            // sub-menus get a back button, shown above the title
-            val backTarget = when (targetSheet) {
-                DbSheetType.RENAME, DbSheetType.FORMULA, DbSheetType.CURRENCY_SELECTION ->
-                    DbSheetType.COLUMN_OPTIONS
-                DbSheetType.FILTER, DbSheetType.SAVE_AS_TEMPLATE, DbSheetType.ADD_VIEW,
-                DbSheetType.GROUP_BY, DbSheetType.CARD_SIZE ->
-                    DbSheetType.TABLE_SETTINGS
-                else -> null
-            }
-            if (backTarget != null) {
-                DbOptionRow(painterResource(Res.drawable.chevron_left), "Back to Options") {
-                    currentSheet = backTarget
+            // on mobile, each sheet is its own stacked InlyBottomSheet with a native title bar
+            // and back-press/dismiss to pop, so the manual back row + title only apply to the
+            // single anchored desktop dropdown, which still swaps content in place
+            if (isDesktopPlatform) {
+                val backTarget = desktopBackTargetFor(targetSheet)
+                if (backTarget != null) {
+                    DbOptionRow(painterResource(Res.drawable.chevron_left), "Back to Options") {
+                        openSheet(backTarget)
+                    }
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 12.dp),
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                    )
                 }
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
-                )
-            }
 
-            if (title.isNotBlank()) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(
-                        bottom = 12.dp,
-                        top = if (isDesktopPlatform) 8.dp else 16.dp
-                    ).padding(horizontal = 20.dp)
-                )
+                val title = sheetTitleFor(targetSheet)
+                if (!title.isNullOrBlank()) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(bottom = 12.dp, top = 8.dp).padding(horizontal = if (isDesktopPlatform) 12.dp else 0.dp)
+                    )
+                }
             }
 
             when (targetSheet) {
@@ -495,8 +540,8 @@ fun DatabaseBlockView(
                         ) { applyAction { actions.onAddDbColumnAt(block.id, colIndex + 1) } }
 
                         HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                            modifier = Modifier.padding(vertical = 12.dp),
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
                         )
 
                         DbOptionRow(
@@ -519,7 +564,7 @@ fun DatabaseBlockView(
                     if (col != null) {
                         DbOptionRow(painterResource(Res.drawable.pen), "Rename Column") {
                             textInput = col.name
-                            currentSheet = DbSheetType.RENAME
+                            openSheet(DbSheetType.RENAME)
                         }
 
                         if (col.type == ColumnType.FORMULA) {
@@ -529,7 +574,7 @@ fun DatabaseBlockView(
                                 color = MaterialTheme.colorScheme.primary
                             ) {
                                 textInput = col.formulaExpression ?: ""
-                                currentSheet = DbSheetType.FORMULA
+                                openSheet(DbSheetType.FORMULA)
                             }
 
                             val isCurrency = col.isFormulaCurrency
@@ -543,7 +588,7 @@ fun DatabaseBlockView(
                                             !isCurrency
                                         )
                                     }
-                                    .padding(horizontal = 20.dp, vertical = 6.dp),
+                                    .padding(vertical = 6.dp).padding(horizontal = if (isDesktopPlatform) 12.dp else 0.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
@@ -575,7 +620,7 @@ fun DatabaseBlockView(
                                     text = "Currency: $currentCurrency",
                                     color = MaterialTheme.colorScheme.primary
                                 ) {
-                                    currentSheet = DbSheetType.CURRENCY_SELECTION
+                                    openSheet(DbSheetType.CURRENCY_SELECTION)
                                 }
                             }
                         }
@@ -587,35 +632,25 @@ fun DatabaseBlockView(
                                 text = "Format: $currentCurrency",
                                 color = MaterialTheme.colorScheme.primary
                             ) {
-                                currentSheet = DbSheetType.CURRENCY_SELECTION
+                                openSheet(DbSheetType.CURRENCY_SELECTION)
                             }
                         }
 
-                        HorizontalDivider(
-                            modifier = Modifier.padding(
-                                horizontal = 20.dp,
-                                vertical = 6.dp
-                            ), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
-                        )
-
                         if (!isDesktopPlatform) {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(vertical = 12.dp),
+                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                            )
                             Text(
                                 text = "Column Width",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.padding(
-                                    start = 20.dp,
-                                    end = 20.dp,
-                                    top = 4.dp,
-                                    bottom = 8.dp
-                                )
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
                             )
 
                             Row(
-                                modifier = Modifier
-                                    .padding(horizontal = 20.dp)
-                                    .padding(bottom = 12.dp),
+                                modifier = Modifier.padding(bottom = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(16.dp)
                             ) {
@@ -676,27 +711,22 @@ fun DatabaseBlockView(
                         }
 
                         HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 20.dp),
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                            modifier = Modifier.padding(vertical = 12.dp),
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
                         )
 
                         Text(
                             text = "Property Type",
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(
-                                start = 20.dp,
-                                end = 20.dp,
-                                bottom = 10.dp,
-                                top = 12.dp
-                            )
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                            modifier = Modifier.padding(bottom = 10.dp, top = 12.dp).padding(horizontal = if (isDesktopPlatform) 12.dp else 0.dp)
                         )
 
                         FlowRow(
+                            modifier = Modifier.padding(horizontal = if (isDesktopPlatform) 12.dp else 0.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.padding(horizontal = 20.dp)
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             ColumnType.entries.forEach { type ->
                                 val isSelected = col.type == type
@@ -734,11 +764,9 @@ fun DatabaseBlockView(
                                 )
                             }
                         }
-
-                        Spacer(Modifier.height(12.dp))
                         HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 20.dp),
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                            modifier = Modifier.padding(vertical = 12.dp),
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
                         )
                         DbOptionRow(
                             icon = painterResource(Res.drawable.trash),
@@ -759,10 +787,11 @@ fun DatabaseBlockView(
 
                 // rename
                 DbSheetType.RENAME -> {
-                    InlyTextField(value = textInput, onValueChange = { textInput = it }, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 12.dp))
+                    Column(modifier = Modifier.padding(horizontal = if (isDesktopPlatform) 12.dp else 0.dp)) {
+                    InlyTextField(value = textInput, onValueChange = { textInput = it }, modifier = Modifier.fillMaxWidth().padding(top = 12.dp))}
                     Row(
                         modifier = Modifier.fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 12.dp),
+                            .padding(vertical = 12.dp).padding(horizontal = if (isDesktopPlatform) 12.dp else 0.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         InlyButtonSecondary(text = "Cancel", onClick = { closeSheet() }, modifier = Modifier.weight(1f))
@@ -781,10 +810,11 @@ fun DatabaseBlockView(
 
                 // rename a view
                 DbSheetType.RENAME_VIEW -> {
-                    InlyTextField(value = textInput, onValueChange = { textInput = it }, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 12.dp))
+                    Column(modifier = Modifier.padding(horizontal = if (isDesktopPlatform) 12.dp else 0.dp)) {
+                    InlyTextField(value = textInput, onValueChange = { textInput = it }, modifier = Modifier.fillMaxWidth().padding(top = 12.dp))}
                     Row(
                         modifier = Modifier.fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 12.dp),
+                            .padding(vertical = 12.dp).padding(horizontal = if (isDesktopPlatform) 12.dp else 0.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         InlyButtonSecondary(text = "Cancel", onClick = { closeSheet() }, modifier = Modifier.weight(1f))
@@ -802,8 +832,8 @@ fun DatabaseBlockView(
 
                     if (block.views.size > 1) {
                         HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                            modifier = Modifier.padding(vertical = 12.dp),
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
                         )
                         DbOptionRow(
                             icon = painterResource(Res.drawable.trash),
@@ -821,15 +851,17 @@ fun DatabaseBlockView(
 
                 // save as template - schema only, no rows
                 DbSheetType.SAVE_AS_TEMPLATE -> {
-                    InlyTextField(
-                        value = textInput,
-                        onValueChange = { textInput = it },
-                        placeholder = "Template name",
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 12.dp)
-                    )
+                    Column(modifier = Modifier.padding(horizontal = if (isDesktopPlatform) 12.dp else 0.dp)) {
+                        InlyTextField(
+                            value = textInput,
+                            onValueChange = { textInput = it },
+                            placeholder = "Template name",
+                            modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
+                        )
+                    }
                     Row(
                         modifier = Modifier.fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 12.dp),
+                            .padding(vertical = 12.dp).padding(horizontal = if (isDesktopPlatform) 12.dp else 0.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         InlyButtonSecondary(text = "Cancel", onClick = { closeSheet() }, modifier = Modifier.weight(1f))
@@ -852,14 +884,13 @@ fun DatabaseBlockView(
                         text = "Properties",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 8.dp, top = 12.dp)
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        modifier = Modifier.padding(bottom = 8.dp, top = 12.dp)
                     )
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                            .padding(start = 20.dp, end = 20.dp, bottom = 12.dp)
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp).padding(horizontal = if (isDesktopPlatform) 12.dp else 0.dp),
                     ) {
                         visibleColumns.filter { it.id != activeColId }.forEach { c ->
                             SuggestionChip(
@@ -888,14 +919,13 @@ fun DatabaseBlockView(
                         text = "Operators",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 8.dp)
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        modifier = Modifier.padding(bottom = 8.dp)
                     )
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                            .padding(start = 20.dp, end = 20.dp, bottom = 12.dp)
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp).padding(horizontal = if (isDesktopPlatform) 12.dp else 0.dp),
                     ) {
                         listOf("+", "-", "*", "/", "(", ")").forEach { op ->
                             SuggestionChip(
@@ -916,10 +946,17 @@ fun DatabaseBlockView(
                         }
                     }
 
-                    InlyTextField(value = textInput, onValueChange = { textInput = it }, placeholder = "e.g. prop(\"Price\") * 2", modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp))
+                    Column(modifier = Modifier.padding(horizontal = if (isDesktopPlatform) 12.dp else 0.dp)) {
+                        InlyTextField(
+                            value = textInput,
+                            onValueChange = { textInput = it },
+                            placeholder = "e.g. prop(\"Price\") * 2",
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                     Row(
                         modifier = Modifier.fillMaxWidth()
-                            .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 12.dp),
+                            .padding(top = 12.dp, bottom = 12.dp).padding(horizontal = if (isDesktopPlatform) 12.dp else 0.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         InlyButtonSecondary(text = "Cancel", onClick = { closeSheet() }, modifier = Modifier.weight(1f))
@@ -945,12 +982,7 @@ fun DatabaseBlockView(
                             text = "Sort order — top layer wins, lower layers break ties",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(
-                                start = 20.dp,
-                                end = 20.dp,
-                                top = 4.dp,
-                                bottom = 8.dp
-                            )
+                            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp).padding(horizontal = if (isDesktopPlatform) 12.dp else 0.dp)
                         )
 
                         activeView.activeSorts.forEachIndexed { index, sortRule ->
@@ -958,7 +990,7 @@ fun DatabaseBlockView(
                                 ?: return@forEachIndexed
                             Row(
                                 modifier = Modifier.fillMaxWidth()
-                                    .padding(horizontal = 20.dp, vertical = 6.dp),
+                                    .padding(vertical = 6.dp).padding(horizontal = if (isDesktopPlatform) 12.dp else 0.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 // layer number badge
@@ -987,7 +1019,9 @@ fun DatabaseBlockView(
                                 Surface(
                                     shape = RoundedCornerShape(12.dp),
                                     color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
-                                    modifier = Modifier.clickable {
+                                    modifier = Modifier
+                                    .clip(RoundedCornerShape(12.dp)).
+                                    clickable {
                                         actions.onUpdateDbSort(
                                             block.id,
                                             col.id,
@@ -996,10 +1030,11 @@ fun DatabaseBlockView(
                                     }
                                 ) {
                                     Row(
-                                        modifier = Modifier.padding(
+                                        modifier = Modifier
+                                            .padding(
                                             horizontal = 10.dp,
-                                            vertical = 6.dp
-                                        ), verticalAlignment = Alignment.CenterVertically
+                                            vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Icon(
                                             if (sortRule.isAscending) painterResource(Res.drawable.arrow_up) else painterResource(Res.drawable.arrow_down),
@@ -1026,10 +1061,8 @@ fun DatabaseBlockView(
                         }
 
                         HorizontalDivider(
-                            modifier = Modifier.padding(
-                                horizontal = 20.dp,
-                                vertical = 8.dp
-                            ), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                            modifier = Modifier.padding(vertical = 12.dp),
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
                         )
                     }
 
@@ -1049,7 +1082,7 @@ fun DatabaseBlockView(
                         FlowRow(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(0.dp),
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = if (isDesktopPlatform) 12.dp else 0.dp),
                         ) {
                             unsortedColumns.forEach { col ->
                                 SuggestionChip(
@@ -1085,13 +1118,13 @@ fun DatabaseBlockView(
                             text = "Every column is already in the sort.",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
+                            modifier = Modifier.padding(vertical = 4.dp)
                         )
                     }
 
                     Row(
                         modifier = Modifier.fillMaxWidth()
-                            .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 12.dp),
+                            .padding(top = 12.dp, bottom = 12.dp).padding(horizontal = if (isDesktopPlatform) 12.dp else 0.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         if (activeView.activeSorts.isNotEmpty()) {
@@ -1148,22 +1181,22 @@ fun DatabaseBlockView(
                                 text = "Add a Checkbox or Status column to group by.",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.outline,
-                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
+                                modifier = Modifier.padding(vertical = 4.dp)
                             )
                         }
 
                         // only show once a column's picked; mirrors bucketKeysFor() in KanbanView.kt
                         if (selectedGroupColumn != null) {
                             HorizontalDivider(
-                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                                modifier = Modifier.padding(vertical = 12.dp),
+                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
                             )
                             Text(
                                 text = "Visible boards",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 4.dp)
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                modifier = Modifier.padding(bottom = 4.dp)
                             )
                             // local drag order, only persisted on drop via onReorderKanbanGroups
                             val defaultBucketKeys = remember(selectedGroupColumn) {
@@ -1194,7 +1227,7 @@ fun DatabaseBlockView(
                                             .clickable {
                                                 actions.onToggleKanbanGroupVisibility(block.id, activeView.id, bucketName, isVisible)
                                             }
-                                            .padding(horizontal = 20.dp, vertical = 10.dp),
+                                            .padding(vertical = 10.dp),
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
@@ -1287,13 +1320,8 @@ fun DatabaseBlockView(
                         text = "Column",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(
-                            start = 20.dp,
-                            end = 20.dp,
-                            top = 4.dp,
-                            bottom = 8.dp
-                        )
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        modifier = Modifier.padding(top = 4.dp, bottom = 8.dp).padding(horizontal = if (isDesktopPlatform) 12.dp else 0.dp)
                     )
 
                     Surface(
@@ -1303,7 +1331,10 @@ fun DatabaseBlockView(
                             MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
                         ),
                         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).clickable {
+                        modifier = Modifier.fillMaxWidth()
+                            .padding(horizontal = if (isDesktopPlatform) 12.dp else 0.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable {
                             val idx = visibleColumns.indexOfFirst { it.id == activeColId }
                             activeColId = visibleColumns[(idx + 1) % visibleColumns.size].id
                             filterOperator = "contains"
@@ -1322,25 +1353,25 @@ fun DatabaseBlockView(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Icon(
-                                painterResource(Res.drawable.trash),
+                                painterResource(Res.drawable.transfer_h),
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.error,
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(18.dp)
                             )
                         }
                     }
 
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 22.dp),
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                    )
+
                     Text(
                         text = "Condition",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(
-                            start = 20.dp,
-                            end = 20.dp,
-                            top = 14.dp,
-                            bottom = 8.dp
-                        )
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        modifier = Modifier.padding(bottom = 8.dp).padding(horizontal = if (isDesktopPlatform) 12.dp else 0.dp)
                     )
 
                     val operatorOptions: List<Pair<String, String>> = when {
@@ -1389,7 +1420,7 @@ fun DatabaseBlockView(
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = if (isDesktopPlatform) 12.dp else 0.dp),
                     ) {
                         operatorOptions.forEach { (op, label) ->
                             val isSelected = filterOperator == op
@@ -1433,17 +1464,36 @@ fun DatabaseBlockView(
 
                     if (needsTextInput) {
                         Spacer(Modifier.height(12.dp))
-                        InlyTextField(value = textInput, onValueChange = { textInput = it }, placeholder = if (isNumber) "Enter number…" else "Enter value…", modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp))
+                        Column(modifier = Modifier.padding(horizontal = if (isDesktopPlatform) 12.dp else 0.dp)) {
+                            InlyTextField(
+                                value = textInput,
+                                onValueChange = { textInput = it },
+                                placeholder = if (isNumber) "Enter number…" else "Enter value…",
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
                     }
 
                     if (needsRangeInput) {
                         Spacer(Modifier.height(12.dp))
                         Row(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                            modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            InlyTextField(value = textInput, onValueChange = { textInput = it }, placeholder = if (isDate) "Start" else "Min", modifier = Modifier.weight(1f))
-                            InlyTextField(value = textInputMax, onValueChange = { textInputMax = it }, placeholder = if (isDate) "End" else "Max", modifier = Modifier.weight(1f))
+                            Column(modifier = Modifier.padding(horizontal = if (isDesktopPlatform) 12.dp else 0.dp)) {
+                                InlyTextField(
+                                    value = textInput,
+                                    onValueChange = { textInput = it },
+                                    placeholder = if (isDate) "Start" else "Min",
+                                    modifier = Modifier.weight(1f)
+                                )
+                                InlyTextField(
+                                    value = textInputMax,
+                                    onValueChange = { textInputMax = it },
+                                    placeholder = if (isDate) "End" else "Max",
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
                         }
                     }
 
@@ -1453,13 +1503,13 @@ fun DatabaseBlockView(
                             text = "Priority level",
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 8.dp)
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                            modifier = Modifier.padding(bottom = 8.dp)
                         )
                         FlowRow(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.padding(horizontal = 20.dp)
+                            modifier = Modifier.padding(horizontal = if (isDesktopPlatform) 12.dp else 0.dp),
                         ) {
                             listOf("Low", "Medium", "High", "Urgent").forEach { p ->
                                 val isSelected = filterPriority == p
@@ -1486,7 +1536,7 @@ fun DatabaseBlockView(
 
                     Row(
                         modifier = Modifier.fillMaxWidth()
-                            .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 12.dp),
+                            .padding(top = 12.dp, bottom = 12.dp).padding(horizontal = if (isDesktopPlatform) 12.dp else 0.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         InlyButtonSecondary(text = "Cancel", onClick = { closeSheet() }, modifier = Modifier.weight(1f))
@@ -1528,7 +1578,9 @@ fun DatabaseBlockView(
                             (row.cells[activeColId] as? CellData.TagList)?.tagIds
                                 ?.toMutableSet() ?: mutableSetOf()
 
-                        InlyTextField(value = tagSearchQuery, onValueChange = { tagSearchQuery = it }, placeholder = "Search or create a tag...", modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp))
+                        Column(modifier = Modifier.padding(horizontal = if (isDesktopPlatform) 12.dp else 0.dp)) {
+                        InlyTextField(value = tagSearchQuery, onValueChange = { tagSearchQuery = it }, placeholder = "Search or create a tag...", modifier = Modifier.fillMaxWidth())
+                            }
                         Spacer(Modifier.height(12.dp))
 
                         val filteredTags = globalTags.filter {
@@ -1575,7 +1627,7 @@ fun DatabaseBlockView(
                                             )
                                             tagSearchQuery = ""
                                         }
-                                        .padding(horizontal = 20.dp, vertical = 12.dp),
+                                        .padding(vertical = 12.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
@@ -1615,7 +1667,8 @@ fun DatabaseBlockView(
                                                 CellData.TagList(currentTagIds.toList())
                                             )
                                         }
-                                        .padding(horizontal = 20.dp, vertical = 10.dp),
+                                        .padding(vertical = 10.dp)
+                                        .padding(end = if (isSelected) 12.dp else 0.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
@@ -1666,7 +1719,7 @@ fun DatabaseBlockView(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 20.dp, vertical = 12.dp)
+                                        .padding(vertical = 12.dp)
                                         .clip(RoundedCornerShape(12.dp))
                                         .background(
                                             if (isRecording) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surface.copy(
@@ -1715,10 +1768,8 @@ fun DatabaseBlockView(
                                     }
                                 }
                                 HorizontalDivider(
-                                    modifier = Modifier.padding(
-                                        horizontal = 20.dp,
-                                        vertical = 8.dp
-                                    ), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                                    modifier = Modifier.padding(vertical = 12.dp),
+                                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
                                 )
                             }
 
@@ -1746,7 +1797,7 @@ fun DatabaseBlockView(
                                                 actions.onOpenFile(cleanFileName, "*/*")
                                             }
                                         }
-                                        .padding(horizontal = 20.dp, vertical = 12.dp),
+                                        .padding(vertical = 12.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
@@ -1809,7 +1860,7 @@ fun DatabaseBlockView(
                                             )
                                         }
                                     }
-                                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                                    .padding(vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
@@ -1856,7 +1907,7 @@ fun DatabaseBlockView(
                                             )
                                         }
                                     }
-                                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                                    .padding(vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
@@ -1887,10 +1938,8 @@ fun DatabaseBlockView(
 
                         if (current.isNotBlank()) {
                             HorizontalDivider(
-                                modifier = Modifier.padding(
-                                    horizontal = 20.dp,
-                                    vertical = 4.dp
-                                ), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                                modifier = Modifier.padding(vertical = 12.dp),
+                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
                             )
                             DbOptionRow(
                                 painterResource(Res.drawable.x),
@@ -1933,7 +1982,7 @@ fun DatabaseBlockView(
                                             )
                                         }
                                     }
-                                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                                    .padding(vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
@@ -1964,10 +2013,8 @@ fun DatabaseBlockView(
 
                         if (current.isNotBlank()) {
                             HorizontalDivider(
-                                modifier = Modifier.padding(
-                                    horizontal = 20.dp,
-                                    vertical = 4.dp
-                                ), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                                modifier = Modifier.padding(vertical = 12.dp),
+                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
                             )
                             DbOptionRow(
                                 painterResource(Res.drawable.x),
@@ -2003,7 +2050,8 @@ fun DatabaseBlockView(
                                         closeSheet()
                                         actions.onUpdateDbAggregation(block.id, col.id, null)
                                     }
-                                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                                    .padding(vertical = 12.dp)
+                                    .padding(end = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
@@ -2051,7 +2099,8 @@ fun DatabaseBlockView(
                                             aggregationExpandedSection =
                                                 if (isExpanded) null else groupName
                                         }
-                                        .padding(horizontal = 20.dp, vertical = 12.dp),
+                                        .padding(vertical = 12.dp)
+                                        .padding(end = 11.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
@@ -2084,11 +2133,11 @@ fun DatabaseBlockView(
                                                     )
                                                 }
                                                 .padding(
-                                                    start = 40.dp,
-                                                    end = 20.dp,
+                                                    start = 20.dp,
                                                     top = 8.dp,
                                                     bottom = 8.dp
-                                                ),
+                                                )
+                                                .padding(end = if (isSelected) 12.dp else 0.dp),
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.SpaceBetween
                                         ) {
@@ -2137,7 +2186,7 @@ fun DatabaseBlockView(
                                             closeSheet()
                                             actions.onUpdateDbCurrency(block.id, col.id, symbol)
                                         }
-                                        .padding(horizontal = 20.dp, vertical = 12.dp),
+                                        .padding(vertical = 12.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
@@ -2185,7 +2234,7 @@ fun DatabaseBlockView(
                             textInput = ""
                             textInputMax = ""
                             filterOperator = "contains"
-                            currentSheet = DbSheetType.FILTER
+                            openSheet(DbSheetType.FILTER)
                         }
                     }
                     DbOptionRow(
@@ -2193,29 +2242,30 @@ fun DatabaseBlockView(
                         text = "Save as Template"
                     ) {
                         textInput = ""
-                        currentSheet = DbSheetType.SAVE_AS_TEMPLATE
+                        openSheet(DbSheetType.SAVE_AS_TEMPLATE)
                     }
                     DbOptionRow(
                         icon = painterResource(Res.drawable.plus),
                         text = "Add View"
-                    ) { currentSheet = DbSheetType.ADD_VIEW }
+                    ) { openSheet(DbSheetType.ADD_VIEW) }
 
                     if (activeView.type == ViewType.KANBAN) {
                         DbOptionRow(
                             icon = painterResource(Res.drawable.group),
                             text = "Group By"
-                        ) { currentSheet = DbSheetType.GROUP_BY }
+                        ) { openSheet(DbSheetType.GROUP_BY) }
                     }
                     if (activeView.type == ViewType.GALLERY) {
                         DbOptionRow(
                             icon = painterResource(Res.drawable.slider_h2),
                             text = "Card Size"
-                        ) { currentSheet = DbSheetType.CARD_SIZE }
+                        ) { openSheet(DbSheetType.CARD_SIZE) }
                     }
                 }
                 else -> {}
             }
         }
+      }
     }
 
     val DesktopDbDropdown = @Composable { visible: Boolean ->
@@ -2238,7 +2288,7 @@ fun DatabaseBlockView(
                     },
                     label = "DesktopDbTransition"
                 ) { target ->
-                    Box(modifier = Modifier.widthIn(min = 280.dp, max = 340.dp).padding(vertical = 4.dp)) {
+                    Box(modifier = Modifier.widthIn(min = 280.dp, max = 340.dp).padding(horizontal = 8.dp, vertical = 4.dp)) {
                         sheetContent(target)
                     }
                 }
@@ -2347,7 +2397,7 @@ fun DatabaseBlockView(
                                     if (isActive) {
                                         textInput = view.name
                                         renamingViewId = view.id
-                                        currentSheet = DbSheetType.RENAME_VIEW
+                                        openSheet(DbSheetType.RENAME_VIEW)
                                     } else {
                                         actions.onSetActiveDatabaseView(block.id, view.id)
                                     }
@@ -2426,7 +2476,7 @@ fun DatabaseBlockView(
                         modifier = Modifier.clickable(enabled = !inSelectionMode) {
                             if (visibleColumns.isNotEmpty()) {
                                 activeColId = activeView.activeSorts.firstOrNull()?.columnId ?: visibleColumns.first().id
-                                currentSheet = DbSheetType.SORT
+                                openSheet(DbSheetType.SORT)
                             }
                         }
                     ) {
@@ -2447,7 +2497,7 @@ fun DatabaseBlockView(
                         shape = RoundedCornerShape(12.dp),
                         color = if (isCustomized) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f) else Color.Transparent,
                         modifier = Modifier.clickable(enabled = !inSelectionMode) {
-                            currentSheet = DbSheetType.TABLE_SETTINGS
+                            openSheet(DbSheetType.TABLE_SETTINGS)
                         }
                     ) {
                         Box(modifier = Modifier.padding(8.dp), contentAlignment = Alignment.Center) {
@@ -2535,10 +2585,10 @@ fun DatabaseBlockView(
                 onOpenSheet = { sheet, rowId, colId ->
                     activeRowId = rowId
                     activeColId = colId
-                    currentSheet = sheet
+                    openSheet(sheet)
                 },
                 onOpenDatePicker = { rowId, colId ->
-                    currentSheet = DbSheetType.NONE
+                    closeSheet()
                     activeRowId = rowId
                     activeColId = colId
                     showDatePicker = true
@@ -2554,7 +2604,7 @@ fun DatabaseBlockView(
                 globalTags = globalTags,
                 allLinkableNotes = allLinkableNotes,
                 actions = actions,
-                onOpenGroupBySheet = { currentSheet = DbSheetType.GROUP_BY }
+                onOpenGroupBySheet = { openSheet(DbSheetType.GROUP_BY) }
             )
             ViewType.GALLERY -> GalleryView(
                 blockId = block.id,
@@ -2569,19 +2619,19 @@ fun DatabaseBlockView(
         }
     }
 
-    if (!isDesktopPlatform && currentSheet != DbSheetType.NONE) {
-        InlyBottomSheet(expanded = true, onDismiss = { closeSheet() }, title = null) { _ ->
-            AnimatedContent(
-                targetState = currentSheet,
-                transitionSpec = {
-                    (fadeIn(animationSpec = tween(220, delayMillis = 90))) togetherWith
-                            fadeOut(animationSpec = tween(90)) using
-                            SizeTransform(clip = false)
-                },
-                label = "MobileDbTransition"
-            ) { target ->
-                Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
-                    sheetContent(target)
+    if (!isDesktopPlatform) {
+        // each stacked sheet is its own InlyBottomSheet instance, so pressing an option that
+        // opens a new sheet slides a fresh sheet in on top instead of swapping this one's content
+        sheetStack.forEachIndexed { index, sheetType ->
+            key(index) {
+                InlyBottomSheet(
+                    expanded = true,
+                    onDismiss = { popSheet() },
+                    title = sheetTitleFor(sheetType)
+                ) { _ ->
+                    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+                        sheetContent(sheetType)
+                    }
                 }
             }
         }
@@ -2763,11 +2813,26 @@ fun TableCell(
                 if (activeTags.isEmpty()) {
                     Text("Empty", color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), style = MaterialTheme.typography.labelSmall)
                 } else {
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.padding(horizontal = if (isDesktopPlatform) 12.dp else 0.dp)
+                    ) {
                         activeTags.forEach { tag ->
-                            val tagColor = try { Color(tag.colorHex.removePrefix("#").toLong(16) or 0xFF000000) } catch (_: Exception) { MaterialTheme.colorScheme.primary }
-                            Surface(shape = RoundedCornerShape(4.dp), color = tagColor.copy(alpha = 0.15f)) {
-                                Text(text = tag.name, style = MaterialTheme.typography.labelSmall, color = tagColor, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                            val tagColor = try {
+                                Color(tag.colorHex.removePrefix("#").toLong(16) or 0xFF000000)
+                            } catch (_: Exception) {
+                                MaterialTheme.colorScheme.primary
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = tagColor.copy(alpha = 0.15f)
+                            ) {
+                                Text(
+                                    text = tag.name,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = tagColor,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
                             }
                         }
                     }
@@ -3160,7 +3225,7 @@ fun IsolatedTableCellTextField(
 
                             if (currentQuery.isNotBlank()) {
                                 if (filteredNotes.isNotEmpty()) {
-                                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+                                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
                                 }
 
                                 Row(

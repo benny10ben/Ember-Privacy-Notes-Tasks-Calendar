@@ -45,7 +45,7 @@ fun Modifier.customInlyShadow(shape: Shape): Modifier = this.shadow(
 // indication = null is unreliable on Compose Multiplatform (known ripple-resolution quirk) -
 // an explicit no-op IndicationNodeFactory consistently suppresses the ripple on both Android and
 // desktop. Modifier.Node-based per the current (non-deprecated) Indication API.
-private object NoRippleIndicationNodeFactory : IndicationNodeFactory {
+object NoRippleIndicationNodeFactory : IndicationNodeFactory {
     private class NoRippleIndicationNode : Modifier.Node(), DrawModifierNode {
         override fun ContentDrawScope.draw() {
             drawContent()

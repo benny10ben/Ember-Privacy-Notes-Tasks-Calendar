@@ -585,7 +585,6 @@ fun DailyScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 20.dp)
                             .padding(bottom = 16.dp),
                         verticalArrangement = Arrangement.spacedBy(24.dp)
                     ) {
