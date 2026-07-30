@@ -20,18 +20,14 @@ import coil3.ImageLoader
 import coil3.compose.setSingletonImageLoaderFactory
 import coil3.network.ktor3.KtorNetworkFetcherFactory
 import coil3.request.crossfade
-import com.ben.inly.data.local.room.NoteMetadataEntity
-import com.ben.inly.domain.model.BookmarkBlock
-import com.ben.inly.domain.model.NoteContent
-import com.ben.inly.domain.repository.NoteRepository
+import com.ben.inly.domain.model.PendingShare
+import com.ben.inly.domain.util.ShareEventBus
 import com.ben.inly.presentation.InlyApp
 import com.ben.inly.ui.theme.InlyTheme
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.koin.android.ext.android.inject
 import org.koin.androidx.compose.KoinAndroidContext
@@ -56,14 +52,13 @@ import com.ben.inly.data.worker.BackupScheduler
 import com.ben.inly.domain.model.NoteBlock
 import com.ben.inly.domain.util.generateAndSaveAndroidPdf
 import com.ben.inly.presentation.navigation.Screen
-import kotlinx.coroutines.CoroutineScope
-import org.koin.core.qualifier.named
 import kotlin.time.Duration.Companion.milliseconds
+import androidx.core.content.IntentCompat
+import android.provider.OpenableColumns
 
 
 class MainActivity : ComponentActivity() {
 
-    private val repository: NoteRepository by inject()
     private val pickImage = registerForActivityResult(
         ActivityResultContracts.GetContent()
     ) { uri: Uri? -> imagePickerCallback?.invoke(uri?.toString() ?: "") }
@@ -89,7 +84,6 @@ class MainActivity : ComponentActivity() {
 
     private val settingsViewModel: com.ben.inly.presentation.settings.SettingsViewModel by inject()
     private val backupScheduler: BackupScheduler by inject()
-    private val appScope: CoroutineScope by inject(named("AppScope"))
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
@@ -350,112 +344,85 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleIntent(intent: Intent?) {
-        if (intent?.action == Intent.ACTION_SEND && intent.type == "text/plain") {
-            val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
-            if (!sharedText.isNullOrBlank()) {
-                saveToInbox(sharedText)
+        intent ?: return
+        when (intent.action) {
+            Intent.ACTION_SEND -> handleSingleShare(intent)
+            Intent.ACTION_SEND_MULTIPLE -> handleMultipleShare(intent)
+        }
+    }
+
+    private fun handleSingleShare(intent: Intent) {
+        when {
+            intent.type == "text/plain" -> {
+                val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
+                if (!sharedText.isNullOrBlank()) {
+                    val extractedUrl = android.util.Patterns.WEB_URL.matcher(sharedText).let {
+                        if (it.find()) it.group() else sharedText
+                    }.trim()
+                    ShareEventBus.postPendingShare(PendingShare.Link(extractedUrl))
+                }
+            }
+            else -> {
+                val uri = extractSingleUri(intent) ?: return
+                val mimeType = resolveMimeType(uri, intent.type)
+                if (mimeType.startsWith("image/")) {
+                    ShareEventBus.postPendingShare(PendingShare.Image(uri.toString()))
+                } else {
+                    val fileName = queryDisplayName(uri) ?: "Shared file"
+                    ShareEventBus.postPendingShare(PendingShare.Document(uri.toString(), mimeType, fileName))
+                }
             }
         }
     }
 
-    private fun saveToInbox(sharedText: String) {
-        val extractedUrl = android.util.Patterns.WEB_URL.matcher(sharedText).let {
-            if (it.find()) it.group() else sharedText
-        }.trim()
+    private fun handleMultipleShare(intent: Intent) {
+        val uris = extractMultipleUris(intent)
+        if (uris.isEmpty()) return
 
-        Toast.makeText(this, "Saved to Inbox!", Toast.LENGTH_SHORT).show()
-
-        lifecycleScope.launch(Dispatchers.IO) {
-            try {
-                val newBlock = BookmarkBlock(
-                    id = UUID.randomUUID().toString(),
-                    indentationLevel = 0,
-                    url = extractedUrl,
-                    title = "Loading preview...",
-                    description = null,
-                    previewImageUrl = null
-                )
-
-                lateinit var inboxNote: NoteMetadataEntity
-                // Read-modify-write of the Inbox note must be serialized against any other writer
-                // (autosave, sync, etc.) or a stale content read here could overwrite their change
-                com.ben.inly.domain.util.SyncCoordinator.mutex.withLock {
-                    val allNotes: List<NoteMetadataEntity> = repository.getAllNotes().first()
-                    var meta: NoteMetadataEntity? = allNotes.find { it.title.equals("Inbox", ignoreCase = true) }
-
-                    val noteId: String
-                    val content: NoteContent
-
-                    if (meta == null) {
-                        noteId = UUID.randomUUID().toString()
-                        meta = NoteMetadataEntity(
-                            noteId = noteId,
-                            title = "Inbox",
-                            icon = "📥",
-                            folderId = null,
-                            isDaily = false,
-                            dateString = null,
-                            createdAt = System.currentTimeMillis(),
-                            updatedAt = System.currentTimeMillis(),
-                            filePath = "note_$noteId.json",
-                            snippet = "Saved links and ideas."
-                        )
-                        content = NoteContent(blocks = emptyList())
-                    } else {
-                        noteId = meta.noteId
-                        content = repository.getNoteContent(noteId) ?: NoteContent(blocks = emptyList())
-                    }
-
-                    val updatedBlocks = content.blocks + newBlock
-                    repository.saveNote(
-                        meta.copy(updatedAt = System.currentTimeMillis()),
-                        NoteContent(blocks = updatedBlocks)
-                    )
-                    inboxNote = meta
-                }
-
-                appScope.launch(Dispatchers.IO) {
-                    try {
-                        val metadata = com.ben.inly.domain.util.HtmlMetadataFetcher.fetchMetadata(extractedUrl)
-                        if (metadata.description == "Could not load preview") return@launch
-
-                        com.ben.inly.domain.util.SyncCoordinator.mutex.withLock {
-                            val currentContent = repository.getNoteContent(inboxNote.noteId) ?: return@withLock
-
-                            val finalizedBlocks = currentContent.blocks.map {
-                                if (it.id == newBlock.id && it is BookmarkBlock) {
-                                    it.copy(
-                                        title = metadata.title ?: "Unknown Link",
-                                        description = metadata.description,
-                                        previewImageUrl = metadata.imageUrl,
-                                        updatedAt = System.currentTimeMillis()
-                                    )
-                                } else it
-                            }
-
-                            repository.saveNote(
-                                inboxNote.copy(updatedAt = System.currentTimeMillis()),
-                                NoteContent(blocks = finalizedBlocks)
-                            )
-                        }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                }
-
-                withContext(Dispatchers.Main) {
-                    if (intent?.action == Intent.ACTION_SEND) {
-                        finish()
-                    }
-                }
-
-            } catch (e: Exception) {
-                e.printStackTrace()
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(this@MainActivity, "Failed to save link.", Toast.LENGTH_SHORT).show()
-                    if (intent?.action == Intent.ACTION_SEND) finish()
-                }
+        val items: List<PendingShare> = uris.map { uri ->
+            val mimeType = resolveMimeType(uri, intent.type)
+            if (mimeType.startsWith("image/")) {
+                PendingShare.Image(uri.toString())
+            } else {
+                val fileName = queryDisplayName(uri) ?: "Shared file"
+                PendingShare.Document(uri.toString(), mimeType, fileName)
             }
+        }
+
+        ShareEventBus.postPendingShare(PendingShare.Multiple(items))
+    }
+
+    private fun extractSingleUri(intent: Intent): Uri? {
+        IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)?.let { return it }
+        return intent.clipData?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.uri
+    }
+
+    private fun extractMultipleUris(intent: Intent): List<Uri> {
+        val streamUris = IntentCompat.getParcelableArrayListExtra(intent, Intent.EXTRA_STREAM, Uri::class.java).orEmpty()
+        if (streamUris.isNotEmpty()) return streamUris
+
+        val clipData = intent.clipData ?: return emptyList()
+        return (0 until clipData.itemCount).mapNotNull { index -> clipData.getItemAt(index)?.uri }
+    }
+
+    private fun resolveMimeType(uri: Uri, fallback: String?): String {
+        return try {
+            contentResolver.getType(uri) ?: fallback ?: "*/*"
+        } catch (e: Exception) {
+            e.printStackTrace()
+            fallback ?: "*/*"
+        }
+    }
+
+    private fun queryDisplayName(uri: Uri): String? {
+        return try {
+            contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (nameIndex >= 0 && cursor.moveToFirst()) cursor.getString(nameIndex) else null
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
         }
     }
 }
