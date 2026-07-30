@@ -451,7 +451,6 @@ fun DesktopMainScreen(
                 // calendar strip
                 CollapsedWeekStrip(
                     selectedDate = selectedDate,
-                    today = today,
                     modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 20.dp, bottom = 12.dp),
                     onDateSelected = { openDaily(it) }
                 )
