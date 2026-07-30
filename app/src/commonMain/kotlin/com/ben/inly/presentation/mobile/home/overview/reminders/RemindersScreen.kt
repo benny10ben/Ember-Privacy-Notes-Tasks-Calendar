@@ -160,8 +160,6 @@ fun RemindersScreen(
                         override fun onRequestDocumentPicker(blockId: String) {}
                         override fun onRequestDbFilePicker(blockId: String, rowId: String, colId: String, isAudio: Boolean) {}
                         override fun onStopDbAudioRecording(blockId: String, rowId: String, colId: String, cancel: Boolean) {}
-                        override fun onUndo() {}
-                        override fun onRedo() {}
                         override fun onTogglePin() {}
                         override fun setScrollEnabled(enabled: Boolean) {}
                         override fun onUpdateSketch(id: String, strokes: List<com.ben.inly.domain.model.Stroke>) {}

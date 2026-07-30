@@ -11,7 +11,8 @@ data class SelfHostManifestEntry(
     val entryType: SelfHostEntryType,
     val updatedAt: Long,
     val dateString: String? = null,
-    val isDeleted: Boolean = false
+    val isDeleted: Boolean = false,
+    val orphanedAt: Long? = null
 )
 
 @Serializable

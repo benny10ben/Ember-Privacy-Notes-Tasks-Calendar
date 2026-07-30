@@ -34,6 +34,8 @@ import org.koin.androidx.compose.KoinAndroidContext
 import java.util.UUID
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import com.ben.inly.domain.media.LocalMediaGarbageCollector
+import com.ben.inly.domain.media.LocalMediaGcTrigger
 import com.ben.inly.domain.sync.AutoSyncTrigger
 import com.ben.inly.domain.sync.discovery.SyncDiscoveryManager
 import com.ben.inly.presentation.sync.SyncViewModel
@@ -121,6 +123,16 @@ class MainActivity : ComponentActivity() {
                 .debounce(1500L.milliseconds)
                 .collect {
                     syncViewModel.triggerFastSync()
+                }
+        }
+
+        val localMediaGarbageCollector: LocalMediaGarbageCollector by inject()
+        @OptIn(FlowPreview::class)
+        lifecycleScope.launch {
+            LocalMediaGcTrigger.cleanupRequests
+                .debounce(2000L.milliseconds)
+                .collect {
+                    localMediaGarbageCollector.collectAndDeleteOrphanedMedia()
                 }
         }
 

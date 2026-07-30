@@ -73,6 +73,7 @@ class SyncRepositoryImpl(
 
         fun scan(blocks: List<NoteBlock>) {
             blocks.forEach { block ->
+                if (block.isDeleted) return@forEach
                 when (block) {
                     is ImageBlock -> block.localFilePath?.substringAfterLast("/")?.let { mediaFiles.add(it) }
                     is DocumentBlock -> block.localFilePath?.substringAfterLast("/")?.let { mediaFiles.add(it) }
@@ -115,8 +116,9 @@ class SyncRepositoryImpl(
         }
     }
 
-    private fun uploadLocalMedia(content: NoteContent) {
+    private fun uploadLocalMedia(content: NoteContent, remoteFileNames: Set<String>) {
         extractMediaFileNames(content).forEach { fileName ->
+            if (fileName in remoteFileNames) return@forEach
             val file = File(mediaStorageHelper.getAbsoluteMediaPath(fileName))
             if (file.exists()) {
                 launchMediaTransfer(fileName, MediaTransferPhase.UPLOADING) {
@@ -458,6 +460,12 @@ class SyncRepositoryImpl(
                 }
             }
 
+            // A synced-in change can tombstone a block (or a whole note) that this device didn't
+            // delete itself, bypassing every editor-driven delete path that already requests a
+            // cleanup - without this, a deletion arriving via sync would only ever get cleaned up
+            // by the next full app restart's launch-time pass.
+            com.ben.inly.domain.media.LocalMediaGcTrigger.requestCleanup()
+
             allSucceeded
         }
 
@@ -468,6 +476,16 @@ class SyncRepositoryImpl(
             val changes = mutableListOf<SyncEnvelope>()
             val modifiedNotes = repository.getNotesModifiedSince(lastSyncTime)
 
+            // Snapshotting the peer's file listing once per collection pass - rather than trusting
+            // the "modified since" watermark alone - means a note that keeps reappearing as locally
+            // modified (e.g. its watermark advance was lost to an interrupted sync) no longer forces
+            // a real re-upload of a file the peer has already confirmed receiving.
+            val remoteFileNames = if (uploadMedia) {
+                syncClient.listRemoteMedia().map { it.fileName }.toSet()
+            } else {
+                emptySet()
+            }
+
             modifiedNotes.forEach { meta ->
                 val content = if (meta.isDaily && meta.dateString != null) {
                     repository.getDailyNote(meta.dateString)
@@ -476,10 +494,10 @@ class SyncRepositoryImpl(
                 } ?: NoteContent(blocks = emptyList())
 
                 if (uploadMedia) {
-                    uploadLocalMedia(content)
+                    uploadLocalMedia(content, remoteFileNames)
 
                     val coverPath = meta.coverImagePath
-                    if (!meta.isDaily && coverPath != null) {
+                    if (!meta.isDaily && coverPath != null && coverPath !in remoteFileNames) {
                         val file = File(mediaStorageHelper.getAbsoluteMediaPath(coverPath))
                         if (file.exists()) {
                             launchMediaTransfer(coverPath, MediaTransferPhase.UPLOADING) {

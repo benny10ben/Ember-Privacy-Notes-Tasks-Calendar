@@ -154,8 +154,6 @@ interface EditorActions {
     fun onRequestImagePicker(blockId: String)
     fun onRequestDocumentPicker(blockId: String)
     fun onOpenFile(filePath: String, mimeType: String)
-    fun onUndo()
-    fun onRedo()
     fun onRequestDbFilePicker(blockId: String, rowId: String, colId: String, isAudio: Boolean)
     fun onStopDbAudioRecording(blockId: String, rowId: String, colId: String, cancel: Boolean)
     fun onTogglePin()
@@ -639,11 +637,7 @@ fun EditorToolbar(
     onToggleFormat: (String) -> Unit,
     onAdjustIndentation: (Boolean) -> Unit,
     onInsertMediaBlock: (String) -> Unit,
-    onUndo: () -> Unit,
-    onRedo: () -> Unit,
     onSelectCurrentBlock: () -> Unit,
-    canUndo: Boolean,
-    canRedo: Boolean,
     hazeState: HazeState
 ) {
     if (isDesktopPlatform) return
@@ -687,16 +681,6 @@ fun EditorToolbar(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(2.dp)
                             ) {
-                                ToolbarButton(enabled = canUndo, onClick = onUndo) {
-                                    Icon(Icons.AutoMirrored.Filled.Undo, "Undo",
-                                        tint = if (canUndo) tint else tint.copy(alpha = 0.3f),
-                                        modifier = Modifier.size(iconSize))
-                                }
-                                ToolbarButton(enabled = canRedo, onClick = onRedo) {
-                                    Icon(Icons.AutoMirrored.Filled.Redo, "Redo",
-                                        tint = if (canRedo) tint else tint.copy(alpha = 0.3f),
-                                        modifier = Modifier.size(iconSize))
-                                }
                                 ToolbarButton(onClick = {
                                     keyboardController?.hide()
                                     onSelectCurrentBlock()

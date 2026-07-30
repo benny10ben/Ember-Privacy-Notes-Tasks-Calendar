@@ -68,7 +68,7 @@ class AndroidSettingsManager(
     }
 
     override fun saveLastSyncTimestamp(timestamp: Long) {
-        sharedPreferences.edit { putLong(SyncConstants.KEY_SYNC_TIMESTAMP, timestamp) }
+        sharedPreferences.edit(commit = true) { putLong(SyncConstants.KEY_SYNC_TIMESTAMP, timestamp) }
     }
 
     override fun getSelfHostLastSyncTimestamp(): Long {

@@ -26,6 +26,8 @@ import com.ben.inly.data.local.prefs.SettingsManager
 import com.ben.inly.data.local.prefs.SyncConstants
 import com.ben.inly.di.desktopModule
 import com.ben.inly.di.sharedModule
+import com.ben.inly.domain.media.LocalMediaGarbageCollector
+import com.ben.inly.domain.media.LocalMediaGcTrigger
 import com.ben.inly.domain.selfhost.sync.ForegroundSyncPoller
 import com.ben.inly.domain.selfhost.crypto.SecureSyncKeyStorage
 import com.ben.inly.domain.selfhost.sync.SelfHostSyncLog
@@ -44,11 +46,14 @@ import com.ben.inly.domain.util.handleExportMarkdown
 import com.ben.inly.domain.util.handleExportPdf
 import com.ben.inly.domain.util.handleImportBackup
 import com.ben.inly.presentation.navigation.Screen
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.debounce
 import org.koin.core.context.GlobalContext
 import org.koin.core.context.startKoin
 import java.awt.Frame
 import javax.swing.JOptionPane
 import javax.swing.SwingUtilities
+import kotlin.time.Duration.Companion.milliseconds
 
 fun main() = application {
 
@@ -99,6 +104,17 @@ fun main() = application {
         } else {
             SelfHostSyncLog.d("DesktopMain: no self-host vault configured, skipping background sync schedules")
         }
+    }
+
+    @OptIn(FlowPreview::class)
+    LaunchedEffect(Unit) {
+        val koin = GlobalContext.get()
+        val localMediaGarbageCollector = koin.get<LocalMediaGarbageCollector>()
+        LocalMediaGcTrigger.cleanupRequests
+            .debounce(2000L.milliseconds)
+            .collect {
+                localMediaGarbageCollector.collectAndDeleteOrphanedMedia()
+            }
     }
 
     var isMainWindowOpen by remember { mutableStateOf(true) }

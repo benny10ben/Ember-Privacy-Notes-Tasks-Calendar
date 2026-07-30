@@ -103,8 +103,6 @@ fun DailyScreen(
     syncViewModel: SyncViewModel = koinViewModel()
 ) {
     val hazeState = remember { HazeState() }
-    val canUndo by viewModel.canUndo.collectAsState()
-    val canRedo by viewModel.canRedo.collectAsState()
 
     val allLinkableNotes by viewModel.allLinkableNotes.collectAsState()
 
@@ -291,8 +289,6 @@ fun DailyScreen(
             override fun onStopRecording(blockId: String, cancel: Boolean) = viewModel.stopHardwareRecording(blockId, cancel)
             override fun onPlayAudio(filePath: String, onComplete: () -> Unit) = viewModel.playAudio(filePath, onComplete)
             override fun onStopAudio() = viewModel.stopAudio()
-            override fun onUndo() = viewModel.undo()
-            override fun onRedo() = viewModel.redo()
             override fun onTogglePin() = viewModel.togglePinSelectedBlocks()
             override fun setScrollEnabled(enabled: Boolean) {
                 isListScrollEnabled = enabled
@@ -455,10 +451,6 @@ fun DailyScreen(
                     onMenuStateChange = { mobileMenuState = it },
                     query = slashQuery,
                     hazeState = hazeState,
-                    canUndo = canUndo,
-                    canRedo = canRedo,
-                    onUndo = { sharedEditorActions.onUndo() },
-                    onRedo = { sharedEditorActions.onRedo() },
                     onChangeBlockType = { sharedEditorActions.onChangeBlockType(it) },
                     onToggleFormat = { sharedEditorActions.onToggleFormat(it) },
                     onAdjustIndentation = { sharedEditorActions.onAdjustIndentation(it) },

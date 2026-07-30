@@ -136,12 +136,6 @@ abstract class BaseEditorViewModel(
     protected abstract suspend fun performIndexing()
     protected abstract fun getNoteTitleForReminder(): String
 
-    private val _canUndo = MutableStateFlow(false)
-    val canUndo: StateFlow<Boolean> = _canUndo.asStateFlow()
-
-    private val _canRedo = MutableStateFlow(false)
-    val canRedo: StateFlow<Boolean> = _canRedo.asStateFlow()
-
     val allLinkableNotes: StateFlow<List<NoteMetadataEntity>> = repository.getAllLinkableNotes()
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
@@ -153,13 +147,6 @@ abstract class BaseEditorViewModel(
         ignoreUnknownKeys = true
         encodeDefaults = true
     }
-
-    private val undoStack = mutableListOf<List<NoteBlock>>()
-    private val redoStack = mutableListOf<List<NoteBlock>>()
-    private var lastHistorySaveTime = 0L
-    private val MAX_HISTORY_SIZE = 50
-
-    private val historyLock = Any()
 
     protected var lastLocalMutationTime: Long = 0L
     private val LOCAL_MUTATION_COOLDOWN_MS = 3000L
@@ -220,16 +207,14 @@ abstract class BaseEditorViewModel(
         val toToggle = _selectedBlockIds.value
         if (toToggle.isEmpty()) return
         val now = System.currentTimeMillis()
-        modifyBlocks(forceSave = true) { list ->
+        modifyBlocks { list ->
             list.map { b -> if (b.id in toToggle) b.withPin(!b.isPinned, now) else b }
         }
         clearSelection()
         scheduleAutosave()
     }
 
-    private var lastHistoryFocusedBlockId: String? = null
-
-    protected fun modifyBlocks(forceSave: Boolean = false, action: (List<NoteBlock>) -> List<NoteBlock>) {
+    protected fun modifyBlocks(action: (List<NoteBlock>) -> List<NoteBlock>) {
         lateinit var newList: List<NoteBlock>
         val currentList = _blocks.getAndUpdate { list ->
             val rawList = action(list)
@@ -272,29 +257,6 @@ abstract class BaseEditorViewModel(
         if (currentList == newList) return
 
         lastLocalMutationTime = System.currentTimeMillis()
-
-        synchronized(historyLock) {
-            val now = System.currentTimeMillis()
-            val isStructuralChange = currentList.size != newList.size ||
-                    currentList.zip(newList).any { (old, new) ->
-                        old.id != new.id || old::class != new::class
-                    }
-            val enoughTimePassed = now - lastHistorySaveTime > 2500
-            val blockChanged = lastHistoryFocusedBlockId != currentlyFocusedBlockId
-
-            val shouldSave = forceSave || isStructuralChange || enoughTimePassed || blockChanged
-
-            if (shouldSave) {
-                undoStack.add(currentList)
-                if (undoStack.size > MAX_HISTORY_SIZE) undoStack.removeAt(0)
-                redoStack.clear()
-                lastHistorySaveTime = now
-                lastHistoryFocusedBlockId = currentlyFocusedBlockId
-            }
-
-            lastWasStructural = isStructuralChange
-            updateHistoryState()
-        }
     }
 
     fun startHardwareRecording() {
@@ -725,12 +687,10 @@ abstract class BaseEditorViewModel(
         scheduleAutosave()
     }
 
-    private var lastWasStructural = false
-
     fun updateBlockText(blockId: String, newText: String) {
         val now = System.currentTimeMillis()
 
-        modifyBlocks(forceSave = false) { list ->
+        modifyBlocks { list ->
             mapBlockById(list, blockId, now) { b ->
                 when (b) {
                     is TextBlock -> b.copy(text = newText, updatedAt = now)
@@ -746,127 +706,6 @@ abstract class BaseEditorViewModel(
             }
         }
         scheduleAutosave()
-    }
-
-    private fun updateHistoryState() {
-        _canUndo.value = undoStack.isNotEmpty()
-        _canRedo.value = redoStack.isNotEmpty()
-    }
-
-    private fun withTombstonesForRemoved(current: List<NoteBlock>, target: List<NoteBlock>): List<NoteBlock> {
-        val targetIds = target.mapTo(HashSet()) { it.id }
-        val tombstones = current.filter { it.id !in targetIds && !it.isDeleted }.map { it.markDeleted() }
-        return if (tombstones.isEmpty()) target else target + tombstones
-    }
-
-    fun undo() {
-        val previousList = synchronized(historyLock) {
-            if (undoStack.isEmpty()) return
-            undoStack.last()
-        }
-
-        val focusId = currentlyFocusedBlockId
-        var targetFocusId: String? = null
-
-        fun isFocusable(b: NoteBlock) = b is TextBlock || b is HeadingBlock || b is CheckboxBlock ||
-                b is BulletedListBlock || b is NumberedListBlock || b is ToggleBlock ||
-                b is QuoteBlock || b is CodeBlock
-
-        if (focusId != null && previousList.any { !it.isDeleted && it.id == focusId && isFocusable(it) }) {
-            targetFocusId = focusId
-        } else if (focusId != null) {
-            val currentList = _blocks.value
-            val removedIndex = currentList.indexOfFirst { it.id == focusId }
-            if (removedIndex > 0) {
-                targetFocusId = currentList.subList(0, removedIndex).lastOrNull { !it.isDeleted && isFocusable(it) }?.id
-            }
-        }
-
-        if (targetFocusId == null) {
-            targetFocusId = previousList.lastOrNull { !it.isDeleted && isFocusable(it) }?.id
-        }
-
-        val needsFocusShift = targetFocusId != null && targetFocusId != focusId
-
-        viewModelScope.launch {
-            if (needsFocusShift) {
-                _focusRequest.value = FocusRequest(id = targetFocusId!!, placeCursorAtEnd = true)
-                currentlyFocusedBlockId = targetFocusId
-                delay(50.milliseconds)
-            }
-
-            synchronized(historyLock) {
-                val beforeRevert = _blocks.value
-                redoStack.add(beforeRevert)
-                if (undoStack.isNotEmpty()) undoStack.removeAt(undoStack.lastIndex)
-                _blocks.value = withTombstonesForRemoved(beforeRevert, previousList)
-                lastWasStructural = true
-                lastHistorySaveTime = System.currentTimeMillis()
-                lastLocalMutationTime = lastHistorySaveTime
-                updateHistoryState()
-            }
-            scheduleAutosave()
-
-            if (targetFocusId != null) {
-                delay(50.milliseconds)
-                _focusRequest.value = FocusRequest(id = targetFocusId, placeCursorAtEnd = true)
-            }
-        }
-    }
-
-    fun redo() {
-        val nextList = synchronized(historyLock) {
-            if (redoStack.isEmpty()) return
-            redoStack.last()
-        }
-
-        val focusId = currentlyFocusedBlockId
-        var targetFocusId: String? = null
-
-        fun isFocusable(b: NoteBlock) = b is TextBlock || b is HeadingBlock || b is CheckboxBlock ||
-                b is BulletedListBlock || b is NumberedListBlock || b is ToggleBlock ||
-                b is QuoteBlock || b is CodeBlock
-
-        if (focusId != null && nextList.any { !it.isDeleted && it.id == focusId && isFocusable(it) }) {
-            targetFocusId = focusId
-        } else if (focusId != null) {
-            val currentList = _blocks.value
-            val removedIndex = currentList.indexOfFirst { it.id == focusId }
-            if (removedIndex > 0) {
-                targetFocusId = currentList.subList(0, removedIndex).lastOrNull { !it.isDeleted && isFocusable(it) }?.id
-            }
-        }
-
-        if (targetFocusId == null) {
-            targetFocusId = nextList.lastOrNull { !it.isDeleted && isFocusable(it) }?.id
-        }
-
-        val needsFocusShift = targetFocusId != null && targetFocusId != focusId
-
-        viewModelScope.launch {
-            if (needsFocusShift) {
-                _focusRequest.value = FocusRequest(id = targetFocusId!!, placeCursorAtEnd = true)
-                currentlyFocusedBlockId = targetFocusId
-                delay(50.milliseconds)
-            }
-
-            synchronized(historyLock) {
-                val beforeAdvance = _blocks.value
-                undoStack.add(beforeAdvance)
-                if (redoStack.isNotEmpty()) redoStack.removeAt(redoStack.lastIndex)
-                _blocks.value = withTombstonesForRemoved(beforeAdvance, nextList)
-                lastWasStructural = true
-                lastHistorySaveTime = System.currentTimeMillis()
-                lastLocalMutationTime = lastHistorySaveTime
-                updateHistoryState()
-            }
-            scheduleAutosave()
-
-            if (targetFocusId != null) {
-                delay(50.milliseconds)
-                _focusRequest.value = FocusRequest(id = targetFocusId, placeCursorAtEnd = true)
-            }
-        }
     }
 
     protected fun findBlockById(blocks: List<NoteBlock>, id: String): NoteBlock? =

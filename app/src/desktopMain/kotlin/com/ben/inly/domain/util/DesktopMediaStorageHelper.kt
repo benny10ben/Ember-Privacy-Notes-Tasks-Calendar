@@ -45,4 +45,8 @@ class DesktopMediaStorageHelper : MediaStorageHelper {
         val cleanName = fileName.substringAfterLast("/")
         return File(mediaStorageDir, cleanName).absolutePath
     }
+
+    override fun listAllMediaFileNames(): List<String> {
+        return mediaStorageDir.listFiles()?.mapNotNull { if (it.isFile) it.name else null } ?: emptyList()
+    }
 }

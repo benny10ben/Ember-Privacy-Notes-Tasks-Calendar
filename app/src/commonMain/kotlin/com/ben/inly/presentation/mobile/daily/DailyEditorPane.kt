@@ -62,8 +62,6 @@ fun DailyEditorPane(
     onExportPdf: (fileName: String, title: String, blocks: List<NoteBlock>) -> Unit = { _, _, _ -> },
     onSelectionModeChange: (Boolean) -> Unit = {}
 ) {
-    val canUndo by viewModel.canUndo.collectAsState()
-    val canRedo by viewModel.canRedo.collectAsState()
     val allLinkableNotes by viewModel.allLinkableNotes.collectAsState()
     val clipboardManager = LocalClipboardManager.current
 
@@ -194,8 +192,6 @@ fun DailyEditorPane(
             override fun onStopRecording(blockId: String, cancel: Boolean) = viewModel.stopHardwareRecording(blockId, cancel)
             override fun onPlayAudio(filePath: String, onComplete: () -> Unit) = viewModel.playAudio(filePath, onComplete)
             override fun onStopAudio() = viewModel.stopAudio()
-            override fun onUndo() = viewModel.undo()
-            override fun onRedo() = viewModel.redo()
             override fun onTogglePin() = viewModel.togglePinSelectedBlocks()
             override fun onUpdateSketch(id: String, strokes: List<Stroke>) =
                 viewModel.updateSketchStrokes(id, strokes)
@@ -285,10 +281,6 @@ fun DailyEditorPane(
                 onMenuStateChange = { mobileMenuState = it },
                 query = slashQuery,
                 hazeState = hazeState,
-                canUndo = canUndo,
-                canRedo = canRedo,
-                onUndo = { actions.onUndo() },
-                onRedo = { actions.onRedo() },
                 onChangeBlockType = { actions.onChangeBlockType(it) },
                 onToggleFormat = { actions.onToggleFormat(it) },
                 onAdjustIndentation = { actions.onAdjustIndentation(it) },

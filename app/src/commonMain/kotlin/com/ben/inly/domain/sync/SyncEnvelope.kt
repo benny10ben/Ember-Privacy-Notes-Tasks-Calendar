@@ -54,3 +54,11 @@ data class RemoteMediaEntry(
 data class RemoteMediaList(
     val entries: List<RemoteMediaEntry>
 )
+
+// Lets an upload client discover how many bytes of a previous, interrupted attempt the peer is
+// still holding onto in its receiving temp file, so a retry can send only the remaining bytes
+// instead of the whole file again.
+@Serializable
+data class MediaUploadStatus(
+    val receivedBytes: Long
+)

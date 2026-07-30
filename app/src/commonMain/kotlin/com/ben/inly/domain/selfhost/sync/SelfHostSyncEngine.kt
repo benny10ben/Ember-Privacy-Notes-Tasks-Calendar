@@ -254,12 +254,10 @@ class SelfHostSyncEngine(
                 }
             }
 
-            // Filter unreferenced files that have exceeded the grace period.
-            // If another device still needs a deleted file, it will automatically
-            // re-upload it during its next sync cycle.
             val nowMs = Clock.System.now().toEpochMilliseconds()
             val orphanedFileNames = manifestMediaEntries
-                .filter { it.entryId !in referencedFileNames && (nowMs - it.updatedAt) > MEDIA_ORPHAN_GRACE_PERIOD_MS }
+                .filter { it.entryId !in referencedFileNames }
+                .filter { entry -> (nowMs - (entry.orphanedAt ?: nowMs)) > MEDIA_ORPHAN_GRACE_PERIOD_MS }
                 .map { it.entryId }
                 .toSet()
 
@@ -279,6 +277,7 @@ class SelfHostSyncEngine(
             uploadMediaManifestEntries(
                 manifest,
                 (remoteMediaFileNames + successfullyUploaded) - orphanedFileNames,
+                referencedFileNames,
                 manifestEtag
             )
 
@@ -337,6 +336,7 @@ class SelfHostSyncEngine(
     private suspend fun uploadMediaManifestEntries(
         previousManifest: SelfHostManifest,
         mediaFileNames: Set<String>,
+        referencedFileNames: Set<String>,
         previousManifestEtag: String? = null,
         attempt: Int = 0
     ) {
@@ -344,13 +344,15 @@ class SelfHostSyncEngine(
         val previousMediaEntriesById = previousManifest.entries
             .filter { it.entryType == SelfHostEntryType.MEDIA }
             .associateBy { it.entryId }
-        // Preserve original upload timestamps for tracked files.
-        // Updating this timestamp every cycle would prevent the orphan grace period from ever expiring.
+        val nowMs = Clock.System.now().toEpochMilliseconds()
         val mediaEntries = mediaFileNames.map { fileName ->
+            val previous = previousMediaEntriesById[fileName]
+            val isReferenced = fileName in referencedFileNames
             SelfHostManifestEntry(
                 entryId = fileName,
                 entryType = SelfHostEntryType.MEDIA,
-                updatedAt = previousMediaEntriesById[fileName]?.updatedAt ?: Clock.System.now().toEpochMilliseconds()
+                updatedAt = previous?.updatedAt ?: nowMs,
+                orphanedAt = if (isReferenced) null else (previous?.orphanedAt ?: nowMs)
             )
         }
         val newManifest = SelfHostManifest(entries = nonMediaEntries + mediaEntries)
@@ -370,7 +372,7 @@ class SelfHostSyncEngine(
                 return
             }
             val (freshManifest, freshEtag) = downloadManifestWithEtag()
-            uploadMediaManifestEntries(freshManifest, mediaFileNames, freshEtag, attempt + 1)
+            uploadMediaManifestEntries(freshManifest, mediaFileNames, referencedFileNames, freshEtag, attempt + 1)
         }
     }
 

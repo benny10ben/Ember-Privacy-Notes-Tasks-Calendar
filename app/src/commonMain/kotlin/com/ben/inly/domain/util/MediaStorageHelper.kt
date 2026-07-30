@@ -24,4 +24,5 @@ data class MediaInfo(
 interface MediaStorageHelper {
     suspend fun copyUriToInternalStorage(uriString: String): MediaInfo?
     fun getAbsoluteMediaPath(fileName: String): String
+    fun listAllMediaFileNames(): List<String>
 }

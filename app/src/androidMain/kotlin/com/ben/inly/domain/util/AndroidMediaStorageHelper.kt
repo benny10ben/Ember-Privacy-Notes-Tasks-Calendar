@@ -115,4 +115,8 @@ class AndroidMediaStorageHelper(private val context: Context) : MediaStorageHelp
         if (newFile.exists()) return newFile.absolutePath
         return File(context.filesDir, cleanName).absolutePath
     }
+
+    override fun listAllMediaFileNames(): List<String> {
+        return mediaDir.listFiles()?.mapNotNull { if (it.isFile) it.name else null } ?: emptyList()
+    }
 }

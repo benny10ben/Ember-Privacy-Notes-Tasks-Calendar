@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.ben.inly.data.local.prefs.SettingsManager
 import com.ben.inly.data.local.room.FolderEntity
 import com.ben.inly.data.local.room.NoteMetadataEntity
+import com.ben.inly.domain.media.LocalMediaGarbageCollector
 import com.ben.inly.domain.model.*
 import com.ben.inly.domain.repository.NoteRepository
 import com.ben.inly.domain.template.DefaultTemplateSeeder
@@ -15,6 +16,7 @@ import com.ben.inly.domain.util.TaskExtractor
 import com.ben.inly.presentation.reminders.ReminderScheduler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
@@ -35,7 +37,8 @@ class HomeViewModel(
     private val reminderScheduler: ReminderScheduler,
     private val taskExtractor: TaskExtractor,
     private val voiceRecognizer: VoiceRecognizer,
-    private val templateSeeder: DefaultTemplateSeeder
+    private val templateSeeder: DefaultTemplateSeeder,
+    private val localMediaGarbageCollector: LocalMediaGarbageCollector
 ) : ViewModel() {
 
     val sortType: StateFlow<SortType> = settingsManager.sortTypeFlow
@@ -281,6 +284,10 @@ class HomeViewModel(
             repository.cleanupOldTrashedNotes()
             templateSeeder.seedIfMissing()
             _isLoading.value = false
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            delay(5_000)
+            localMediaGarbageCollector.collectAndDeleteOrphanedMedia()
         }
         viewModelScope.launch {
             repository.getIncompleteTasksCount().collect { count ->

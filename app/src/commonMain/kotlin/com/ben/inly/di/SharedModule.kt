@@ -51,6 +51,13 @@ val sharedModule = module {
         com.ben.inly.domain.template.DefaultTemplateSeeder(repository = get())
     }
 
+    single {
+        com.ben.inly.domain.media.LocalMediaGarbageCollector(
+            noteRepository = get(),
+            mediaStorageHelper = get()
+        )
+    }
+
     single<com.ben.inly.domain.repository.BackupRepository> {
         com.ben.inly.domain.repository.BackupRepositoryImpl(
             noteDao = get(),
@@ -80,7 +87,8 @@ val sharedModule = module {
             reminderScheduler = get(),
             taskExtractor = get(),
             voiceRecognizer = get(),
-            templateSeeder = get()
+            templateSeeder = get(),
+            localMediaGarbageCollector = get()
         )
     }
     viewModel {

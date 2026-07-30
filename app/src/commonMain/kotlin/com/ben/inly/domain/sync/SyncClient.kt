@@ -15,6 +15,7 @@ import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.content.OutgoingContent
 import io.ktor.http.contentType
 import io.ktor.http.encodedPath
@@ -27,6 +28,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
 import kotlinx.serialization.json.Json
 import java.io.File
+import java.io.FileOutputStream
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 
@@ -114,18 +116,22 @@ class SyncClient(
     // MEDIA ROUTES - streamed through AES/GCM so a large file is never fully buffered in memory
 
     suspend fun downloadMedia(fileName: String, destinationFile: File): MediaTransferOutcome {
-        // Unique temporary file path to prevent concurrent sync operations from overwriting each other.
-        val tempFile = File(destinationFile.parentFile, "${destinationFile.name}.${java.util.UUID.randomUUID()}.tmp")
+        val tempFile = File(destinationFile.parentFile, "$fileName.tmp")
+        val resumeOffset = if (tempFile.exists()) tempFile.length() else 0L
         val url = "$serverUrl/sync/media/$fileName"
         val startedAt = Clock.System.now().toEpochMilliseconds()
         return try {
-            val downloaded = client.prepareGet(url).execute { response ->
+            val downloaded = client.prepareGet(url) {
+                if (resumeOffset > 0) {
+                    header(HttpHeaders.Range, "bytes=$resumeOffset-")
+                }
+            }.execute { response ->
                 if (response.status.value !in 200..299) {
                     LanSyncLog.e("downloadMedia: $fileName request failed with status ${response.status.value}")
                     return@execute false
                 }
                 response.bodyAsChannel().toInputStream().use { encryptedInput ->
-                    tempFile.outputStream().use { plainOutput ->
+                    FileOutputStream(tempFile, resumeOffset > 0).use { plainOutput ->
                         syncEncryptionManager.decryptStream(encryptedInput, plainOutput, settingsManager.getSyncEncryptionKey())
                     }
                 }
@@ -140,18 +146,25 @@ class SyncClient(
             }
         } catch (e: ClientRequestException) {
             val elapsedMs = Clock.System.now().toEpochMilliseconds() - startedAt
-            if (e.response.status.value == 425) {
-                MediaTransferOutcome.PEER_NOT_READY
-            } else {
-                LanSyncLog.e("downloadMedia: $fileName failed after ${elapsedMs}ms with ${e::class.simpleName}: ${e.message}", e)
-                MediaTransferOutcome.FAILED
+            when (e.response.status.value) {
+                425 -> MediaTransferOutcome.PEER_NOT_READY
+                // if the peer no longer recognizes our resume offset (e.g. the source file changed
+                // size since our last attempt) - discard the stale partial file so the next attempt
+                // starts clean instead of repeating a 416 forever.
+                416 -> {
+                    LanSyncLog.e("downloadMedia: $fileName resume offset $resumeOffset rejected by peer (416), discarding partial file")
+                    tempFile.delete()
+                    MediaTransferOutcome.FAILED
+                }
+                else -> {
+                    LanSyncLog.e("downloadMedia: $fileName failed after ${elapsedMs}ms with ${e::class.simpleName}: ${e.message}", e)
+                    MediaTransferOutcome.FAILED
+                }
             }
         } catch (e: Exception) {
             val elapsedMs = Clock.System.now().toEpochMilliseconds() - startedAt
             LanSyncLog.e("downloadMedia: $fileName failed after ${elapsedMs}ms with ${e::class.simpleName}: ${e.message}", e)
             MediaTransferOutcome.FAILED
-        } finally {
-            tempFile.delete()
         }
     }
 
@@ -174,13 +187,31 @@ class SyncClient(
         }
     }
 
+    // Asks the peer how many bytes of a previous, interrupted upload attempt it still has
+    // buffered in its receiving temp file, so this attempt knows where to resume from. Returns 0
+    // both when there's genuinely no partial upload and when the check itself fails
+    suspend fun getUploadStatus(fileName: String): Long {
+        return try {
+            client.get("$serverUrl/sync/media/$fileName/upload-status").body<MediaUploadStatus>().receivedBytes
+        } catch (e: Exception) {
+            LanSyncLog.e("getUploadStatus: $fileName failed with ${e::class.simpleName}: ${e.message}", e)
+            0L
+        }
+    }
+
     suspend fun uploadMedia(fileName: String, file: File): MediaTransferOutcome {
-        // Unique temporary file path to isolate concurrent uploads.
-        val tempEncryptedFile = File(file.parentFile, "$fileName.${java.util.UUID.randomUUID()}.enc.tmp")
+        // This scratch file only ever holds THIS attempt's encrypted bytes - unlike the download
+        // side's temp file, it doesn't need to persist across attempts, since the peer (not this
+        // device) is the one remembering how much has been received; every attempt re-derives
+        // fresh from the always-intact local plaintext source file.
+        val tempEncryptedFile = File(file.parentFile, "$fileName.enc.tmp")
         val startedAt = Clock.System.now().toEpochMilliseconds()
         return try {
+            val resumeOffset = getUploadStatus(fileName).coerceIn(0L, file.length())
+
             withContext(Dispatchers.IO) {
                 file.inputStream().use { plainInput ->
+                    if (resumeOffset > 0) plainInput.channel.position(resumeOffset)
                     tempEncryptedFile.outputStream().use { encryptedOutput ->
                         syncEncryptionManager.encryptStream(plainInput, encryptedOutput, settingsManager.getSyncEncryptionKey())
                     }
@@ -188,6 +219,9 @@ class SyncClient(
             }
 
             val response = client.post("$serverUrl/sync/media/$fileName") {
+                if (resumeOffset > 0) {
+                    header(SyncConstants.HEADER_RESUME_OFFSET, resumeOffset.toString())
+                }
                 contentType(ContentType.Application.OctetStream)
                 setBody(object : OutgoingContent.ReadChannelContent() {
                     override val contentType = ContentType.Application.OctetStream

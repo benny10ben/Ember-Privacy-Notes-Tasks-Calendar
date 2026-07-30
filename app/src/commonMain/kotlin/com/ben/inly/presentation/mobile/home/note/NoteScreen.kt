@@ -140,8 +140,6 @@ fun NoteScreen(
     viewModel: NoteEditorViewModel = koinViewModel(key = noteId)
 ) {
 
-    val canUndo by viewModel.canUndo.collectAsState()
-    val canRedo by viewModel.canRedo.collectAsState()
     val hazeState = externalHazeState ?: remember { HazeState() }
     val clipboardManager = LocalClipboardManager.current
     val blocks by viewModel.visibleBlocks.collectAsState()
@@ -377,8 +375,6 @@ fun NoteScreen(
             override fun onStopRecording(blockId: String, cancel: Boolean) = viewModel.stopHardwareRecording(blockId, cancel)
             override fun onPlayAudio(filePath: String, onComplete: () -> Unit) = viewModel.playAudio(filePath, onComplete)
             override fun onStopAudio() = viewModel.stopAudio()
-            override fun onUndo() = viewModel.undo()
-            override fun onRedo() = viewModel.redo()
             override fun onTogglePin() = viewModel.togglePinSelectedBlocks()
             override fun setScrollEnabled(enabled: Boolean) {
                 isListScrollEnabled = enabled
@@ -487,10 +483,6 @@ fun NoteScreen(
                         onMenuStateChange = { mobileMenuState = it },
                         query = slashQuery,
                         hazeState = hazeState,
-                        canUndo = canUndo,
-                        canRedo = canRedo,
-                        onUndo = { editorActions.onUndo() },
-                        onRedo = { editorActions.onRedo() },
                         onChangeBlockType = { editorActions.onChangeBlockType(it) },
                         onToggleFormat = { editorActions.onToggleFormat(it) },
                         onAdjustIndentation = { editorActions.onAdjustIndentation(it) },
