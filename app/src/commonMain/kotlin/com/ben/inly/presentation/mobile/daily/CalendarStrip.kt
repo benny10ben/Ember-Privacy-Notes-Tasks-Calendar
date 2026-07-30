@@ -36,7 +36,6 @@ import kotlin.math.abs
 @Composable
 fun CollapsedWeekStrip(
     selectedDate: LocalDate,
-    today: LocalDate,
     modifier: Modifier = Modifier,
     onDateSelected: (LocalDate) -> Unit
 ) {

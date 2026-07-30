@@ -15,6 +15,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Tray
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
@@ -102,6 +103,16 @@ fun main() = application {
 
     var isMainWindowOpen by remember { mutableStateOf(true) }
 
+    Tray(
+        icon = painterResource("app_icon.png"),
+        tooltip = "Inly",
+        onAction = { isMainWindowOpen = true },
+        menu = {
+            Item("Open Inly", onClick = { isMainWindowOpen = true })
+            Item("Quit", onClick = { exitApplication() })
+        }
+    )
+
     if (isMainWindowOpen) {
     Window(
         onCloseRequest = { isMainWindowOpen = false },
@@ -155,16 +166,35 @@ fun main() = application {
                             java.io.File(System.getProperty("user.home"), ".inly/media/$cleanPath")
                         }
 
-                        val tmpDir = java.io.File(System.getProperty("java.io.tmpdir"), "inly_view").apply { mkdirs() }
-                        val viewFile = java.io.File(tmpDir, originalFile.name)
+                        if (!originalFile.exists()) {
+                            SwingUtilities.invokeLater {
+                                JOptionPane.showMessageDialog(
+                                    currentWindow,
+                                    "This file is no longer available on this device.",
+                                    "File Not Found",
+                                    JOptionPane.WARNING_MESSAGE
+                                )
+                            }
+                        } else {
+                            val tmpDir = java.io.File(System.getProperty("java.io.tmpdir"), "inly_view").apply { mkdirs() }
+                            val viewFile = java.io.File(tmpDir, originalFile.name)
 
-                        if (!viewFile.exists() || viewFile.length() != originalFile.length()) {
-                            originalFile.copyTo(viewFile, overwrite = true)
+                            if (!viewFile.exists() || viewFile.length() != originalFile.length()) {
+                                originalFile.copyTo(viewFile, overwrite = true)
+                            }
+
+                            java.awt.Desktop.getDesktop().open(viewFile)
                         }
-
-                        java.awt.Desktop.getDesktop().open(viewFile)
                     } catch (e: Exception) {
                         e.printStackTrace()
+                        SwingUtilities.invokeLater {
+                            JOptionPane.showMessageDialog(
+                                currentWindow,
+                                "Failed to open file: ${e.message}",
+                                "Error",
+                                JOptionPane.ERROR_MESSAGE
+                            )
+                        }
                     }
                 },
                 onExportMarkdown = { fileName, content ->
@@ -243,16 +273,35 @@ fun main() = application {
                                     java.io.File(System.getProperty("user.home"), ".inly/media/$cleanPath")
                                 }
 
-                                val tmpDir = java.io.File(System.getProperty("java.io.tmpdir"), "inly_view").apply { mkdirs() }
-                                val viewFile = java.io.File(tmpDir, originalFile.name)
+                                if (!originalFile.exists()) {
+                                    SwingUtilities.invokeLater {
+                                        JOptionPane.showMessageDialog(
+                                            stickyWindow,
+                                            "This file is no longer available on this device.",
+                                            "File Not Found",
+                                            JOptionPane.WARNING_MESSAGE
+                                        )
+                                    }
+                                } else {
+                                    val tmpDir = java.io.File(System.getProperty("java.io.tmpdir"), "inly_view").apply { mkdirs() }
+                                    val viewFile = java.io.File(tmpDir, originalFile.name)
 
-                                if (!viewFile.exists() || viewFile.length() != originalFile.length()) {
-                                    originalFile.copyTo(viewFile, overwrite = true)
+                                    if (!viewFile.exists() || viewFile.length() != originalFile.length()) {
+                                        originalFile.copyTo(viewFile, overwrite = true)
+                                    }
+
+                                    java.awt.Desktop.getDesktop().open(viewFile)
                                 }
-
-                                java.awt.Desktop.getDesktop().open(viewFile)
                             } catch (e: Exception) {
                                 e.printStackTrace()
+                                SwingUtilities.invokeLater {
+                                    JOptionPane.showMessageDialog(
+                                        stickyWindow,
+                                        "Failed to open file: ${e.message}",
+                                        "Error",
+                                        JOptionPane.ERROR_MESSAGE
+                                    )
+                                }
                             }
                         },
                         onExportMarkdown = { fileName, content ->

@@ -758,7 +758,6 @@ private fun StaticDateHeader(
 
         CollapsedWeekStrip(
             selectedDate = selectedDate,
-            today = Clock.System.todayIn(TimeZone.currentSystemDefault()),
             modifier = Modifier.padding(vertical = 8.dp),
             onDateSelected = onDateSelected
         )

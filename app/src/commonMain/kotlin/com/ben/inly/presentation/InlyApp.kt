@@ -40,6 +40,8 @@ import inly.app.generated.resources.Res
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import com.ben.inly.presentation.mobile.home.HomeScreen
+import com.ben.inly.presentation.share.ShareReceiverSheet
+import com.ben.inly.presentation.share.ShareViewModel
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.withContext
 import kotlin.time.Duration.Companion.milliseconds
@@ -213,9 +215,31 @@ fun InlyApp(
             return@CompositionLocalProvider
         }
 
+        val shareViewModel: ShareViewModel = koinViewModel()
+        val currentShare by shareViewModel.currentShare.collectAsState()
+        val linkableNotes by shareViewModel.linkableNotes.collectAsState()
+        val shareNavigateToNoteId by shareViewModel.navigateToNoteId.collectAsState()
+        val shareSavedMessage by shareViewModel.savedMessage.collectAsState()
+        val snackbarHostState = remember { SnackbarHostState() }
+
+        LaunchedEffect(shareNavigateToNoteId) {
+            shareNavigateToNoteId?.let { id ->
+                navController.navigate(Screen.Note.createRoute(id))
+                shareViewModel.clearNavigation()
+            }
+        }
+
+        LaunchedEffect(shareSavedMessage) {
+            shareSavedMessage?.let { message ->
+                snackbarHostState.showSnackbar(message)
+                shareViewModel.clearSavedMessage()
+            }
+        }
+
         Scaffold(
             containerColor = MaterialTheme.colorScheme.background,
-            contentWindowInsets = WindowInsets(0)
+            contentWindowInsets = WindowInsets(0),
+            snackbarHost = { SnackbarHost(snackbarHostState) }
         ) { innerPadding ->
             SharedTransitionLayout(
                 modifier = Modifier.fillMaxSize()
@@ -767,6 +791,17 @@ fun InlyApp(
                     },
                     viewModel = ragViewModel
                 )
+
+                ShareReceiverSheet(
+                    share = currentShare,
+                    linkableNotes = linkableNotes,
+                    onSaveToInbox = { shareViewModel.saveToInbox() },
+                    onNoteSelected = { noteId -> shareViewModel.saveToNote(noteId) },
+                    onCreateNote = { title -> shareViewModel.createNoteAndSave(title) },
+                    onCreateBlankNote = { shareViewModel.createNoteAndSave("") },
+                    onDismiss = { shareViewModel.dismiss() }
+                )
+
                 fullScreenContent?.invoke()
                 }
             }
