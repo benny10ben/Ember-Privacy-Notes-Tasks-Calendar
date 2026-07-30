@@ -34,14 +34,15 @@ import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
 import com.ben.inly.domain.model.ImageBlock
+import com.ben.inly.domain.sync.MediaRetryCoordinator
 import com.ben.inly.domain.util.MediaStorageHelper
 import com.ben.inly.domain.util.isDesktopPlatform
 import com.ben.inly.presentation.LocalImageOverlay
 import com.ben.inly.presentation.shared.editor.DefaultBlockShape
 import inly.app.generated.resources.Res
 import inly.app.generated.resources.camera
+import inly.app.generated.resources.circle_x
 import inly.app.generated.resources.image
-import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.painterResource
 import org.koin.compose.koinInject
 import java.io.File
@@ -58,6 +59,7 @@ fun ImageBlockView(
     onDownload: () -> Unit = {}
 ) {
     val mediaStorageHelper = koinInject<MediaStorageHelper>()
+    val mediaRetryCoordinator = koinInject<MediaRetryCoordinator>()
     var showFullScreen by remember { mutableStateOf(false) }
     val setFullScreenOverlay = LocalImageOverlay.current
 
@@ -125,66 +127,112 @@ fun ImageBlockView(
         val absolutePath = remember(block.localFilePath) {
             mediaStorageHelper.getAbsoluteMediaPath(block.localFilePath)
         }
-        val imageFile = remember(absolutePath) { File(absolutePath) }
+        val fileName = remember(block.localFilePath) { block.localFilePath.substringAfterLast("/") }
+        val availability = rememberMediaAvailability(absolutePath, fileName)
 
-        var fileWatchTick by remember(absolutePath) { mutableStateOf(0) }
-        LaunchedEffect(absolutePath) {
-            while (!imageFile.exists()) {
-                delay(2000L)
-                fileWatchTick++
-            }
-        }
-
-        val context = LocalPlatformContext.current
-        val request = remember(absolutePath, fileWatchTick, context) {
-            ImageRequest.Builder(context)
-                .data(imageFile)
-                .memoryCacheKey("$absolutePath-${imageFile.lastModified()}")
-                .diskCacheKey("$absolutePath-${imageFile.lastModified()}")
-                .build()
-        }
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp)
-                .heightIn(min = 100.dp, max = 260.dp)
-                .clip(DefaultBlockShape)
-                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))
-                .combinedClickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = {
-                        if (inSelectionMode) onToggleSelection()
-                        else showFullScreen = true
-                    },
-                    onLongClick = onToggleSelection
-                )
-        ) {
-            AsyncImage(
-                model = request,
-                contentDescription = "Note Image",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-        }
-
-        LaunchedEffect(showFullScreen, request) {
-            if (showFullScreen) {
-                setFullScreenOverlay {
-                    com.ben.inly.presentation.shared.editor.components.FullScreenImageScreen(
-                        request = request,
-                        hasLocalFile = block.localFilePath != null,
-                        onBack = { showFullScreen = false },
-                        onDownload = onDownload,
-                        onDelete = {
-                            showFullScreen = false
-                            onDelete()
-                        }
-                    )
+        if (availability != MediaAvailability.Available) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+                    .heightIn(min = 100.dp, max = 160.dp)
+                    .clip(DefaultBlockShape)
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))
+                    .combinedClickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = {
+                            if (inSelectionMode) onToggleSelection()
+                            else if (availability == MediaAvailability.Failed) mediaRetryCoordinator.retryMediaDownload(fileName)
+                        },
+                        onLongClick = onToggleSelection
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                if (availability == MediaAvailability.Failed) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            painterResource(Res.drawable.circle_x),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            "Failed to download image - tap to retry",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        androidx.compose.material3.CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            "Downloading image...",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    }
                 }
-            } else {
-                setFullScreenOverlay(null)
+            }
+        } else {
+            val imageFile = remember(absolutePath) { File(absolutePath) }
+            val context = LocalPlatformContext.current
+            val request = remember(absolutePath, context) {
+                ImageRequest.Builder(context)
+                    .data(imageFile)
+                    .memoryCacheKey("$absolutePath-${imageFile.lastModified()}")
+                    .diskCacheKey("$absolutePath-${imageFile.lastModified()}")
+                    .build()
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+                    .heightIn(min = 100.dp, max = 260.dp)
+                    .clip(DefaultBlockShape)
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))
+                    .combinedClickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = {
+                            if (inSelectionMode) onToggleSelection()
+                            else showFullScreen = true
+                        },
+                        onLongClick = onToggleSelection
+                    )
+            ) {
+                AsyncImage(
+                    model = request,
+                    contentDescription = "Note Image",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            }
+
+            LaunchedEffect(showFullScreen, request) {
+                if (showFullScreen) {
+                    setFullScreenOverlay {
+                        com.ben.inly.presentation.shared.editor.components.FullScreenImageScreen(
+                            request = request,
+                            hasLocalFile = block.localFilePath != null,
+                            onBack = { showFullScreen = false },
+                            onDownload = onDownload,
+                            onDelete = {
+                                showFullScreen = false
+                                onDelete()
+                            }
+                        )
+                    }
+                } else {
+                    setFullScreenOverlay(null)
+                }
             }
         }
     }

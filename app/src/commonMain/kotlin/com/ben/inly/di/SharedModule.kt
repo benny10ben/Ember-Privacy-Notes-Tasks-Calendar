@@ -107,6 +107,13 @@ val sharedModule = module {
         )
     }
     viewModel {
+        com.ben.inly.presentation.share.ShareViewModel(
+            repository = get(),
+            mediaStorageHelper = get(),
+            appScope = get(named("AppScope"))
+        )
+    }
+    viewModel {
         _root_ide_package_.com.ben.inly.presentation.mobile.home.note.NoteEditorViewModel(
             repository = get(),
             mediaStorageHelper = get(),
@@ -154,9 +161,14 @@ val sharedModule = module {
             categoryDao = get(),
             settingsManager = get(),
             mediaStorageHelper = get(),
-            localMediaReader = get(),
             noteRepository = get(),
             selfHostDeletedNoteDao = get()
+        )
+    }
+    single {
+        com.ben.inly.domain.sync.MediaRetryCoordinator(
+            syncRepository = get(),
+            selfHostSyncEngine = get()
         )
     }
 

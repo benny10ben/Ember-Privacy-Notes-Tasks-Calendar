@@ -18,7 +18,12 @@ import com.ben.inly.domain.repository.NoteRepository
 import com.ben.inly.domain.util.MediaStorageHelper
 import com.ben.inly.domain.util.SyncEventBus
 import com.ben.inly.domain.util.withSyncCoordinatorOrSkip
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -32,6 +37,36 @@ class SyncRepositoryImpl(
 ) : SyncRepository {
 
     private val json = Json { ignoreUnknownKeys = true }
+
+    // Coroutine scope for background media transfers to prevent blocking text sync operations.
+    private val mediaTransferScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val inFlightMediaTransfersMutex = Mutex()
+    private val inFlightMediaTransfers = mutableSetOf<String>()
+
+    // Executes a single file transfer on the background scope if it isn't already in flight.
+    // Updates MediaTransferStatusBus so UI components stay in sync with real-time transfer states.
+    private fun launchMediaTransfer(fileName: String, phase: MediaTransferPhase, block: suspend () -> MediaTransferOutcome) {
+        mediaTransferScope.launch {
+            val acquired = inFlightMediaTransfersMutex.withLock { inFlightMediaTransfers.add(fileName) }
+            if (!acquired) {
+                return@launch
+            }
+            MediaTransferStatusBus.markStarted(fileName, phase)
+            var outcome = MediaTransferOutcome.FAILED
+            try {
+                outcome = block()
+            } catch (e: Exception) {
+                LanSyncLog.e("mediaSync: $phase of $fileName failed unexpectedly: ${e.message}", e)
+            } finally {
+                inFlightMediaTransfersMutex.withLock { inFlightMediaTransfers.remove(fileName) }
+                when (outcome) {
+                    MediaTransferOutcome.SUCCESS -> MediaTransferStatusBus.markFinished(fileName, succeeded = true)
+                    MediaTransferOutcome.FAILED -> MediaTransferStatusBus.markFinished(fileName, succeeded = false)
+                    MediaTransferOutcome.PEER_NOT_READY -> MediaTransferStatusBus.markDeferred(fileName)
+                }
+            }
+        }
+    }
 
     private fun extractMediaFileNames(content: NoteContent): List<String> {
         val mediaFiles = mutableListOf<String>()
@@ -65,17 +100,37 @@ class SyncRepositoryImpl(
         return mediaFiles.distinct()
     }
 
-    private suspend fun downloadMissingMedia(content: NoteContent) {
+    private fun downloadMissingMedia(content: NoteContent) {
         extractMediaFileNames(content).forEach { fileName ->
             val file = File(mediaStorageHelper.getAbsoluteMediaPath(fileName))
-            if (!file.exists()) syncClient.downloadMedia(fileName, file)
+            if (!file.exists()) {
+                launchMediaTransfer(fileName, MediaTransferPhase.DOWNLOADING) {
+                    val outcome = syncClient.downloadMedia(fileName, file)
+                    if (outcome == MediaTransferOutcome.FAILED) {
+                        LanSyncLog.e("downloadMissingMedia: $fileName failed, will retry on the next sync pass")
+                    }
+                    outcome
+                }
+            }
         }
     }
 
-    private suspend fun uploadLocalMedia(content: NoteContent) {
+    private fun uploadLocalMedia(content: NoteContent) {
         extractMediaFileNames(content).forEach { fileName ->
             val file = File(mediaStorageHelper.getAbsoluteMediaPath(fileName))
-            if (file.exists()) syncClient.uploadMedia(fileName, file)
+            if (file.exists()) {
+                launchMediaTransfer(fileName, MediaTransferPhase.UPLOADING) {
+                    val outcome = syncClient.uploadMedia(fileName, file)
+                    if (outcome == MediaTransferOutcome.FAILED) {
+                        LanSyncLog.e(
+                            "uploadLocalMedia: $fileName (${file.length()} bytes) failed to upload, " +
+                                    "note metadata will still be pushed and reference a file the peer doesn't have yet - " +
+                                    "it will self-heal once this upload succeeds on a later sync pass"
+                        )
+                    }
+                    outcome
+                }
+            }
         }
     }
 
@@ -98,10 +153,7 @@ class SyncRepositoryImpl(
             val referencedFileNames = collectAllReferencedMediaFileNames()
             val remoteMedia = syncClient.listRemoteMedia()
             val nowMs = System.currentTimeMillis()
-            // Same grace-period reasoning as self-host's media cleanup - "not referenced right now"
-            // doesn't mean "not referenced anywhere," since this device might just not have applied
-            // the note that still needs it yet. If any peer still genuinely needs a file, its own
-            // next push re-uploads it (self-healing), even after this device has removed it here.
+            // Filters and deletes remote media files that are no longer referenced locally and exceed the grace period.
             val orphaned = remoteMedia.filter {
                 it.fileName !in referencedFileNames && (nowMs - it.lastModified) > MEDIA_ORPHAN_GRACE_PERIOD_MS
             }
@@ -111,11 +163,57 @@ class SyncRepositoryImpl(
                     val localFile = File(mediaStorageHelper.getAbsoluteMediaPath(entry.fileName))
                     if (localFile.exists()) localFile.delete()
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    LanSyncLog.e("cleanupOrphanedMedia: failed to delete orphaned ${entry.fileName}: ${e.message}", e)
                 }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            LanSyncLog.e("cleanupOrphanedMedia: failed with ${e::class.simpleName}: ${e.message}", e)
+        }
+    }
+
+    override suspend fun reconcileMedia() = withContext(Dispatchers.IO) {
+        try {
+            val referencedFileNames = collectAllReferencedMediaFileNames()
+            val remoteFileNames = syncClient.listRemoteMedia().map { it.fileName }.toSet()
+            val existingLocalFileNames = referencedFileNames.filterTo(mutableSetOf()) { fileExistsLocally(it) }
+
+            // Uploads referenced local files missing on the peer; downloads referenced peer files missing locally.
+            val toUpload = existingLocalFileNames - remoteFileNames
+            val toDownload = referencedFileNames.filter { it in remoteFileNames && it !in existingLocalFileNames }
+
+            toUpload.forEach { fileName ->
+                val file = File(mediaStorageHelper.getAbsoluteMediaPath(fileName))
+                launchMediaTransfer(fileName, MediaTransferPhase.UPLOADING) {
+                    syncClient.uploadMedia(fileName, file)
+                }
+            }
+            toDownload.forEach { fileName ->
+                val file = File(mediaStorageHelper.getAbsoluteMediaPath(fileName))
+                file.parentFile?.mkdirs()
+                launchMediaTransfer(fileName, MediaTransferPhase.DOWNLOADING) {
+                    syncClient.downloadMedia(fileName, file)
+                }
+            }
+        } catch (e: Exception) {
+            LanSyncLog.e("reconcileMedia: failed with ${e::class.simpleName}: ${e.message}", e)
+        }
+    }
+
+    override fun retryMediaDownload(fileName: String) {
+        val file = File(mediaStorageHelper.getAbsoluteMediaPath(fileName))
+        if (file.exists()) return
+        file.parentFile?.mkdirs()
+        launchMediaTransfer(fileName, MediaTransferPhase.DOWNLOADING) {
+            syncClient.downloadMedia(fileName, file)
+        }
+    }
+
+    private fun fileExistsLocally(fileName: String): Boolean {
+        return try {
+            File(mediaStorageHelper.getAbsoluteMediaPath(fileName)).exists()
+        } catch (e: Exception) {
+            LanSyncLog.e("reconcileMedia: could not check local existence for $fileName", e)
+            false
         }
     }
 
@@ -126,13 +224,13 @@ class SyncRepositoryImpl(
     override suspend fun applyRemoteChanges(changes: List<SyncEnvelope>): Boolean =
         withContext(Dispatchers.IO) {
             val syncKey = settingsManager.getSyncEncryptionKey()
-            // The sync watermark only advances if every envelope in the batch succeeds.
-            // Failing the entire batch on any single error or lock skip ensures failed
-            // changes get retried next time instead of being permanently lost.
-            // Re-applying already-synced envelopes on retry is a safe no-op.
             var allSucceeded = true
 
             changes.forEach { envelope ->
+                // Media downloads are queued after releasing the lock so large file downloads do not block editor saves.
+                var pendingMediaContent: NoteContent? = null
+                var pendingCoverImagePath: String? = null
+
                 val applied = withSyncCoordinatorOrSkip {
                     try {
                         val decryptedMetaJson =
@@ -154,22 +252,9 @@ class SyncRepositoryImpl(
                                 val localMeta = repository.getNoteById(envelope.entityId)
 
                                 if (localMeta == null) {
-                                    // A tombstone this device already knows about (received earlier, or its
-                                    // own past deletion) must block recreation here - otherwise a peer that
-                                    // hasn't caught up to the delete yet would keep resurrecting the note
-                                    // every time it pushes its own still-existing copy.
+                                    // Prevents re-creating a note if a tombstone already exists.
                                     val tombstone = repository.getNoteTombstone(envelope.entityId)
                                     if (!envelope.isDeleted && (tombstone == null || tombstone.deletedAt < envelope.updatedAt)) {
-                                        downloadMissingMedia(remoteContent)
-                                        if (remoteMeta.coverImagePath != null) {
-                                            val file = File(
-                                                mediaStorageHelper.getAbsoluteMediaPath(remoteMeta.coverImagePath)
-                                            )
-                                            if (!file.exists()) syncClient.downloadMedia(
-                                                remoteMeta.coverImagePath,
-                                                file
-                                            )
-                                        }
                                         repository.saveNote(
                                             remoteMeta,
                                             remoteContent,
@@ -180,6 +265,8 @@ class SyncRepositoryImpl(
                                         repository.indexNote(remoteMeta, remoteContent)
 
                                         SyncEventBus.emitSyncCompleted(envelope.entityId)
+                                        pendingMediaContent = remoteContent
+                                        pendingCoverImagePath = remoteMeta.coverImagePath
                                     }
                                 } else if (envelope.isDeleted && envelope.updatedAt > localMeta.updatedAt) {
                                     val trashedMeta =
@@ -202,22 +289,10 @@ class SyncRepositoryImpl(
                                         remoteContent = remoteContent,
                                         remoteUpdatedAt = envelope.updatedAt
                                     )
-                                    downloadMissingMedia(mergedContent)
-                                    if (remoteMeta.coverImagePath != null) {
-                                        val file =
-                                            File(mediaStorageHelper.getAbsoluteMediaPath(remoteMeta.coverImagePath))
-                                        if (!file.exists()) syncClient.downloadMedia(
-                                            remoteMeta.coverImagePath,
-                                            file
-                                        )
-                                    }
+                                    pendingMediaContent = mergedContent
+                                    pendingCoverImagePath = remoteMeta.coverImagePath
                                     val contentChanged = mergedContent != localContent
-                                    // Full-object comparison (normalizing the two fields that legitimately
-                                    // differ without being a real change: updatedAt itself, and filePath,
-                                    // which is vestigial/per-device) instead of a hand-picked field list -
-                                    // the old list of 4 fields silently dropped folder moves, reorders,
-                                    // template conversion, and Trash restores whenever the note body itself
-                                    // hadn't also changed.
+                                    // Checks for metadata differences ignoring non-sync fields like filePath.
                                     val metadataChanged = localMeta.copy(
                                         updatedAt = remoteMeta.updatedAt,
                                         filePath = remoteMeta.filePath
@@ -225,7 +300,6 @@ class SyncRepositoryImpl(
                                     if (contentChanged || metadataChanged) {
                                         val resolvedUpdatedAt =
                                             maxOf(localMeta.updatedAt, envelope.updatedAt)
-                                        // Strictly greater, not >= - see NoteMergeHelper's identical reasoning.
                                         val winningMeta =
                                             if (envelope.updatedAt > localMeta.updatedAt) {
                                                 remoteMeta.copy(updatedAt = resolvedUpdatedAt)
@@ -260,7 +334,6 @@ class SyncRepositoryImpl(
                                 if (localMeta == null) {
                                     val tombstone = repository.getNoteTombstone(dateString)
                                     if (tombstone == null || tombstone.deletedAt < envelope.updatedAt) {
-                                        downloadMissingMedia(remoteContent)
                                         repository.saveDailyNote(
                                             dateString,
                                             remoteContent,
@@ -278,6 +351,7 @@ class SyncRepositoryImpl(
                                         )
 
                                         SyncEventBus.emitSyncCompleted(dateString)
+                                        pendingMediaContent = remoteContent
                                     }
                                 } else {
                                     val localContent = repository.getDailyNote(dateString)
@@ -287,7 +361,7 @@ class SyncRepositoryImpl(
                                         remoteContent = remoteContent,
                                         remoteUpdatedAt = envelope.updatedAt
                                     )
-                                    downloadMissingMedia(mergedContent)
+                                    pendingMediaContent = mergedContent
 
                                     val contentChanged = mergedContent != localContent
                                     val metadataChanged =
@@ -320,10 +394,6 @@ class SyncRepositoryImpl(
                                 }
                             }
 
-                            // insertOrUpdateTag/insertFolder are for this device's OWN edits and always
-                            // restamp updatedAt to now - applying a peer's tag/folder through them would
-                            // both defeat LWW (the peer's real edit time is discarded) and never honor a
-                            // deletion (isDeleted was never even read here before).
                             SyncType.TAG -> {
                                 val remoteTag = json.decodeFromString<TagEntity>(decryptedMetaJson)
                                 repository.applyRemoteTag(remoteTag)
@@ -359,9 +429,28 @@ class SyncRepositoryImpl(
                         }
                         true
                     } catch (e: Exception) {
-                        println("Failed to apply remote change for ${envelope.entityId}: ${e.message}")
+                        LanSyncLog.e("applyRemoteChanges: failed to apply change for ${envelope.entityId}: ${e.message}", e)
                         false
                     }
+                }
+
+                // Triggers background downloads for media referenced by newly applied notes.
+                try {
+                    pendingMediaContent?.let { downloadMissingMedia(it) }
+                    pendingCoverImagePath?.let { path ->
+                        val file = File(mediaStorageHelper.getAbsoluteMediaPath(path))
+                        if (!file.exists()) {
+                            launchMediaTransfer(path, MediaTransferPhase.DOWNLOADING) {
+                                val outcome = syncClient.downloadMedia(path, file)
+                                if (outcome == MediaTransferOutcome.FAILED) {
+                                    LanSyncLog.e("applyRemoteChanges: cover image $path failed to download for ${envelope.entityId}")
+                                }
+                                outcome
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    LanSyncLog.e("applyRemoteChanges: failed to queue media download for ${envelope.entityId}: ${e.message}", e)
                 }
 
                 if (applied != true) {
@@ -372,7 +461,7 @@ class SyncRepositoryImpl(
             allSucceeded
         }
 
-    override suspend fun collectLocalChanges(since: Long): List<SyncEnvelope> =
+    override suspend fun collectLocalChanges(since: Long, uploadMedia: Boolean): List<SyncEnvelope> =
         withContext(Dispatchers.IO) {
             val lastSyncTime = since
             val syncKey = settingsManager.getSyncEncryptionKey()
@@ -386,11 +475,22 @@ class SyncRepositoryImpl(
                     repository.getNoteContent(meta.noteId)
                 } ?: NoteContent(blocks = emptyList())
 
-                uploadLocalMedia(content)
+                if (uploadMedia) {
+                    uploadLocalMedia(content)
 
-                if (!meta.isDaily && meta.coverImagePath != null) {
-                    val file = File(mediaStorageHelper.getAbsoluteMediaPath(meta.coverImagePath))
-                    if (file.exists()) syncClient.uploadMedia(meta.coverImagePath, file)
+                    val coverPath = meta.coverImagePath
+                    if (!meta.isDaily && coverPath != null) {
+                        val file = File(mediaStorageHelper.getAbsoluteMediaPath(coverPath))
+                        if (file.exists()) {
+                            launchMediaTransfer(coverPath, MediaTransferPhase.UPLOADING) {
+                                val outcome = syncClient.uploadMedia(coverPath, file)
+                                if (outcome == MediaTransferOutcome.FAILED) {
+                                    LanSyncLog.e("collectLocalChanges: cover image $coverPath failed to upload for ${meta.noteId}")
+                                }
+                                outcome
+                            }
+                        }
+                    }
                 }
 
                 val encryptedMeta =
@@ -413,9 +513,7 @@ class SyncRepositoryImpl(
                 )
             }
 
-            // Modified-since on updatedAt (not createdAt, and not filtered to isDeleted=0 like the
-            // list-for-display queries) - a rename/reparent after creation, or a deletion, previously
-            // had no way to ever be selected as a change to send.
+            // Collects tags modified since lastSyncTime.
             val modifiedTags = repository.getTagsModifiedSince(lastSyncTime)
             modifiedTags.forEach { tag ->
                 val encryptedTag =
@@ -429,6 +527,7 @@ class SyncRepositoryImpl(
                 )
             }
 
+            // Collects folders modified since lastSyncTime.
             val modifiedFolders = repository.getFoldersModifiedSince(lastSyncTime)
             modifiedFolders.forEach { folder ->
                 val encryptedFolder =
@@ -442,10 +541,7 @@ class SyncRepositoryImpl(
                 )
             }
 
-            // Permanent (Trash "delete forever", or folder delete) note deletions - collectLocalChanges
-            // above can never surface these since deleteNote already removed the Room row before this
-            // even runs, leaving nothing to select on updatedAt. This is the only place a hard delete is
-            // ever announced to a peer.
+            // Collects permanently deleted note tombstones.
             val modifiedTombstones = repository.getNoteTombstonesModifiedSince(lastSyncTime)
             modifiedTombstones.forEach { tombstone ->
                 val payload = NoteTombstonePayload(
@@ -465,6 +561,7 @@ class SyncRepositoryImpl(
                 )
             }
 
+            // Collects categories modified since lastSyncTime.
             val modifiedCategories = repository.getCategoriesModifiedSince(lastSyncTime)
             modifiedCategories.forEach { category ->
                 val encryptedCategory =

@@ -30,7 +30,6 @@ import com.ben.inly.data.worker.BackupRescheduler
 import com.ben.inly.database.DatabaseDriverFactory
 import com.ben.inly.domain.ai.RagRepository
 import com.ben.inly.domain.selfhost.crypto.KeyDerivationManager
-import com.ben.inly.domain.selfhost.media.LocalMediaReader
 import com.ben.inly.domain.selfhost.crypto.Pbkdf2KeyDerivationManager
 import com.ben.inly.domain.selfhost.crypto.SecureSyncKeyStorage
 import com.ben.inly.domain.selfhost.sync.SelfHostSyncScheduler
@@ -118,7 +117,6 @@ val androidModule = module {
     // Self-hosted WebDAV sync
     single<KeyDerivationManager> { Pbkdf2KeyDerivationManager() }
     single<SecureSyncKeyStorage> { SecureSyncKeyStorage(androidContext()) }
-    single { LocalMediaReader(androidContext()) }
     single { SelfHostSyncScheduler(androidContext(), get(), get()) }
     worker {
         SelfHostSyncWorker(

@@ -20,6 +20,19 @@ import io.ktor.utils.io.jvm.javaio.toInputStream
 import kotlinx.serialization.json.Json
 import java.security.MessageDigest
 
+// Tracks active file uploads so GET requests return HTTP 425 (Too Early)
+// when a requested file is currently being uploaded by another device.
+private object InFlightUploadsTracker {
+    private val uploading = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    fun markStarted(fileName: String) {
+        uploading.add(fileName)
+    }
+    fun markFinished(fileName: String) {
+        uploading.remove(fileName)
+    }
+    fun isUploading(fileName: String): Boolean = fileName in uploading
+}
+
 // Verifies request headers against an HMAC signature to reject expired or tampered requests.
 private fun ApplicationCall.hasValidSyncSignature(settingsManager: SettingsManager, hmacSigner: SyncHmacSigner): Boolean {
     val timestampMillis = request.headers[SyncConstants.HEADER_SYNC_TIMESTAMP]?.toLongOrNull() ?: return false
@@ -112,15 +125,29 @@ fun startSyncServer(
                 val file = java.io.File(mediaDir, fileName)
 
                 if (!file.exists()) {
-                    call.respond(io.ktor.http.HttpStatusCode.NotFound)
+                    if (InFlightUploadsTracker.isUploading(fileName)) {
+                        call.respond(io.ktor.http.HttpStatusCode(425, "Too Early"))
+                    } else {
+                        LanSyncLog.e("GET /sync/media: $fileName not found at ${file.absolutePath}, responding 404")
+                        call.respond(io.ktor.http.HttpStatusCode.NotFound)
+                    }
                     return@get
                 }
-                call.respondOutputStream(ContentType.Application.OctetStream) {
-                    this.use { responseOutput ->
-                        file.inputStream().use { plainInput ->
-                            syncEncryptionManager.encryptStream(plainInput, responseOutput, settingsManager.getSyncEncryptionKey())
+                val startedAt = System.currentTimeMillis()
+                try {
+                    call.respondOutputStream(ContentType.Application.OctetStream) {
+                        this.use { responseOutput ->
+                            file.inputStream().use { plainInput ->
+                                syncEncryptionManager.encryptStream(plainInput, responseOutput, settingsManager.getSyncEncryptionKey())
+                            }
                         }
                     }
+                } catch (e: Exception) {
+                    LanSyncLog.e(
+                        "GET /sync/media: streaming $fileName failed after ${System.currentTimeMillis() - startedAt}ms with ${e::class.simpleName}: ${e.message}",
+                        e
+                    )
+                    throw e
                 }
             }
 
@@ -138,15 +165,33 @@ fun startSyncServer(
 
                 val mediaDir = java.io.File(System.getProperty("user.home"), ".inly/media").apply { mkdirs() }
                 val file = java.io.File(mediaDir, fileName)
+                // Saves to a temporary file first and moves it atomically upon completion to avoid incomplete files.
+                val tempFile = java.io.File(mediaDir, "$fileName.${java.util.UUID.randomUUID()}.tmp")
 
-                // Streams and decrypts the upload directly to disk in fixed chunks without buffering the full file into memory.
-                call.receiveChannel().toInputStream().use { encryptedInput ->
-                    file.outputStream().use { plainOutput ->
-                        syncEncryptionManager.decryptStream(encryptedInput, plainOutput, settingsManager.getSyncEncryptionKey())
+                val startedAt = System.currentTimeMillis()
+                InFlightUploadsTracker.markStarted(fileName)
+                try {
+                    call.receiveChannel().toInputStream().use { encryptedInput ->
+                        tempFile.outputStream().use { plainOutput ->
+                            syncEncryptionManager.decryptStream(encryptedInput, plainOutput, settingsManager.getSyncEncryptionKey())
+                        }
                     }
+                    java.nio.file.Files.move(
+                        tempFile.toPath(), file.toPath(),
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                        java.nio.file.StandardCopyOption.ATOMIC_MOVE
+                    )
+                    call.respond(io.ktor.http.HttpStatusCode.OK)
+                } catch (e: Exception) {
+                    LanSyncLog.e(
+                        "POST /sync/media: $fileName failed after ${System.currentTimeMillis() - startedAt}ms with ${e::class.simpleName}: ${e.message}",
+                        e
+                    )
+                    tempFile.delete()
+                    call.respond(io.ktor.http.HttpStatusCode.BadRequest, e.message ?: "Media upload failed")
+                } finally {
+                    InFlightUploadsTracker.markFinished(fileName)
                 }
-
-                call.respond(io.ktor.http.HttpStatusCode.OK)
             }
 
             get("/sync/media/list") {

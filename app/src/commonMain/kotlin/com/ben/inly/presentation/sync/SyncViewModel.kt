@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.ben.inly.core.security.SyncEncryptionManager
 import com.ben.inly.core.security.SyncHmacSigner
 import com.ben.inly.data.local.prefs.SettingsManager
+import com.ben.inly.domain.sync.LanSyncLog
 import com.ben.inly.domain.sync.SyncClient
 import com.ben.inly.domain.sync.SyncPairingData
 import com.ben.inly.domain.sync.SyncPairingState
@@ -14,9 +15,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration.Companion.milliseconds
+
+private const val MEDIA_RECONCILE_INTERVAL_MS = 60_000L
 
 class SyncViewModel(
     private val syncRepository: SyncRepository,
@@ -28,6 +32,31 @@ class SyncViewModel(
 
     private val _syncStatus = MutableStateFlow("Idle")
     val syncStatus = _syncStatus.asStateFlow()
+
+    // Prevents concurrent sync cycles (e.g. manual trigger vs background watchdog) from executing simultaneously.
+    private val syncMutex = Mutex()
+
+    // Single client instance reused across all sync cycles to avoid leaking HTTP resources.
+    private val syncClient = SyncClient(settingsManager, hmacSigner, syncEncryptionManager)
+
+    // Throttles full media reconciliation passes to run at most once per interval.
+    private var lastMediaReconcileAt = 0L
+
+    private suspend fun reconcileMediaIfDue() {
+        val now = System.currentTimeMillis()
+        if (now - lastMediaReconcileAt < MEDIA_RECONCILE_INTERVAL_MS) return
+        lastMediaReconcileAt = now
+        try {
+            syncRepository.reconcileMedia()
+        } catch (e: Exception) {
+            LanSyncLog.e("reconcileMediaIfDue: failed: ${e.message}", e)
+        }
+    }
+
+    override fun onCleared() {
+        syncClient.close()
+        super.onCleared()
+    }
 
     val isPaired = pairingState.isPaired
 
@@ -60,11 +89,11 @@ class SyncViewModel(
     fun unpair() {
         viewModelScope.launch {
             val isCurrentlyPaired = settingsManager.getSyncIpAddress().isNotBlank() &&
-                settingsManager.getSyncAuthToken().isNotBlank()
+                    settingsManager.getSyncAuthToken().isNotBlank()
 
             if (!isDesktopPlatform && isCurrentlyPaired) {
-                withTimeoutOrNull(3_000L) {
-                    SyncClient(settingsManager, hmacSigner, syncEncryptionManager).requestUnpair()
+                withTimeoutOrNull(3_000L.milliseconds) {
+                    syncClient.requestUnpair()
                 }
             }
 
@@ -83,35 +112,38 @@ class SyncViewModel(
                 return@launch
             }
 
+            if (!syncMutex.tryLock()) {
+                _syncStatus.value = "Sync already in progress"
+                return@launch
+            }
+
             _syncStatus.value = "Syncing..."
 
-            // Collecting and transferring changes do not hold SyncCoordinator.mutex.
-            // applyRemoteChanges acquires the mutex individually per envelope when writing to Room.
+            // Collecting and pushing changes run without holding SyncCoordinator.mutex.
+            // Database writes acquire the mutex per envelope inside applyRemoteChanges.
             val syncStart = System.currentTimeMillis()
             val lastSyncTimestamp = settingsManager.getLastSyncTimestamp()
 
             try {
-                val client = SyncClient(settingsManager, hmacSigner, syncEncryptionManager)
-
-                val localChanges = syncRepository.collectLocalChanges(lastSyncTimestamp)
+                val localChanges = syncRepository.collectLocalChanges(lastSyncTimestamp, uploadMedia = true)
                 if (localChanges.isNotEmpty()) {
-                    client.pushChanges(localChanges)
+                    syncClient.pushChanges(localChanges)
                 }
 
                 _syncStatus.value = "Fetching from Desktop..."
-                val remoteChanges = client.fetchChanges(lastSyncTimestamp)
+                val remoteChanges = syncClient.fetchChanges(lastSyncTimestamp)
                 val appliedCleanly = if (remoteChanges.isNotEmpty()) {
                     syncRepository.applyRemoteChanges(remoteChanges)
                 } else true
 
                 if (appliedCleanly) {
-                    // Only advance the sync timestamp if all fetched changes were applied successfully.
-                    // If any change failed, keeping the old timestamp ensures it is retried.
+                    // Only advance the sync timestamp if all fetched changes applied cleanly.
                     settingsManager.saveLastSyncTimestamp(syncStart)
                     _syncStatus.value = "Success!"
 
-                    // Clean up orphaned media only during manual syncs to avoid unnecessary disk scans in background tasks.
+                    // Clean up orphaned media and reconcile files after a successful sync.
                     syncRepository.cleanupOrphanedMedia()
+                    syncRepository.reconcileMedia()
                 } else {
                     _syncStatus.value = "Partial sync, will retry"
                 }
@@ -119,6 +151,8 @@ class SyncViewModel(
             } catch (e: Exception) {
                 e.printStackTrace()
                 _syncStatus.value = "Failed: ${e.message}"
+            } finally {
+                syncMutex.unlock()
             }
         }
     }
@@ -145,20 +179,23 @@ class SyncViewModel(
         }
     }
 
-    private suspend fun performSilentSync(): Boolean = withContext(Dispatchers.IO) {
-        // Runs network requests un-locked to prevent blocking local editor saves during frequent background polling.
-        val syncStart = System.currentTimeMillis()
-        val lastSyncTimestamp = settingsManager.getLastSyncTimestamp()
+    // Returns null if skipped due to lock contention, preserving the current watchdog backoff state.
+    private suspend fun performSilentSync(): Boolean? = withContext(Dispatchers.IO) {
+        // Obtains syncMutex to isolate background sync runs without locking local editor saves.
+        if (!syncMutex.tryLock()) {
+            return@withContext null
+        }
         try {
+            val syncStart = System.currentTimeMillis()
+            val lastSyncTimestamp = settingsManager.getLastSyncTimestamp()
             _syncStatus.value = "Auto-Syncing..."
-            val client = SyncClient(settingsManager, hmacSigner, syncEncryptionManager)
 
-            val localChanges = syncRepository.collectLocalChanges(lastSyncTimestamp)
+            val localChanges = syncRepository.collectLocalChanges(lastSyncTimestamp, uploadMedia = true)
             if (localChanges.isNotEmpty()) {
-                client.pushChanges(localChanges)
+                syncClient.pushChanges(localChanges)
             }
 
-            val remoteChanges = client.fetchChanges(lastSyncTimestamp)
+            val remoteChanges = syncClient.fetchChanges(lastSyncTimestamp)
             val appliedCleanly = if (remoteChanges.isNotEmpty()) {
                 syncRepository.applyRemoteChanges(remoteChanges)
             } else true
@@ -178,6 +215,8 @@ class SyncViewModel(
             e.printStackTrace()
             _syncStatus.value = "Sync Error: ${e.javaClass.simpleName}"
             false
+        } finally {
+            syncMutex.unlock()
         }
     }
 
@@ -205,13 +244,16 @@ class SyncViewModel(
                 if (settingsManager.getSyncIpAddress().isNotBlank()) {
                     val success = performSilentSync()
 
-                    currentDelay = if (success) {
+                    currentDelay = when (success) {
                         // Reset to aggressive polling if the server is alive
-                        1500L
-                    } else {
+                        true -> 1500L
                         // Back off exponentially if the server is dead
-                        (currentDelay * 2).coerceAtMost(maxDelay)
+                        false -> (currentDelay * 2).coerceAtMost(maxDelay)
+                        // Preserve the delay if the sync was skipped due to lock contention
+                        null -> currentDelay
                     }
+
+                    reconcileMediaIfDue()
                 }
             }
         }

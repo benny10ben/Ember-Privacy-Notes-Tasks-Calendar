@@ -34,6 +34,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ben.inly.domain.model.VoiceBlock
+import com.ben.inly.domain.sync.MediaRetryCoordinator
 import com.ben.inly.domain.util.MediaStorageHelper
 import com.ben.inly.presentation.shared.editor.DefaultBlockShape
 import inly.app.generated.resources.Res
@@ -46,7 +47,6 @@ import org.jetbrains.compose.resources.painterResource
 import org.koin.compose.koinInject
 import kotlin.time.Duration.Companion.milliseconds
 import inly.app.generated.resources.microphone
-import java.io.File
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -61,24 +61,17 @@ fun AudioBlockView(
     onStopAudio: () -> Unit
 ) {
     val mediaStorageHelper = koinInject<MediaStorageHelper>()
+    val mediaRetryCoordinator = koinInject<MediaRetryCoordinator>()
     var isRecording by remember { mutableStateOf(false) }
     var recordingDuration by remember { mutableIntStateOf(0) }
     var isPlaying by remember { mutableStateOf(false) }
     var playProgress by remember { mutableFloatStateOf(0f) }
 
     val localFilePath = block.localFilePath
-    var fileReady by remember(localFilePath) {
-        mutableStateOf(localFilePath != null && File(mediaStorageHelper.getAbsoluteMediaPath(localFilePath)).exists())
-    }
-    LaunchedEffect(localFilePath) {
-        if (localFilePath != null) {
-            val absolutePath = mediaStorageHelper.getAbsoluteMediaPath(localFilePath)
-            while (!File(absolutePath).exists()) {
-                delay(2000L)
-            }
-            fileReady = true
-        }
-    }
+    val fileName = remember(localFilePath) { localFilePath?.substringAfterLast("/") }
+    val availability = if (localFilePath != null && fileName != null) {
+        rememberMediaAvailability(mediaStorageHelper.getAbsoluteMediaPath(localFilePath), fileName)
+    } else null
 
     LaunchedEffect(isRecording) {
         if (isRecording) {
@@ -167,7 +160,27 @@ fun AudioBlockView(
                         )
                     }
                 }
-            } else if (!fileReady) {
+            } else if (availability == MediaAvailability.Failed) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { fileName?.let { mediaRetryCoordinator.retryMediaDownload(it) } }
+                ) {
+                    Icon(
+                        painterResource(Res.drawable.circle_x),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = "Failed to download audio - tap to retry",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            } else if (availability != MediaAvailability.Available) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                     androidx.compose.material3.CircularProgressIndicator(
                         modifier = Modifier.size(16.dp),

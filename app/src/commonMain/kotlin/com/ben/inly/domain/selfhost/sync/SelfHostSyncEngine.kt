@@ -18,7 +18,6 @@ import com.ben.inly.domain.model.NoteBlock
 import com.ben.inly.domain.model.NoteContent
 import com.ben.inly.domain.model.VoiceBlock
 import com.ben.inly.domain.repository.NoteRepository
-import com.ben.inly.domain.selfhost.media.LocalMediaReader
 import com.ben.inly.domain.selfhost.media.MediaReferenceScanner
 import com.ben.inly.domain.selfhost.merge.NoteMergeHelper
 import com.ben.inly.domain.selfhost.translation.NoteJsonCompiler
@@ -27,10 +26,15 @@ import com.ben.inly.domain.selfhost.webdav.WebDavConfigurationException
 import com.ben.inly.domain.selfhost.webdav.WebDavConflictException
 import com.ben.inly.domain.selfhost.webdav.WebDavSyncClient
 import com.ben.inly.domain.selfhost.webdav.WebDavSyncPaths
+import com.ben.inly.domain.sync.MediaTransferPhase
+import com.ben.inly.domain.sync.MediaTransferStatusBus
 import com.ben.inly.domain.util.MediaStorageHelper
-import com.ben.inly.domain.util.SyncCoordinator
 import com.ben.inly.domain.util.withSyncCoordinatorOrSkip
 import java.io.File
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.Clock
@@ -53,7 +57,6 @@ class SelfHostSyncEngine(
     private val categoryDao: CategoryDao,
     private val settingsManager: SettingsManager,
     private val mediaStorageHelper: MediaStorageHelper,
-    private val localMediaReader: LocalMediaReader,
     private val noteRepository: NoteRepository,
     private val selfHostDeletedNoteDao: SelfHostDeletedNoteDao
 ) {
@@ -64,6 +67,7 @@ class SelfHostSyncEngine(
     private val manifestJson = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val blockJson = Json { ignoreUnknownKeys = true }
     private val collectionJson = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+    private val mediaRetryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private companion object {
         const val MAX_MANIFEST_UPLOAD_RETRIES = 3
@@ -101,9 +105,36 @@ class SelfHostSyncEngine(
             return SelfHostSyncResult.AlreadyInProgress
         }
         return try {
-            SyncCoordinator.mutex.withLock { syncMediaLocked() }
+            // Media sync only touches files on disk and the remote manifest, never note data, so it
+            // doesn't need SyncCoordinator.mutex - this class's own mutex above already prevents two
+            // self-host sync passes from overlapping. Holding SyncCoordinator.mutex here would instead
+            // freeze every local editor save for as long as a large attachment takes to transfer.
+            syncMediaLocked()
         } finally {
             mutex.unlock()
+        }
+    }
+
+    // Lets UI explicitly retry one specific file on demand (e.g. a "tap to retry" affordance on a
+    // failed block) rather than only waiting for the next scheduled/foreground-polled media sync.
+    // Fire-and-forget and independent of the mutex above, mirroring SyncRepositoryImpl's LAN
+    // equivalent, so a single retry tap can't block on or be blocked by a whole sync pass.
+    fun retryMediaDownload(fileName: String) {
+        val file = File(mediaStorageHelper.getAbsoluteMediaPath(fileName))
+        if (file.exists()) return
+        file.parentFile?.mkdirs()
+        mediaRetryScope.launch {
+            MediaTransferStatusBus.markStarted(fileName, MediaTransferPhase.DOWNLOADING)
+            var succeeded = false
+            try {
+                succeeded = webDavSyncClient.downloadMediaToFile(fileName, file)
+            } catch (cause: WebDavConfigurationException) {
+                // Not configured - a normal, expected outcome when self-host isn't set up, not an error.
+            } catch (cause: Exception) {
+                SelfHostSyncLog.e("retryMediaDownload: $fileName failed: ${cause.message}", cause)
+            } finally {
+                MediaTransferStatusBus.markFinished(fileName, succeeded)
+            }
         }
     }
 
@@ -118,10 +149,10 @@ class SelfHostSyncEngine(
 
             if (textResult is SelfHostSyncResult.Success) {
                 try {
-                    // Media sync holds SyncCoordinator.mutex for its entire duration.
-                    // It only modifies files on disk and the remote manifest, not note data,
-                    // so a granular per-note lock is unnecessary here.
-                    when (val mediaResult = SyncCoordinator.mutex.withLock { syncMediaLocked() }) {
+                    // Media sync only touches files on disk and the remote manifest, never note data,
+                    // so it doesn't need SyncCoordinator.mutex - holding it here would otherwise freeze
+                    // every local editor save for as long as a large attachment takes to transfer.
+                    when (val mediaResult = syncMediaLocked()) {
                         is SelfHostSyncResult.Failure -> SelfHostSyncLog.e(
                             "runBaselineSync(): baseline media sync failed, will retry via background worker: ${mediaResult.cause.message}",
                             mediaResult.cause
@@ -174,41 +205,52 @@ class SelfHostSyncEngine(
             val successfullyUploaded = mutableSetOf<String>()
 
             for (fileName in toUpload) {
+                val file = File(mediaStorageHelper.getAbsoluteMediaPath(fileName))
+                if (!file.exists()) {
+                    failedCount++
+                    SelfHostSyncLog.e("MediaSync Error: local file missing for $fileName at path=${file.path}")
+                    continue
+                }
+                // Publishes to the same MediaTransferStatusBus the LAN sync path uses, so a note's
+                // Image/Document/Audio block shows a real "downloading"/"failed" state regardless of
+                // which sync mechanism (LAN or self-host) is actually fetching its attachment.
+                MediaTransferStatusBus.markStarted(fileName, MediaTransferPhase.UPLOADING)
+                var uploadSucceeded = false
                 try {
-                    val path = mediaStorageHelper.getAbsoluteMediaPath(fileName)
-                    val bytes = localMediaReader.readBytes(path)
-                    if (bytes == null) {
-                        failedCount++
-                        SelfHostSyncLog.e("MediaSync Error: could not read local bytes for $fileName from path=$path")
-                        continue
-                    }
-                    webDavSyncClient.uploadMedia(fileName, bytes)
+                    webDavSyncClient.uploadMedia(fileName, file)
+                    uploadSucceeded = true
                     successfullyUploaded.add(fileName)
                     uploadedCount++
-                    SelfHostSyncLog.d("MediaSync: uploaded $fileName (${bytes.size} bytes)")
+                    SelfHostSyncLog.d("MediaSync: uploaded $fileName (${file.length()} bytes)")
                 } catch (cause: Exception) {
                     failedCount++
                     SelfHostSyncLog.e("MediaSync Error: failed to upload $fileName: ${cause.message}", cause)
+                } finally {
+                    MediaTransferStatusBus.markFinished(fileName, uploadSucceeded)
                 }
             }
 
             var downloadedCount = 0
             for (fileName in toDownload) {
                 SelfHostSyncLog.d("MediaSync: Downloading missing local file $fileName")
+                val file = File(mediaStorageHelper.getAbsoluteMediaPath(fileName))
+                file.parentFile?.mkdirs()
+                MediaTransferStatusBus.markStarted(fileName, MediaTransferPhase.DOWNLOADING)
+                var downloadSucceeded = false
                 try {
-                    val bytes = webDavSyncClient.downloadMedia(fileName)
-                    if (bytes == null) {
+                    val downloaded = webDavSyncClient.downloadMediaToFile(fileName, file)
+                    if (!downloaded) {
                         SelfHostSyncLog.d("MediaSync: $fileName is listed in the manifest but missing on the server, skipping")
-                        continue
+                    } else {
+                        downloadSucceeded = true
+                        downloadedCount++
+                        SelfHostSyncLog.d("MediaSync: downloaded $fileName (${file.length()} bytes)")
                     }
-                    val file = File(mediaStorageHelper.getAbsoluteMediaPath(fileName))
-                    file.parentFile?.mkdirs()
-                    file.writeBytes(bytes)
-                    downloadedCount++
-                    SelfHostSyncLog.d("MediaSync: downloaded $fileName (${bytes.size} bytes)")
                 } catch (cause: Exception) {
                     failedCount++
                     SelfHostSyncLog.e("MediaSync Error: failed to download $fileName: ${cause.message}", cause)
+                } finally {
+                    MediaTransferStatusBus.markFinished(fileName, downloadSucceeded)
                 }
             }
 

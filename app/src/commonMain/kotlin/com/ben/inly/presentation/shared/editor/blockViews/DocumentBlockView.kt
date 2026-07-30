@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -27,10 +28,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ben.inly.domain.model.DocumentBlock
+import com.ben.inly.domain.sync.MediaRetryCoordinator
+import com.ben.inly.domain.util.MediaStorageHelper
 import com.ben.inly.presentation.shared.editor.DefaultBlockShape
 import inly.app.generated.resources.Res
+import inly.app.generated.resources.circle_x
 import inly.app.generated.resources.file_text
 import org.jetbrains.compose.resources.painterResource
+import org.koin.compose.koinInject
 
 private fun documentFormatLabel(fileName: String, mimeType: String?): String {
     val extension = fileName.substringAfterLast('.', "").uppercase()
@@ -62,6 +67,9 @@ fun DocumentBlockView(
     onRequestPicker: () -> Unit,
     onOpenFile: (filePath: String, mimeType: String) -> Unit)
 {
+    val mediaStorageHelper = koinInject<MediaStorageHelper>()
+    val mediaRetryCoordinator = koinInject<MediaRetryCoordinator>()
+
     if (block.localFilePath == null) {
         Box(
             modifier = Modifier
@@ -88,6 +96,12 @@ fun DocumentBlockView(
             }
         }
     } else {
+        val absolutePath = remember(block.localFilePath) {
+            mediaStorageHelper.getAbsoluteMediaPath(block.localFilePath)
+        }
+        val fileName = remember(block.localFilePath) { block.localFilePath.substringAfterLast("/") }
+        val availability = rememberMediaAvailability(absolutePath, fileName)
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -100,10 +114,12 @@ fun DocumentBlockView(
                     onClick = {
                         if (inSelectionMode) {
                             onToggleSelection()
-                        } else {
-                            block.localFilePath?.let { path ->
+                        } else when (availability) {
+                            MediaAvailability.Available -> block.localFilePath?.let { path ->
                                 onOpenFile(path, block.mimeType ?: "*/*")
                             }
+                            MediaAvailability.Failed -> mediaRetryCoordinator.retryMediaDownload(fileName)
+                            MediaAvailability.Downloading -> Unit
                         }
                     },
                     onLongClick = onToggleSelection
@@ -122,22 +138,53 @@ fun DocumentBlockView(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Text(
-                    text = "${block.fileSizeString}    ${documentFormatLabel(block.fileName, block.mimeType)}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.outline
-                )
+                when (availability) {
+                    MediaAvailability.Failed -> Text(
+                        text = "Failed to download - tap to retry",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    MediaAvailability.Downloading -> Text(
+                        text = "Downloading...    ${documentFormatLabel(block.fileName, block.mimeType)}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                    MediaAvailability.Available -> Text(
+                        text = "${block.fileSizeString}    ${documentFormatLabel(block.fileName, block.mimeType)}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                }
             }
 
-            Icon(
-                imageVector = Icons.Default.Description,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.outline,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(12.dp)
-                    .size(18.dp)
-            )
+            when (availability) {
+                MediaAvailability.Failed -> Icon(
+                    painterResource(Res.drawable.circle_x),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(12.dp)
+                        .size(18.dp)
+                )
+                MediaAvailability.Downloading -> CircularProgressIndicator(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(12.dp)
+                        .size(18.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.outline
+                )
+                MediaAvailability.Available -> Icon(
+                    imageVector = Icons.Default.Description,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(12.dp)
+                        .size(18.dp)
+                )
+            }
         }
     }
 }

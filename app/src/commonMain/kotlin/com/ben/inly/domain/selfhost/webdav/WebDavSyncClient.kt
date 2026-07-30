@@ -11,20 +11,31 @@ import io.ktor.client.request.put
 import io.ktor.client.request.request
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
+import io.ktor.client.statement.bodyAsChannel
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.Url
+import io.ktor.http.content.OutgoingContent
 import io.ktor.http.contentType
+import io.ktor.utils.io.ByteReadChannel
+import io.ktor.utils.io.jvm.javaio.toByteReadChannel
+import io.ktor.utils.io.jvm.javaio.toInputStream
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import org.w3c.dom.Element
 import org.xml.sax.InputSource
+import java.io.File
 import java.io.StringReader
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import javax.xml.parsers.DocumentBuilderFactory
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
+import kotlin.time.Duration.Companion.milliseconds
 
 @OptIn(ExperimentalEncodingApi::class)
 class WebDavSyncClient(
@@ -112,7 +123,7 @@ class WebDavSyncClient(
                 }
             } catch (cause: Exception) {
                 if (networkAttempt >= MAX_NETWORK_RETRIES) throw cause
-                delay(NETWORK_RETRY_BASE_DELAY_MS * (networkAttempt + 1))
+                delay((NETWORK_RETRY_BASE_DELAY_MS * (networkAttempt + 1)).milliseconds)
                 networkAttempt++
                 continue
             }
@@ -121,7 +132,7 @@ class WebDavSyncClient(
                 HttpStatusCode.MethodNotAllowed.value -> return true
                 WEBDAV_LOCKED_STATUS -> {
                     if (attempt >= MAX_LOCK_RETRIES) throw statusException("MKCOL", remotePath, response)
-                    delay(LOCK_RETRY_BASE_DELAY_MS * (attempt + 1))
+                    delay((LOCK_RETRY_BASE_DELAY_MS * (attempt + 1)).milliseconds)
                     attempt++
                 }
                 else -> throw statusException("MKCOL", remotePath, response)
@@ -239,7 +250,7 @@ class WebDavSyncClient(
                 }
             } catch (cause: Exception) {
                 if (networkAttempt >= MAX_NETWORK_RETRIES) throw cause
-                delay(NETWORK_RETRY_BASE_DELAY_MS * (networkAttempt + 1))
+                delay((NETWORK_RETRY_BASE_DELAY_MS * (networkAttempt + 1)).milliseconds)
                 networkAttempt++
                 continue
             }
@@ -283,11 +294,16 @@ class WebDavSyncClient(
     suspend fun downloadDailyWithEtag(dateString: String): Pair<String, String?>? =
         downloadAndDecryptJsonWithEtag(WebDavSyncPaths.dailyPath(dateString))
 
-    suspend fun uploadMedia(mediaId: String, rawBytes: ByteArray, ifMatchEtag: String? = null): String? =
-        uploadEncryptedBytes(WebDavSyncPaths.mediaPath(mediaId), rawBytes, ifMatchEtag)
+    // Media files are streamed rather than passed as ByteArray - a note's attached video/document can be
+    // orders of magnitude larger than a note's own JSON, so encryptBytes/decryptBytes's whole-array approach
+    // (used below for notes/daily JSON, which are always small) would hold multiple copies of a huge file in
+    // memory at once. uploadMedia/downloadMediaToFile instead reuse the chunked, memory-bounded
+    // encryptStream/decryptStream and read/write the local file directly.
+    suspend fun uploadMedia(mediaId: String, sourceFile: File): String? =
+        uploadEncryptedFile(WebDavSyncPaths.mediaPath(mediaId), sourceFile)
 
-    suspend fun downloadMedia(mediaId: String): ByteArray? =
-        downloadAndDecryptBytes(WebDavSyncPaths.mediaPath(mediaId))
+    suspend fun downloadMediaToFile(mediaId: String, destinationFile: File): Boolean =
+        downloadAndDecryptToFile(WebDavSyncPaths.mediaPath(mediaId), destinationFile)
 
     suspend fun uploadEncryptedJson(remotePath: String, jsonPayload: String, ifMatchEtag: String? = null): String? {
         val encryptedBase64 = syncEncryptionManager.encryptPayload(jsonPayload, requireEncryptionKeyBase64())
@@ -317,6 +333,111 @@ class WebDavSyncClient(
         return syncEncryptionManager.decryptBytes(encryptedBytes, requireEncryptionKeyBase64())
     }
 
+    suspend fun uploadEncryptedFile(remotePath: String, sourceFile: File): String? {
+        // Suffixed with a UUID rather than just sourceFile.name - the media engine's own mutex and
+        // sequential per-file loop mean this can't currently collide with itself, but a shared,
+        // non-unique temp path here is exactly the pattern that caused real corruption on the LAN
+        // sync path once its transfers were decoupled to run concurrently - keep this safe by
+        // construction rather than relying on the caller never becoming concurrent.
+        val tempEncryptedFile = File(sourceFile.parentFile, "${sourceFile.name}.${java.util.UUID.randomUUID()}.enc.tmp")
+        return try {
+            sourceFile.inputStream().use { plainInput ->
+                tempEncryptedFile.outputStream().use { encryptedOutput ->
+                    syncEncryptionManager.encryptStream(plainInput, encryptedOutput, requireEncryptionKeyBase64())
+                }
+            }
+            putFileStreaming(remotePath, tempEncryptedFile)
+        } finally {
+            tempEncryptedFile.delete()
+        }
+    }
+
+    suspend fun downloadAndDecryptToFile(remotePath: String, destinationFile: File): Boolean {
+        val credentials = requireCredentials()
+        // Suffixed with a UUID for the same reason as uploadEncryptedFile's temp file above - not
+        // currently reachable given this engine's own mutex + sequential per-file loop, but a shared
+        // temp path is exactly what corrupted transfers once the LAN sync path became concurrent.
+        val tempFile = File(destinationFile.parentFile, "${destinationFile.name}.${java.util.UUID.randomUUID()}.tmp")
+
+        // Same network-drop retry as getFileWithEtag, but the decrypt+move happens per attempt too, since a
+        // connection dropped mid-body surfaces as an exception out of decryptStream, not a bad status code.
+        var attempt = 0
+        while (true) {
+            try {
+                val response = httpClient.get(resolveUrl(credentials, remotePath)) {
+                    header(HttpHeaders.Authorization, basicAuthHeaderValue(credentials))
+                }
+                if (response.status.value == HttpStatusCode.NotFound.value) return false
+                if (response.status.value !in 200..299) {
+                    throw statusException("GET", remotePath, response)
+                }
+
+                // Decrypts into a temp file first and only moves it over the real destination once the whole
+                // transfer succeeds, so a dropped connection can never leave a truncated file at the path
+                // syncMediaLocked's file.exists() check would otherwise treat as "already synced".
+                response.bodyAsChannel().toInputStream().use { encryptedInput ->
+                    tempFile.outputStream().use { plainOutput ->
+                        syncEncryptionManager.decryptStream(encryptedInput, plainOutput, requireEncryptionKeyBase64())
+                    }
+                }
+                withContext(Dispatchers.IO) {
+                    Files.move(
+                        tempFile.toPath(),
+                        destinationFile.toPath(),
+                        StandardCopyOption.REPLACE_EXISTING,
+                        StandardCopyOption.ATOMIC_MOVE
+                    )
+                }
+                return true
+            } catch (cause: WebDavException) {
+                throw cause
+            } catch (cause: Exception) {
+                if (attempt >= MAX_NETWORK_RETRIES) throw cause
+                delay((NETWORK_RETRY_BASE_DELAY_MS * (attempt + 1)).milliseconds)
+                attempt++
+            } finally {
+                tempFile.delete()
+            }
+        }
+    }
+
+    private suspend fun putFileStreaming(remotePath: String, sourceFile: File): String? {
+        val credentials = requireCredentials()
+
+        // Same lock-contention and network-drop retries as putFile below; media doesn't use ifMatchEtag since
+        // syncMediaLocked never conditions media uploads on one.
+        var attempt = 0
+        var networkAttempt = 0
+        while (true) {
+            val response = try {
+                httpClient.put(resolveUrl(credentials, remotePath)) {
+                    header(HttpHeaders.Authorization, basicAuthHeaderValue(credentials))
+                    contentType(ContentType.Application.OctetStream)
+                    setBody(object : OutgoingContent.ReadChannelContent() {
+                        override val contentType = ContentType.Application.OctetStream
+                        override val contentLength = sourceFile.length()
+                        override fun readFrom(): ByteReadChannel = sourceFile.inputStream().toByteReadChannel()
+                    })
+                }
+            } catch (cause: Exception) {
+                if (networkAttempt >= MAX_NETWORK_RETRIES) throw cause
+                delay((NETWORK_RETRY_BASE_DELAY_MS * (networkAttempt + 1)).milliseconds)
+                networkAttempt++
+                continue
+            }
+
+            when (response.status.value) {
+                in 200..299 -> return response.headers[HttpHeaders.ETag]?.trim('"')
+                WEBDAV_LOCKED_STATUS -> {
+                    if (attempt >= MAX_LOCK_RETRIES) throw statusException("PUT", remotePath, response)
+                    delay((LOCK_RETRY_BASE_DELAY_MS * (attempt + 1)).milliseconds)
+                    attempt++
+                }
+                else -> throw statusException("PUT", remotePath, response)
+            }
+        }
+    }
+
     private suspend fun putFile(remotePath: String, bytes: ByteArray, ifMatchEtag: String?): String? {
         val credentials = requireCredentials()
 
@@ -340,7 +461,7 @@ class WebDavSyncClient(
                 }
             } catch (cause: Exception) {
                 if (networkAttempt >= MAX_NETWORK_RETRIES) throw cause
-                delay(NETWORK_RETRY_BASE_DELAY_MS * (networkAttempt + 1))
+                delay((NETWORK_RETRY_BASE_DELAY_MS * (networkAttempt + 1)).milliseconds)
                 networkAttempt++
                 continue
             }
@@ -352,7 +473,7 @@ class WebDavSyncClient(
                 )
                 WEBDAV_LOCKED_STATUS -> {
                     if (attempt >= MAX_LOCK_RETRIES) throw statusException("PUT", remotePath, response)
-                    delay(LOCK_RETRY_BASE_DELAY_MS * (attempt + 1))
+                    delay((LOCK_RETRY_BASE_DELAY_MS * (attempt + 1)).milliseconds)
                     attempt++
                 }
                 else -> throw statusException("PUT", remotePath, response)
@@ -393,7 +514,7 @@ class WebDavSyncClient(
                 throw cause
             } catch (cause: Exception) {
                 if (attempt >= MAX_NETWORK_RETRIES) throw cause
-                delay(NETWORK_RETRY_BASE_DELAY_MS * (attempt + 1))
+                delay((NETWORK_RETRY_BASE_DELAY_MS * (attempt + 1)).milliseconds)
                 attempt++
             }
         }

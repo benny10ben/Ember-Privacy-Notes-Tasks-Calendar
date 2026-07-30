@@ -76,12 +76,17 @@ class LocalAiEngine {
     private fun ensureEmbedderLoaded() {
         if (loadedModel == LoadedModel.EMBEDDER) return
 
+        val embedderPath = resolveModelPath(embedderFileName)
+        if (!modelFileExists(embedderPath)) {
+            throw IllegalStateException("Embedding model not found at $embedderPath")
+        }
+
         if (loadedModel == LoadedModel.GENERATOR) {
             LlamaBridge.shutdown()
             loadedModel = LoadedModel.NONE
         }
 
-        val loaded = LlamaBridge.initEmbedModel(resolveModelPath(embedderFileName))
+        val loaded = LlamaBridge.initEmbedModel(embedderPath)
         if (!loaded) throw IllegalStateException(
             "Failed to load native embedding model. Check memory constraints or model corruption."
         )
@@ -90,6 +95,11 @@ class LocalAiEngine {
 
     private fun ensureGeneratorLoaded() {
         if (loadedModel == LoadedModel.GENERATOR) return
+
+        val generatorPath = resolveModelPath(generatorFileName)
+        if (!modelFileExists(generatorPath)) {
+            throw IllegalStateException("Generator model not found at $generatorPath")
+        }
 
         // If embedder is loaded, free it first
         if (loadedModel == LoadedModel.EMBEDDER) {
@@ -111,7 +121,7 @@ class LocalAiEngine {
             gpuLayers      = 0
         )
 
-        val loaded = LlamaBridge.initGenerateModel(resolveModelPath(generatorFileName))
+        val loaded = LlamaBridge.initGenerateModel(generatorPath)
         if (!loaded) throw IllegalStateException("Failed to load native Phi-4 model.")
         loadedModel = LoadedModel.GENERATOR
     }

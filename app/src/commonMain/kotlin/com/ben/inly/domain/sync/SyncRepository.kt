@@ -1,19 +1,20 @@
 package com.ben.inly.domain.sync
 
 interface SyncRepository {
-    // Collects all changes since `since` - takes the cursor explicitly rather than reading a
-    // stored watermark internally, so the desktop server can answer each peer's fetch using THAT
-    // peer's own cursor instead of a single shared server-side watermark that starves a second
-    // client device and can't be safely advanced before the peer confirms it applied the changes.
-    suspend fun collectLocalChanges(since: Long): List<SyncEnvelope>
+    // Collects all changes since the given `since` timestamp for a specific peer.
+    // Set `uploadMedia` to true when pushing changes to upload referenced media files before returning envelopes.
+    suspend fun collectLocalChanges(since: Long, uploadMedia: Boolean = false): List<SyncEnvelope>
 
-    // Applies incoming changes to the local Room database and file storage. Returns true only if
-    // every envelope applied without error - the caller must not advance its own watermark past
-    // this batch otherwise, or a single failed envelope is silently never retried.
+    // Applies incoming changes to the local database and file storage.
+    // Returns true only if every envelope in the batch applies successfully.
     suspend fun applyRemoteChanges(changes: List<SyncEnvelope>): Boolean
 
-    // Deletes media files that no local note references anymore AND have sat that way for over a
-    // day (see the grace-period reasoning on the self-host equivalent) - without this, every
-    // deleted image/attachment accumulates on the desktop server and on-device forever.
+    // Deletes local media files that are no longer referenced by any note and have exceeded the deletion grace period.
     suspend fun cleanupOrphanedMedia()
+
+    // Scans all referenced media against the remote peer's media list and retries transfers for missing files in either direction.
+    suspend fun reconcileMedia()
+
+    // Triggers an immediate retry for a specific media file download.
+    fun retryMediaDownload(fileName: String)
 }
