@@ -1,5 +1,11 @@
 package com.ben.inly.presentation.search
 
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -13,12 +19,14 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import com.ben.inly.presentation.shared.rememberStableStatusBarsPadding
+import com.ben.inly.presentation.shared.stableStatusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -37,31 +45,36 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.ben.inly.data.local.room.NoteMetadataEntity
 import com.ben.inly.domain.model.NoteSearchResult
 import com.ben.inly.domain.util.isDesktopPlatform
+import com.ben.inly.presentation.customInlyShadow
 import com.ben.inly.presentation.shared.components.TopBarIconButton
-import com.ben.inly.presentation.shared.components.customInlyShadow
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.haze
-import dev.chrisbanes.haze.hazeChild
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
 import inly.app.generated.resources.Res
+import inly.app.generated.resources.chevron_left
 import inly.app.generated.resources.search
 import inly.app.generated.resources.x
-import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.painterResource
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -69,25 +82,44 @@ import org.koin.compose.viewmodel.koinViewModel
  * Full-screen cross-note search. The input field floats at the bottom of the Box and picks
  * up `.imePadding()`, so it's always pinned directly above the software keyboard.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun SearchScreen(
     onBack: () -> Unit,
     onNoteClick: (String) -> Unit,
     onDailyNoteClick: (String) -> Unit,
+    sharedTransitionScope: SharedTransitionScope,
+    searchIconAnimatedVisibilityScope: AnimatedVisibilityScope,
     viewModel: SearchViewModel = koinViewModel()
 ) {
     val query by viewModel.query.collectAsState()
     val results by viewModel.results.collectAsState()
-    val focusRequester = remember { FocusRequester() }
     val hazeState = remember { HazeState() }
 
-    LaunchedEffect(Unit) {
-        delay(100)
-        try {
-            focusRequester.requestFocus()
-        } catch (e: Exception) {
-            // Focus fallback
+    var isBottomBarCompact by remember { mutableStateOf(false) }
+    val bottomBarScrollAccumulator = remember { FloatArray(1) }
+    val bottomBarNestedScrollConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                val delta = available.y
+                if (delta == 0f) return Offset.Zero
+
+                val accumulated = bottomBarScrollAccumulator[0]
+                if ((delta < 0f && accumulated > 0f) || (delta > 0f && accumulated < 0f)) {
+                    bottomBarScrollAccumulator[0] = 0f
+                }
+                bottomBarScrollAccumulator[0] += delta
+
+                val toggleThresholdPx = 60f
+                if (bottomBarScrollAccumulator[0] <= -toggleThresholdPx && !isBottomBarCompact) {
+                    isBottomBarCompact = true
+                    bottomBarScrollAccumulator[0] = 0f
+                } else if (bottomBarScrollAccumulator[0] >= toggleThresholdPx && isBottomBarCompact) {
+                    isBottomBarCompact = false
+                    bottomBarScrollAccumulator[0] = 0f
+                }
+                return Offset.Zero
+            }
         }
     }
 
@@ -100,12 +132,13 @@ fun SearchScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .consumeWindowInsets(innerPadding)
+                .nestedScroll(bottomBarNestedScrollConnection)
         ) {
             // Main content background with Haze blur applied
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .haze(hazeState)
+                    .hazeSource(state = hazeState)
                     .background(if (isDesktopPlatform) Color(0xFF121212) else MaterialTheme.colorScheme.background)
             ) {
                 when {
@@ -116,7 +149,7 @@ fun SearchScreen(
                         contentPadding = PaddingValues(
                             start = 16.dp,
                             end = 16.dp,
-                            top = rememberStableStatusBarsPadding().calculateTopPadding() + 16.dp,
+                            top = rememberStableStatusBarsPadding().calculateTopPadding() + 70.dp,
                             bottom = 120.dp
                         )
                     ) {
@@ -137,40 +170,99 @@ fun SearchScreen(
                 }
             }
 
-            // Floating Search Input and Close Button
-            Row(
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .then(if (isDesktopPlatform) Modifier else Modifier.stableStatusBarsPadding())
+                    .padding(top = if (isDesktopPlatform) 16.dp else 10.dp, start = 16.dp)
+            ) {
+                TopBarIconButton(
+                    icon = painterResource(Res.drawable.chevron_left),
+                    contentDescription = "Back",
+                    bgColor = if (isDesktopPlatform) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.background.copy(alpha = 0.45f),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    hazeState = hazeState,
+                    onClick = onBack
+                )
+            }
+
+            // Floating search pill, styled exactly like InlyBottomBar's pill
+            val defaultBgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.65f)
+            val isMorphing = searchIconAnimatedVisibilityScope.transition.isRunning
+            val shadowElevation by animateDpAsState(
+                targetValue = if (isMorphing) 0.dp else 14.dp,
+                animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing)
+            )
+
+            val barAnimationSpec = tween<Dp>(durationMillis = 350, easing = FastOutSlowInEasing)
+            val barSize by animateDpAsState(
+                targetValue = if (isBottomBarCompact) 44.dp else 52.dp,
+                animationSpec = barAnimationSpec
+            )
+            val bottomInset by animateDpAsState(
+                targetValue = if (isBottomBarCompact) 0.dp else 6.dp,
+                animationSpec = barAnimationSpec
+            )
+            val horizontalInset by animateDpAsState(
+                targetValue = if (isBottomBarCompact) 24.dp else 12.dp,
+                animationSpec = barAnimationSpec
+            )
+
+            Surface(
+                shape = CircleShape,
+                color = defaultBgColor,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .imePadding()
                     .navigationBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 16.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(bottom = bottomInset, start = 16.dp, end = 16.dp)
+                    .padding(horizontal = horizontalInset)
+                    .height(barSize)
+                    .then(
+                        with(sharedTransitionScope) {
+                            Modifier.sharedBounds(
+                                sharedContentState = rememberSharedContentState(key = "calendarBottomBarPill"),
+                                animatedVisibilityScope = searchIconAnimatedVisibilityScope,
+                                boundsTransform = { _, _ -> tween(durationMillis = 300, easing = FastOutSlowInEasing) }
+                            )
+                        }
+                    )
+                    .customInlyShadow(CircleShape, elevation = shadowElevation)
+                    .clip(CircleShape)
+                    .hazeEffect(hazeState, HazeStyle.Unspecified, null)
+                    .border(
+                        width = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                        shape = CircleShape
+                    )
             ) {
-                // Glassy BasicTextField wrapper
                 Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .size(52.dp)
-                        .customInlyShadow(RoundedCornerShape(24.dp))
-                        .clip(RoundedCornerShape(24.dp))
-                        .hazeChild(hazeState)
-                        .background(MaterialTheme.colorScheme.background.copy(alpha = 0.45f))
-                        .border(
-                            width = 0.5.dp,
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
-                            shape = RoundedCornerShape(24.dp)
-                        )
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    modifier = with(sharedTransitionScope) {
+                        Modifier
+                            .padding(horizontal = 16.dp, vertical = 6.dp)
+                            .skipToLookaheadSize()
+                    },
+                    horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         painterResource(Res.drawable.search),
                         contentDescription = "Search",
                         tint = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier
+                            .padding(end = 8.dp)
+                            .size(20.dp)
+                            .then(
+                                with(sharedTransitionScope) {
+                                    Modifier.sharedElement(
+                                        sharedContentState = rememberSharedContentState(key = "searchIcon"),
+                                        animatedVisibilityScope = searchIconAnimatedVisibilityScope,
+                                        boundsTransform = { _, _ -> tween(durationMillis = 300, easing = FastOutSlowInEasing) }
+                                    )
+                                }
+                            )
                     )
-                    Spacer(modifier = Modifier.width(12.dp))
                     BasicTextField(
                         value = query,
                         onValueChange = viewModel::onQueryChange,
@@ -180,8 +272,7 @@ fun SearchScreen(
                         singleLine = true,
                         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                         modifier = Modifier
-                            .weight(1f)
-                            .focusRequester(focusRequester),
+                            .weight(1f),
                         decorationBox = { innerTextField ->
                             if (query.isBlank()) {
                                 Text(
@@ -193,34 +284,20 @@ fun SearchScreen(
                             innerTextField()
                         }
                     )
-                }
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.background.copy(alpha = 0.45f),
-                    contentColor = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier
-                        .size(52.dp)
-                        .customInlyShadow(CircleShape)
-                        .clip(CircleShape)
-                        .hazeChild(hazeState)
-                        .clickable(onClick = onBack)
-                        .border(
-                            width = 0.5.dp,
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
-                            shape = CircleShape
-                        )
-                ) {
-                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                        Icon(
-                            painterResource(Res.drawable.x),
-                            contentDescription = "Close Search",
-                            tint = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
+//                    Box(
+//                        modifier = Modifier
+//                            .size(40.dp)
+//                            .clip(CircleShape)
+//                            .clickable(onClick = onBack),
+//                        contentAlignment = Alignment.Center
+//                    ) {
+//                        Icon(
+//                            painterResource(Res.drawable.x),
+//                            contentDescription = "Close Search",
+//                            tint = MaterialTheme.colorScheme.onSurface,
+//                            modifier = Modifier.size(20.dp)
+//                        )
+//                    }
                 }
             }
         }

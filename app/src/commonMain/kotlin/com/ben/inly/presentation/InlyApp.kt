@@ -114,7 +114,7 @@ fun InlyApp(
     val isTopLevelScreen = currentRoute == Screen.Daily.route ||
             currentRoute == Screen.Home.route ||
             currentRoute == Screen.Note.route
-    val isBottomBarVisible = isTopLevelScreen && !isSelectionActive
+    val isBottomBarVisible = isTopLevelScreen && !isSelectionActive && !showRagChatOverlay
     var bottomBarHeightDp by remember { mutableStateOf(0.dp) }
     var suppressBottomBarEnterAnimation by remember { mutableStateOf(true) }
     LaunchedEffect(isBottomBarVisible) {
@@ -544,7 +544,9 @@ fun InlyApp(
                                     popUpTo(navController.graph.id) { inclusive = true }
                                     launchSingleTop = true
                                 }
-                            }
+                            },
+                            sharedTransitionScope = sharedTransitionScope,
+                            searchIconAnimatedVisibilityScope = this,
                         )
                     }
 
@@ -789,7 +791,8 @@ fun InlyApp(
                         showRagChatOverlay = false
                         ragViewModel.clearChat()
                     },
-                    viewModel = ragViewModel
+                    viewModel = ragViewModel,
+                    sharedTransitionScope = sharedTransitionScope,
                 )
 
                 ShareReceiverSheet(

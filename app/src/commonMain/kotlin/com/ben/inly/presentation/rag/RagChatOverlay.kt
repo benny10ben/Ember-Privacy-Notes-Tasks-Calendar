@@ -5,10 +5,12 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -17,45 +19,72 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Close
+import com.ben.inly.presentation.shared.rememberStableStatusBarsPadding
 import com.ben.inly.presentation.shared.stableStatusBarsPadding
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.ben.inly.domain.util.AiEventBus
 import com.ben.inly.domain.util.isDesktopPlatform
+import com.ben.inly.presentation.customInlyShadow
+import com.ben.inly.presentation.shared.components.InlyBottomSheet
+import com.ben.inly.presentation.shared.components.InlyButtonPrimary
+import com.ben.inly.presentation.shared.components.InlyTextField
 import com.ben.inly.presentation.shared.components.KmpBackHandler
-import com.ben.inly.ui.theme.LocalInlyFontStyle
-import com.ben.inly.ui.theme.fontFamilyFor
+import com.ben.inly.presentation.shared.components.TopBarIconButton
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
+import inly.app.generated.resources.Res
+import inly.app.generated.resources.chevron_left
 import kotlinx.coroutines.delay
+import org.jetbrains.compose.resources.painterResource
 
 private val DesktopMaxContentWidth = 720.dp
 
+private enum class ExternalAiProvider(val displayName: String) {
+    OPENAI("OpenAI"),
+    ANTHROPIC("Anthropic"),
+    GEMINI("Gemini"),
+    CUSTOM("Custom")
+}
+
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun RagChatOverlay(
     isVisible: Boolean,
     onDismiss: () -> Unit,
-    viewModel: RagViewModel
+    viewModel: RagViewModel,
+    sharedTransitionScope: SharedTransitionScope
 ) {
     KmpBackHandler(enabled = isVisible) { onDismiss() }
 
     AnimatedVisibility(
         visible = isVisible,
-        enter = slideInVertically(animationSpec = tween(300, easing = FastOutSlowInEasing)) { it } +
+        enter = slideInHorizontally(animationSpec = tween(300, easing = FastOutSlowInEasing)) { fullWidth -> fullWidth } +
                 fadeIn(tween(250)),
-        exit  = slideOutVertically(animationSpec = tween(250, easing = FastOutSlowInEasing)) { it } +
+        exit  = slideOutHorizontally(animationSpec = tween(250, easing = FastOutSlowInEasing)) { fullWidth -> fullWidth } +
                 fadeOut(tween(200)),
         modifier = Modifier.fillMaxSize()
     ) {
@@ -71,6 +100,8 @@ fun RagChatOverlay(
                     viewModel = viewModel,
                     onDismiss = onDismiss,
                     isVisible = isVisible,
+                    sharedTransitionScope = sharedTransitionScope,
+                    chatAnimatedVisibilityScope = this@AnimatedVisibility,
                     contentModifier = Modifier
                         .fillMaxHeight()
                         .then(
@@ -84,6 +115,7 @@ fun RagChatOverlay(
 }
 
 // Desktop-only: persistent, resizable side-panel variant.
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun RagChatPanel(
     onDismiss: () -> Unit,
@@ -103,19 +135,25 @@ fun RagChatPanel(
     }
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun RagChatContent(
     viewModel: RagViewModel,
     onDismiss: () -> Unit,
     isVisible: Boolean,
-    contentModifier: Modifier
+    contentModifier: Modifier,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    chatAnimatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val messages        by viewModel.messages.collectAsState()
     val isLoading       by viewModel.isLoading.collectAsState()
     val isModelAvailable by viewModel.isModelAvailable.collectAsState()
     val listState       = rememberLazyListState()
+    val hazeState       = remember { HazeState() }
 
     var inputText by remember { mutableStateOf("") }
+    var showAiSettingsSheet by remember { mutableStateOf(false) }
+    var showExternalAiSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(isVisible) {
         if (isVisible) {
@@ -141,120 +179,171 @@ private fun RagChatContent(
         }
     }
 
-    Column(modifier = contentModifier) {
-        // Header
-                    val headerPadding = if (isDesktopPlatform) 32.dp else 20.dp
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .stableStatusBarsPadding()
-                            .padding(
-                                start = headerPadding,
-                                end = if (isDesktopPlatform) 24.dp else 12.dp,
-                                top = if (isDesktopPlatform) 18.dp else 12.dp,
-                                bottom = 8.dp
-                            ),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Default.AutoAwesome,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                text = "Ask Inly",
-                                fontFamily = fontFamilyFor(LocalInlyFontStyle.current),
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 16.sp,
-                                color = MaterialTheme.colorScheme.onBackground
-                            )
-                        }
-                        Surface(
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
-                            modifier = Modifier.size(34.dp)
-                        ) {
-                            IconButton(onClick = onDismiss) {
-                                Icon(
-                                    Icons.Default.Close,
-                                    contentDescription = "Close",
-                                    tint = MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        }
-                    }
+    var isInputBarCompact by remember { mutableStateOf(false) }
+    val inputBarScrollAccumulator = remember { FloatArray(1) }
+    val inputBarNestedScrollConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                val delta = available.y
+                if (delta == 0f) return Offset.Zero
 
-                    // Body
-                    val sidePadding = if (isDesktopPlatform) 32.dp else 16.dp
-                    Box(modifier = Modifier.weight(1f)) {
-                        when {
-                            // Still checking
-                            isModelAvailable == null -> {
-                                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                    CircularProgressIndicator(
-                                        color = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(28.dp),
-                                        strokeWidth = 2.dp
-                                    )
-                                }
-                            }
+                val accumulated = inputBarScrollAccumulator[0]
+                if ((delta < 0f && accumulated > 0f) || (delta > 0f && accumulated < 0f)) {
+                    inputBarScrollAccumulator[0] = 0f
+                }
+                inputBarScrollAccumulator[0] += delta
 
-                            // Model not found
-                            isModelAvailable == false -> {
-                                ModelUnavailablePrompt(
-                                    sidePadding = sidePadding,
-                                    onDownloadClick = { /* TODO: implement download */ },
-                                    onApiKeyClick = { /* TODO: implement API key entry */ }
-                                )
-                            }
-
-                            // Model ready, no messages yet
-                            messages.isEmpty() -> {
-                                EmptyState(
-                                    sidePadding = sidePadding,
-                                    onSuggestionTap = { suggestion ->
-                                        inputText = suggestion
-                                        submit()
-                                    }
-                                )
-                            }
-
-                            // Chat
-                            else -> {
-                                LazyColumn(
-                                    state = listState,
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentPadding = PaddingValues(
-                                        horizontal = sidePadding,
-                                        vertical = 16.dp
-                                    ),
-                                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    items(items = messages, key = { it.id }) { message ->
-                                        ChatBubble(message)
-                                    }
-                                    if (isLoading && messages.lastOrNull()?.text?.isEmpty() == true) {
-                                        item { ThinkingIndicator() }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Input bar — always visible
-                    ChatInputBar(
-                        value = inputText,
-                        onValueChange = { inputText = it },
-                        onSubmit = submit,
-                        enabled = !isLoading && isModelAvailable == true,
-                        sidePadding = sidePadding
-                    )
+                val toggleThresholdPx = 60f
+                if (inputBarScrollAccumulator[0] <= -toggleThresholdPx && !isInputBarCompact) {
+                    isInputBarCompact = true
+                    inputBarScrollAccumulator[0] = 0f
+                } else if (inputBarScrollAccumulator[0] >= toggleThresholdPx && isInputBarCompact) {
+                    isInputBarCompact = false
+                    inputBarScrollAccumulator[0] = 0f
+                }
+                return Offset.Zero
+            }
+        }
     }
+
+    val sidePadding = if (isDesktopPlatform) 32.dp else 16.dp
+
+    Box(modifier = contentModifier.nestedScroll(inputBarNestedScrollConnection)) {
+        // Body
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .hazeSource(state = hazeState)
+        ) {
+            when {
+                // Still checking
+                isModelAvailable == null -> {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(28.dp),
+                            strokeWidth = 2.dp
+                        )
+                    }
+                }
+
+                // Model not found
+                isModelAvailable == false -> {
+                    ModelUnavailablePrompt(
+                        sidePadding = sidePadding,
+                        onDownloadClick = { /* TODO: implement download */ },
+                        onApiKeyClick = { /* TODO: implement API key entry */ }
+                    )
+                }
+
+                // Model ready, no messages yet
+                messages.isEmpty() -> {
+                    EmptyState(
+                        sidePadding = sidePadding,
+                        onSuggestionTap = { suggestion ->
+                            inputText = suggestion
+                            submit()
+                        }
+                    )
+                }
+
+                // Chat
+                else -> {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(
+                            start = sidePadding,
+                            end = sidePadding,
+                            top = rememberStableStatusBarsPadding().calculateTopPadding() + 70.dp,
+                            bottom = 140.dp
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        items(items = messages, key = { it.id }) { message ->
+                            ChatBubble(message)
+                        }
+                        if (isLoading && messages.lastOrNull()?.text?.isEmpty() == true) {
+                            item { ThinkingIndicator() }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Header: back button + "Ask Inly" title
+        Row(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .then(if (isDesktopPlatform) Modifier else Modifier.stableStatusBarsPadding())
+                .padding(
+                    start = 16.dp,
+                    end = 16.dp,
+                    top = if (isDesktopPlatform) 16.dp else 10.dp,
+                    bottom = 8.dp
+                ),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            TopBarIconButton(
+                icon = painterResource(Res.drawable.chevron_left),
+                contentDescription = "Back",
+                bgColor = if (isDesktopPlatform) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.background.copy(alpha = 0.45f),
+                tint = MaterialTheme.colorScheme.onSurface,
+                hazeState = hazeState,
+                onClick = onDismiss
+            )
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.AutoAwesome,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "Ask Inly",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+            }
+
+            TopBarIconButton(
+                icon = Icons.Default.Settings,
+                contentDescription = "AI settings",
+                bgColor = if (isDesktopPlatform) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.background.copy(alpha = 0.45f),
+                tint = MaterialTheme.colorScheme.onSurface,
+                hazeState = hazeState,
+                onClick = { showAiSettingsSheet = true }
+            )
+        }
+
+        // Input bar — floating pill, styled exactly like InlyBottomBar's pill
+        ChatInputBar(
+            value = inputText,
+            onValueChange = { inputText = it },
+            onSubmit = submit,
+            enabled = !isLoading && isModelAvailable == true,
+            isCompact = isInputBarCompact,
+            hazeState = hazeState,
+            sharedTransitionScope = sharedTransitionScope,
+            chatAnimatedVisibilityScope = chatAnimatedVisibilityScope,
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
+    }
+
+    AiSettingsSheet(
+        expanded = showAiSettingsSheet,
+        onDismiss = { showAiSettingsSheet = false },
+        onExternalAiClick = { showExternalAiSheet = true }
+    )
+
+    ExternalAiSettingsSheet(
+        expanded = showExternalAiSheet,
+        onDismiss = { showExternalAiSheet = false }
+    )
 }
 
 // Model unavailable
@@ -281,20 +370,16 @@ private fun ModelUnavailablePrompt(
         Spacer(Modifier.height(20.dp))
         Text(
             text = "Local AI model not found",
-            fontFamily = fontFamilyFor(LocalInlyFontStyle.current),
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 17.sp,
+            style = MaterialTheme.typography.titleLarge,
             color = MaterialTheme.colorScheme.onBackground,
             textAlign = TextAlign.Center
         )
         Spacer(Modifier.height(6.dp))
         Text(
             text = "Download the on-device model to chat privately, or connect an external AI with an API key.",
-            fontFamily = fontFamilyFor(LocalInlyFontStyle.current),
-            fontSize = 13.sp,
+            style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.Center,
-            lineHeight = 19.sp
+            textAlign = TextAlign.Center
         )
         Spacer(Modifier.height(32.dp))
 
@@ -341,15 +426,12 @@ private fun ModelOptionCard(
             Column {
                 Text(
                     text = title,
-                    fontFamily = fontFamilyFor(LocalInlyFontStyle.current),
-                    fontWeight = FontWeight.Medium,
-                    fontSize = 14.sp,
+                    style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                     text = subtitle,
-                    fontFamily = fontFamilyFor(LocalInlyFontStyle.current),
-                    fontSize = 12.sp,
+                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurface
                 )
             }
@@ -386,17 +468,14 @@ private fun EmptyState(
         Spacer(Modifier.height(20.dp))
         Text(
             text = "What's on your mind?",
-            fontFamily = fontFamilyFor(LocalInlyFontStyle.current),
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 22.sp,
+            style = MaterialTheme.typography.titleLarge,
             color = MaterialTheme.colorScheme.onBackground,
             textAlign = TextAlign.Center
         )
         Spacer(Modifier.height(6.dp))
         Text(
             text = "Everything runs privately on your device.",
-            fontFamily = fontFamilyFor(LocalInlyFontStyle.current),
-            fontSize = 13.sp,
+            style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Center
         )
@@ -421,8 +500,7 @@ private fun EmptyState(
             ) {
                 Text(
                     text = suggestion,
-                    fontFamily = fontFamilyFor(LocalInlyFontStyle.current),
-                    fontSize = 14.sp,
+                    style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -459,11 +537,9 @@ fun ChatBubble(message: ChatMessage) {
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
             Text(
-                text      = message.text,
-                color     = textColor,
-                fontFamily = fontFamilyFor(LocalInlyFontStyle.current),
-                fontSize  = 15.sp,
-                lineHeight = 23.sp
+                text  = message.text,
+                color = textColor,
+                style = MaterialTheme.typography.bodyLarge
             )
         }
     }
@@ -471,13 +547,18 @@ fun ChatBubble(message: ChatMessage) {
 
 // Input bar
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun ChatInputBar(
     value: String,
     onValueChange: (String) -> Unit,
     onSubmit: () -> Unit,
     enabled: Boolean,
-    sidePadding: androidx.compose.ui.unit.Dp
+    isCompact: Boolean,
+    hazeState: HazeState,
+    sharedTransitionScope: SharedTransitionScope?,
+    chatAnimatedVisibilityScope: AnimatedVisibilityScope?,
+    modifier: Modifier = Modifier
 ) {
     val canSend = value.isNotBlank() && enabled
 
@@ -488,39 +569,102 @@ private fun ChatInputBar(
         label = "sendColor"
     )
 
-    Row(
-        modifier = Modifier
+    val defaultBgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.65f)
+
+    val barAnimationSpec = tween<Dp>(durationMillis = 350, easing = FastOutSlowInEasing)
+    val barSize by animateDpAsState(
+        targetValue = if (isCompact) 44.dp else 52.dp,
+        animationSpec = barAnimationSpec
+    )
+    val bottomInset by animateDpAsState(
+        targetValue = if (isCompact) 0.dp else 6.dp,
+        animationSpec = barAnimationSpec
+    )
+    val horizontalInset by animateDpAsState(
+        targetValue = if (isCompact) 24.dp else 12.dp,
+        animationSpec = barAnimationSpec
+    )
+    val navItemHeight = barSize - 12.dp
+
+    val isMorphing = chatAnimatedVisibilityScope?.transition?.isRunning == true
+    val shadowElevation by animateDpAsState(
+        targetValue = if (isMorphing) 0.dp else 14.dp,
+        animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing)
+    )
+
+    val sharedPillModifier = if (sharedTransitionScope != null && chatAnimatedVisibilityScope != null) {
+        with(sharedTransitionScope) {
+            Modifier.sharedBounds(
+                sharedContentState = rememberSharedContentState(key = "calendarBottomBarPill"),
+                animatedVisibilityScope = chatAnimatedVisibilityScope,
+                boundsTransform = { _, _ -> tween(durationMillis = 300, easing = FastOutSlowInEasing) }
+            )
+        }
+    } else Modifier
+
+    val innerRowModifier = if (sharedTransitionScope != null) {
+        with(sharedTransitionScope) {
+            Modifier
+                .padding(horizontal = 6.dp, vertical = 6.dp)
+                .skipToLookaheadSize()
+        }
+    } else {
+        Modifier.padding(horizontal = 6.dp, vertical = 6.dp)
+    }
+
+    val aiIconModifier = if (sharedTransitionScope != null && chatAnimatedVisibilityScope != null) {
+        with(sharedTransitionScope) {
+            Modifier.sharedElement(
+                sharedContentState = rememberSharedContentState(key = "aiIcon"),
+                animatedVisibilityScope = chatAnimatedVisibilityScope,
+                boundsTransform = { _, _ -> tween(durationMillis = 300, easing = FastOutSlowInEasing) }
+            )
+        }
+    } else Modifier
+
+    Surface(
+        shape = CircleShape,
+        color = defaultBgColor,
+        modifier = modifier
             .fillMaxWidth()
-            .navigationBarsPadding()
             .imePadding()
-            .padding(
-                horizontal = sidePadding,
-                vertical   = if (isDesktopPlatform) 24.dp else 12.dp
-            ),
-        verticalAlignment = Alignment.Bottom
+            .navigationBarsPadding()
+            .padding(bottom = bottomInset, start = 16.dp, end = 16.dp)
+            .padding(horizontal = horizontalInset)
+            .heightIn(min = barSize)
+            .then(sharedPillModifier)
+            .customInlyShadow(CircleShape, elevation = shadowElevation)
+            .animateContentSize(animationSpec = tween(150))
+            .clip(CircleShape)
+            .hazeEffect(hazeState, HazeStyle.Unspecified, null)
+            .border(
+                width = 0.5.dp,
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                shape = CircleShape
+            )
     ) {
-        Surface(
-            shape = RoundedCornerShape(26.dp),
-            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
-            modifier = Modifier
-                .weight(1f)
-                .heightIn(min = 52.dp)
-                .animateContentSize(animationSpec = tween(150))
-                .border(
-                    width = 1.dp,
-                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f),
-                    shape = RoundedCornerShape(26.dp)
-                )
+        Row(
+            modifier = innerRowModifier,
+            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            Icon(
+                Icons.Default.AutoAwesome,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .padding(horizontal = 8.dp)
+                    .size(20.dp)
+                    .then(aiIconModifier)
+            )
             Box(
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 15.dp),
+                modifier = Modifier.weight(1f),
                 contentAlignment = Alignment.CenterStart
             ) {
                 if (value.isEmpty()) {
                     Text(
                         text = "Ask about your notes…",
-                        fontFamily = fontFamilyFor(LocalInlyFontStyle.current),
-                        fontSize = 14.sp,
+                        style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                     )
                 }
@@ -528,11 +672,8 @@ private fun ChatInputBar(
                     value = value,
                     onValueChange = onValueChange,
                     enabled = enabled,
-                    textStyle = TextStyle(
-                        fontFamily = fontFamilyFor(LocalInlyFontStyle.current),
-                        fontSize   = 14.sp,
-                        color      = MaterialTheme.colorScheme.onBackground,
-                        lineHeight = 21.sp
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(
+                        color = MaterialTheme.colorScheme.onBackground
                     ),
                     cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
@@ -541,16 +682,14 @@ private fun ChatInputBar(
                     modifier = Modifier.fillMaxWidth()
                 )
             }
-        }
-
-        Spacer(Modifier.width(10.dp))
-
-        Surface(
-            shape = CircleShape,
-            color = sendColor,
-            modifier = Modifier.size(52.dp)
-        ) {
-            IconButton(onClick = onSubmit, enabled = canSend) {
+            Box(
+                modifier = Modifier
+                    .size(navItemHeight)
+                    .clip(CircleShape)
+                    .background(sendColor)
+                    .clickable(enabled = canSend, onClick = onSubmit),
+                contentAlignment = Alignment.Center
+            ) {
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowForward,
                     contentDescription = "Send",
@@ -573,8 +712,7 @@ private fun ThinkingIndicator() {
     ) {
         Text(
             text = "Thinking",
-            fontFamily = fontFamilyFor(LocalInlyFontStyle.current),
-            fontSize = 13.sp,
+            style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.primary
         )
         Spacer(Modifier.width(4.dp))
@@ -590,9 +728,139 @@ private fun ThinkingIndicator() {
         )
         Text(
             text = "•••",
-            fontFamily = fontFamilyFor(LocalInlyFontStyle.current),
-            fontSize = 13.sp,
+            style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.primary.copy(alpha = alpha)
+        )
+    }
+}
+
+// AI settings sheet
+
+@Composable
+private fun AiSettingsSheet(
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    onExternalAiClick: () -> Unit
+) {
+    InlyBottomSheet(
+        expanded = expanded,
+        onDismiss = onDismiss,
+        title = "AI Settings",
+        applyNavPadding = true
+    ) {
+        ModelOptionCard(
+            icon = { Icon(Icons.Default.Download, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp)) },
+            title = "Local AI",
+            subtitle = "Runs fully on-device. Private & offline.",
+            onClick = {}
+        )
+        Spacer(Modifier.height(10.dp))
+        ModelOptionCard(
+            icon = { Icon(Icons.Default.Key, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp)) },
+            title = "External AI",
+            subtitle = "Connect an external provider with your own API key.",
+            onClick = onExternalAiClick
+        )
+        Spacer(Modifier.height(10.dp))
+        ModelOptionCard(
+            icon = { Icon(Icons.Default.Tune, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp)) },
+            title = "Fine-tuning",
+            subtitle = "Customize how the assistant responds.",
+            onClick = {}
+        )
+        Spacer(Modifier.height(10.dp))
+    }
+}
+
+// External AI settings sheet
+
+@Composable
+private fun ExternalAiSettingsSheet(
+    expanded: Boolean,
+    onDismiss: () -> Unit
+) {
+    var selectedProvider by remember { mutableStateOf(ExternalAiProvider.OPENAI) }
+    var apiKey by remember { mutableStateOf("") }
+    var isApiKeyVisible by remember { mutableStateOf(false) }
+
+    InlyBottomSheet(
+        expanded = expanded,
+        onDismiss = onDismiss,
+        title = "External AI",
+        subtitle = "Connect an external provider using your own API key.",
+        applyNavPadding = true
+    ) { closeAnd ->
+        Text(
+            text = "Provider",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            ExternalAiProvider.entries.forEach { provider ->
+                ProviderChip(
+                    label = provider.displayName,
+                    selected = provider == selectedProvider,
+                    onClick = { selectedProvider = provider }
+                )
+            }
+        }
+        Spacer(Modifier.height(20.dp))
+        Text(
+            text = "API Key",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(Modifier.height(8.dp))
+        InlyTextField(
+            value = apiKey,
+            onValueChange = { apiKey = it },
+            placeholder = "Enter your ${selectedProvider.displayName} API key",
+            singleLine = true,
+            visualTransformation = if (isApiKeyVisible) VisualTransformation.None else PasswordVisualTransformation(),
+            trailingIcon = {
+                IconButton(onClick = { isApiKeyVisible = !isApiKeyVisible }) {
+                    Icon(
+                        imageVector = if (isApiKeyVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                        contentDescription = if (isApiKeyVisible) "Hide API key" else "Show API key",
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(Modifier.height(24.dp))
+        InlyButtonPrimary(
+            text = "Save",
+            enabled = apiKey.isNotBlank(),
+            onClick = { closeAnd { } },
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(Modifier.height(10.dp))
+    }
+}
+
+@Composable
+private fun ProviderChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+        modifier = Modifier
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick)
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
         )
     }
 }
