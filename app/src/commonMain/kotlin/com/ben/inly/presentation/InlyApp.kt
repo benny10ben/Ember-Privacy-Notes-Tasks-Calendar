@@ -778,21 +778,22 @@ fun InlyApp(
                         )
                     }
                 }
-
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .fillMaxWidth()
-                        .height(rememberStableStatusBarsPadding().calculateTopPadding() + 24.dp)
-                        .background(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(
-                                    MaterialTheme.colorScheme.background,
-                                    MaterialTheme.colorScheme.background.copy(alpha = 0f)
+                    // top progressive fade
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .fillMaxWidth()
+                            .height(rememberStableStatusBarsPadding().calculateTopPadding() + 46.dp)
+                            .background(
+                                brush = Brush.verticalGradient(
+                                    colors = listOf(
+                                        MaterialTheme.colorScheme.background.copy(alpha = 1f),
+                                        MaterialTheme.colorScheme.background.copy(alpha = 0.5f),
+                                        MaterialTheme.colorScheme.background.copy(alpha = 0f)
+                                    )
                                 )
                             )
-                        )
-                )
+                    )
 
                 if (!isDesktopPlatform) {
                     AnimatedVisibility(

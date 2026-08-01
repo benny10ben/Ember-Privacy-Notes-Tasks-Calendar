@@ -29,6 +29,9 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.node.DelegatableNode
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
@@ -299,6 +302,32 @@ fun NoteScreen(
 
     var isListScrollEnabled by remember { mutableStateOf(true) }
 
+    val editorListState = androidx.compose.foundation.lazy.rememberLazyListState()
+    var titleTopPx by remember { mutableFloatStateOf(Float.MAX_VALUE) }
+    var topBarBottomPx by remember { mutableFloatStateOf(0f) }
+    val collapseRangePx = with(density) { 32.dp.toPx() }
+    var baselineDistancePx by remember { mutableFloatStateOf(Float.MAX_VALUE) }
+    val isAtScrollTop by remember {
+        derivedStateOf {
+            editorListState.firstVisibleItemIndex == 0 && editorListState.firstVisibleItemScrollOffset == 0
+        }
+    }
+    LaunchedEffect(isAtScrollTop, titleTopPx, topBarBottomPx) {
+        if (isAtScrollTop) {
+            baselineDistancePx = titleTopPx - topBarBottomPx
+        }
+    }
+    val titleCollapseProgress by remember {
+        derivedStateOf {
+            val distance = titleTopPx - topBarBottomPx
+            val scrolledPx = (baselineDistancePx - distance).coerceAtLeast(0f)
+            (scrolledPx / collapseRangePx).coerceIn(0f, 1f)
+        }
+    }
+    val onCollapsedTitleClick: () -> Unit = {
+        scope.launch { editorListState.animateScrollToItem(0) }
+    }
+
     val editorActions = remember(viewModel, onOpenFile) {
         object : EditorActions {
             override fun onClearFocusRequest() = viewModel.clearFocusRequest()
@@ -455,11 +484,14 @@ fun NoteScreen(
                             onDismissIconPicker = { showIconPicker = false },
                             onIconChange = { viewModel.updateIcon(it) },
                             onTitleChange = { viewModel.updateTitle(it) },
-                            onIconClick = { showIconPicker = true }
+                            onIconClick = { showIconPicker = true },
+                            titleCollapseProgress = titleCollapseProgress,
+                            onTitlePositioned = { titleTopPx = it.positionInRoot().y }
                         )
                     },
                     globalTags = globalTags,
-                    modifier = Modifier.fillMaxSize().hazeSource(state = hazeState)
+                    modifier = Modifier.fillMaxSize().hazeSource(state = hazeState),
+                    listState = editorListState
                 )
 
                 AnimatedVisibility(
@@ -542,6 +574,10 @@ fun NoteScreen(
                     hazeState = hazeState,
                     topBarBgColor = topBarBgColor,
                     topBarContentColor = topBarContentColor,
+                    collapsedTitle = noteTitle.ifBlank { "Untitled" },
+                    collapsedTitleProgress = titleCollapseProgress,
+                    onCollapsedTitleClick = onCollapsedTitleClick,
+                    onPositioned = { topBarBottomPx = it.positionInRoot().y + it.size.height },
                     onBackClick = {
                         if (isSelectionMode) {
                             viewModel.clearSelection()
@@ -715,7 +751,9 @@ private fun NoteHeader(
     onDismissIconPicker: () -> Unit,
     onIconChange: (String?) -> Unit,
     onTitleChange: (String) -> Unit,
-    onIconClick: () -> Unit
+    onIconClick: () -> Unit,
+    titleCollapseProgress: Float = 0f,
+    onTitlePositioned: (androidx.compose.ui.layout.LayoutCoordinates) -> Unit = {}
 ) {
     val mediaStorageHelper: com.ben.inly.domain.util.MediaStorageHelper = org.koin.compose.koinInject()
 
@@ -816,11 +854,20 @@ private fun NoteHeader(
             Spacer(modifier = Modifier.height(topPadding))
 
             Box(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp)
+                    .onGloballyPositioned(onTitlePositioned)
+                    .graphicsLayer { alpha = 1f - titleCollapseProgress }
             ) {
-                val titleStyle = MaterialTheme.typography.titleLarge.let {
+                val expandedStyle = MaterialTheme.typography.titleLarge.let {
                     it.copy(fontSize = it.fontSize * 1.5f, lineHeight = it.lineHeight * 1.2f)
                 }
+                val collapsedStyle = MaterialTheme.typography.bodyLarge
+                val titleStyle = expandedStyle.copy(
+                    fontSize = lerp(expandedStyle.fontSize, collapsedStyle.fontSize, titleCollapseProgress),
+                    lineHeight = lerp(expandedStyle.lineHeight, collapsedStyle.lineHeight, titleCollapseProgress)
+                )
                 NoteTitleField(
                     noteTitle = noteTitle,
                     onTitleChange = onTitleChange,
@@ -1058,7 +1105,11 @@ private fun NoteTopBar(
     topBarBgColor: Color? = null,
     topBarContentColor: Color? = null,
     onDismissOptionsMenu: () -> Unit = {},
-    desktopMenuContent: @Composable () -> Unit = {}
+    desktopMenuContent: @Composable () -> Unit = {},
+    collapsedTitle: String = "",
+    collapsedTitleProgress: Float = 0f,
+    onCollapsedTitleClick: () -> Unit = {},
+    onPositioned: (androidx.compose.ui.layout.LayoutCoordinates) -> Unit = {}
 ) {
     val defaultBgColor = topBarBgColor ?: MaterialTheme.colorScheme.background.copy(alpha = 0.45f)
     val defaultContentColor = topBarContentColor ?: MaterialTheme.colorScheme.onSurface
@@ -1067,7 +1118,8 @@ private fun NoteTopBar(
         modifier = Modifier
             .fillMaxWidth()
             .then(if (isDesktopPlatform) Modifier else Modifier.stableStatusBarsPadding())
-            .padding(top = if (isDesktopPlatform) 16.dp else 10.dp).padding(horizontal = if (isDesktopPlatform) 22.dp else 16.dp),
+            .padding(top = if (isDesktopPlatform) 16.dp else 10.dp).padding(horizontal = if (isDesktopPlatform) 22.dp else 16.dp)
+            .onGloballyPositioned(onPositioned),
         contentAlignment = Alignment.Center
     ) {
         Row(
@@ -1086,6 +1138,29 @@ private fun NoteTopBar(
                 )
             } else {
                 Spacer(Modifier.size(1.dp))
+            }
+
+            if (!isEditingTemplate && collapsedTitleProgress > 0f) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 8.dp)
+                        .graphicsLayer { alpha = collapsedTitleProgress }
+                        .clickable(onClick = onCollapsedTitleClick),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = collapsedTitle,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = defaultContentColor,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            } else {
+                Spacer(Modifier.weight(1f))
             }
 
             Box {

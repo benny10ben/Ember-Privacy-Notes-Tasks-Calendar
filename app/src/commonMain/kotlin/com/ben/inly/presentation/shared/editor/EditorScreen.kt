@@ -197,7 +197,8 @@ fun EditorScreen(
     onSlashQueryChange: (String) -> Unit = {},
     allLinkableNotes: List<NoteMetadataEntity> = emptyList(),
     isCurrentActivePage: Boolean = true,
-    onScrollStateChange: (Boolean) -> Unit = {}
+    onScrollStateChange: (Boolean) -> Unit = {},
+    listState: LazyListState = rememberLazyListState()
 ) {
     val isSelectionMode = selectedBlockIds.isNotEmpty()
     val focusManager = LocalFocusManager.current
@@ -236,7 +237,6 @@ fun EditorScreen(
         )
     }
 
-    val listState = rememberLazyListState()
     val isScrolled by remember {
         derivedStateOf {
             listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0

@@ -752,7 +752,8 @@ private fun SettingsTopBar(onNavigateBack: () -> Unit, hazeState: HazeState) {
 
         Text(
             text = "Settings",
-            style = MaterialTheme.typography.titleLarge,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.Bold,
             color = defaultContentColor,
             modifier = Modifier.align(Alignment.Center)
         )
