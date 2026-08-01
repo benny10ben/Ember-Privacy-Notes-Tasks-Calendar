@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -82,14 +83,7 @@ internal fun LocalAiSettingsSheet(
     ) { _ ->
         Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
             ModelOptionCard(
-                icon = {
-                    Icon(
-                        Icons.Default.Download,
-                        null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                },
+                icon = null,
                 title = if (isResumable && downloadProgress !is ModelDownloadProgress.Downloading)
                     "Resume qwen2.5-1.5b-instruct-q8_0 download"
                 else
@@ -134,14 +128,7 @@ internal fun LocalAiSettingsSheet(
             Spacer(Modifier.height(10.dp))
 
             ModelOptionCard(
-                icon = {
-                    Icon(
-                        Icons.Default.Add,
-                        null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                },
+                icon = null,
                 title = "Upload your own model",
                 subtitle = when (val upload = uploadState) {
                     LocalModelUploadState.Uploading -> "Copying model file… ${(uploadProgress * 100).toInt()}%"
@@ -222,6 +209,7 @@ internal fun LocalAiSettingsSheet(
                                     Text("Restore", style = MaterialTheme.typography.bodyLarge)
                                 }
                             } else {
+                                Spacer(Modifier.width(6.dp))
                                 Icon(
                                     Icons.Default.Delete,
                                     contentDescription = "Delete model",
@@ -230,6 +218,7 @@ internal fun LocalAiSettingsSheet(
                                         .size(20.dp)
                                         .clickable { viewModel.deleteLocalModel(model.fileName) }
                                 )
+                                Spacer(Modifier.width(5.dp))
                             }
                         }
                     )

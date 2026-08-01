@@ -2,9 +2,11 @@ package com.ben.inly.presentation.mobile.home.overview.documents
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -14,9 +16,17 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 import com.ben.inly.domain.model.DocumentBlock
 import com.ben.inly.domain.util.isDesktopPlatform
@@ -57,6 +67,30 @@ fun DocumentsScreen(
     }
 
     val hazeState = remember { HazeState() }
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    val density = LocalDensity.current
+
+    var titleTopPx by remember { mutableFloatStateOf(Float.MAX_VALUE) }
+    var topBarBottomPx by remember { mutableFloatStateOf(0f) }
+    var baselineDistancePx by remember { mutableFloatStateOf(Float.MAX_VALUE) }
+    val collapseRangePx = with(density) { 32.dp.toPx() }
+    val isAtScrollTop by remember {
+        derivedStateOf { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 }
+    }
+    LaunchedEffect(isAtScrollTop, titleTopPx, topBarBottomPx) {
+        if (isAtScrollTop) baselineDistancePx = titleTopPx - topBarBottomPx
+    }
+    val titleCollapseProgress by remember {
+        derivedStateOf {
+            val distance = titleTopPx - topBarBottomPx
+            val scrolledPx = (baselineDistancePx - distance).coerceAtLeast(0f)
+            (scrolledPx / collapseRangePx).coerceIn(0f, 1f)
+        }
+    }
+    val onCollapsedTitleClick: () -> Unit = {
+        scope.launch { listState.animateScrollToItem(0) }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.loadAllDocuments()
@@ -81,6 +115,7 @@ fun DocumentsScreen(
         ) {
 
             LazyColumn(
+                state = listState,
                 modifier = Modifier
                     .fillMaxSize()
                     .haze(state = hazeState)
@@ -102,6 +137,7 @@ fun DocumentsScreen(
                         modifier = Modifier
                             .padding(horizontal = if (isDesktopPlatform) 40.dp else 16.dp)
                             .padding(bottom = 8.dp)
+                            .onGloballyPositioned { titleTopPx = it.positionInRoot().y }
                     )
                 }
 
@@ -156,6 +192,10 @@ fun DocumentsScreen(
                 modifier = Modifier.align(Alignment.TopCenter),
                 isSelectionMode = isSelectionMode,
                 hazeState = hazeState,
+                collapsedTitle = "Documents",
+                collapsedTitleProgress = titleCollapseProgress,
+                onCollapsedTitleClick = onCollapsedTitleClick,
+                onPositioned = { topBarBottomPx = it.positionInRoot().y + it.size.height },
                 onBackClick = {
                     if (isSelectionMode) viewModel.clearSelection() else onNavigateBack()
                 },
@@ -259,6 +299,10 @@ private fun DocumentsTopBar(
     modifier: Modifier = Modifier,
     isSelectionMode: Boolean,
     hazeState: HazeState? = null,
+    collapsedTitle: String = "",
+    collapsedTitleProgress: Float = 0f,
+    onCollapsedTitleClick: () -> Unit = {},
+    onPositioned: (LayoutCoordinates) -> Unit = {},
     onBackClick: () -> Unit,
     onAddClick: () -> Unit
 ) {
@@ -269,7 +313,8 @@ private fun DocumentsTopBar(
         modifier = modifier
             .fillMaxWidth()
             .then(if (isDesktopPlatform) Modifier else Modifier.stableStatusBarsPadding())
-            .padding(top = if (isDesktopPlatform) 16.dp else 10.dp, start = 16.dp, end = 16.dp),
+            .padding(top = if (isDesktopPlatform) 16.dp else 10.dp, start = 16.dp, end = 16.dp)
+            .onGloballyPositioned(onPositioned),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -282,6 +327,29 @@ private fun DocumentsTopBar(
             onClick = onBackClick
         )
 
+        if (collapsedTitleProgress > 0f) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 8.dp)
+                    .graphicsLayer { alpha = collapsedTitleProgress }
+                    .clickable(onClick = onCollapsedTitleClick),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = collapsedTitle,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = defaultContentColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center
+                )
+            }
+        } else {
+            Spacer(Modifier.weight(1f))
+        }
+
         if (!isSelectionMode) {
             TopBarIconButton(
                 icon = painterResource(Res.drawable.circle_plus),
@@ -291,6 +359,8 @@ private fun DocumentsTopBar(
                 hazeState = hazeState,
                 onClick = onAddClick
             )
+        } else {
+            Spacer(Modifier.size(1.dp))
         }
     }
 }

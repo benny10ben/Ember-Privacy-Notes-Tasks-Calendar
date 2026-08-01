@@ -1,16 +1,26 @@
 package com.ben.inly.presentation.mobile.home.overview.reminders
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 import com.ben.inly.presentation.shared.stableStatusBarsPadding
 import com.ben.inly.domain.model.CellData
@@ -60,6 +70,30 @@ fun RemindersScreen(
     }
 
     val hazeState = remember { HazeState() }
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    val density = LocalDensity.current
+
+    var titleTopPx by remember { mutableFloatStateOf(Float.MAX_VALUE) }
+    var topBarBottomPx by remember { mutableFloatStateOf(0f) }
+    var baselineDistancePx by remember { mutableFloatStateOf(Float.MAX_VALUE) }
+    val collapseRangePx = with(density) { 32.dp.toPx() }
+    val isAtScrollTop by remember {
+        derivedStateOf { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 }
+    }
+    LaunchedEffect(isAtScrollTop, titleTopPx, topBarBottomPx) {
+        if (isAtScrollTop) baselineDistancePx = titleTopPx - topBarBottomPx
+    }
+    val titleCollapseProgress by remember {
+        derivedStateOf {
+            val distance = titleTopPx - topBarBottomPx
+            val scrolledPx = (baselineDistancePx - distance).coerceAtLeast(0f)
+            (scrolledPx / collapseRangePx).coerceIn(0f, 1f)
+        }
+    }
+    val onCollapsedTitleClick: () -> Unit = {
+        scope.launch { listState.animateScrollToItem(0) }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.loadAllTasks()
@@ -82,13 +116,19 @@ fun RemindersScreen(
 
             if (isLoading || blocks.isEmpty()) {
                 LazyColumn(
+                    state = listState,
                     modifier = Modifier
                         .fillMaxSize()
                         .hazeSource(state = hazeState)
                         .background(MaterialTheme.colorScheme.background),
                     contentPadding = PaddingValues(top = topPadding, bottom = bottomPadding)
                 ) {
-                    item { ScreenTitle(isShowingCompleted) }
+                    item {
+                        ScreenTitle(
+                            isShowingCompleted,
+                            modifier = Modifier.onGloballyPositioned { titleTopPx = it.positionInRoot().y }
+                        )
+                    }
                     item {
                         Box(
                             modifier = Modifier.fillParentMaxSize(),
@@ -197,11 +237,17 @@ fun RemindersScreen(
                     selectedBlockIds = selectedBlockIds,
                     topContentPadding = topPadding,
                     allLinkableNotes = allLinkableNotes,
-                    headerContent = { ScreenTitle(isShowingCompleted) },
+                    headerContent = {
+                        ScreenTitle(
+                            isShowingCompleted,
+                            modifier = Modifier.onGloballyPositioned { titleTopPx = it.positionInRoot().y }
+                        )
+                    },
                     modifier = Modifier
                         .fillMaxSize()
                         .hazeSource(state = hazeState)
-                        .background(MaterialTheme.colorScheme.background)
+                        .background(MaterialTheme.colorScheme.background),
+                    listState = listState
                 )
             }
 
@@ -210,6 +256,10 @@ fun RemindersScreen(
                 hazeState = hazeState,
                 isSelectionMode = isSelectionMode,
                 isShowingCompleted = isShowingCompleted,
+                collapsedTitle = if (isShowingCompleted) "Completed" else "Reminders",
+                collapsedTitleProgress = titleCollapseProgress,
+                onCollapsedTitleClick = onCollapsedTitleClick,
+                onPositioned = { topBarBottomPx = it.positionInRoot().y + it.size.height },
                 onBackClick = {
                     if (isSelectionMode) viewModel.clearSelection()
                     else if (isShowingCompleted) viewModel.toggleCompletedView()
@@ -243,7 +293,7 @@ fun RemindersScreen(
 }
 
 @Composable
-private fun ScreenTitle(isShowingCompleted: Boolean) {
+private fun ScreenTitle(isShowingCompleted: Boolean, modifier: Modifier = Modifier) {
     val titleStyle = MaterialTheme.typography.titleLarge.let {
         it.copy(fontSize = it.fontSize * 1.5f, lineHeight = it.lineHeight * 1.2f)
     }
@@ -252,7 +302,7 @@ private fun ScreenTitle(isShowingCompleted: Boolean) {
         style = titleStyle,
         fontWeight = FontWeight.Bold,
         color = MaterialTheme.colorScheme.onBackground,
-        modifier = Modifier
+        modifier = modifier
             .padding(horizontal = if (isDesktopPlatform) 40.dp else 16.dp)
             .padding(bottom = 8.dp)
     )
@@ -264,6 +314,10 @@ private fun RemindersTopBar(
     isSelectionMode: Boolean,
     isShowingCompleted: Boolean,
     hazeState: HazeState? = null,
+    collapsedTitle: String = "",
+    collapsedTitleProgress: Float = 0f,
+    onCollapsedTitleClick: () -> Unit = {},
+    onPositioned: (LayoutCoordinates) -> Unit = {},
     onBackClick: () -> Unit,
     onToggleCompleted: () -> Unit,
     onAddClick: () -> Unit
@@ -275,7 +329,8 @@ private fun RemindersTopBar(
         modifier = modifier
             .fillMaxWidth()
             .then(if (isDesktopPlatform) Modifier else Modifier.stableStatusBarsPadding())
-            .padding(top = if (isDesktopPlatform) 16.dp else 10.dp, start = 16.dp, end = 16.dp),
+            .padding(top = if (isDesktopPlatform) 16.dp else 10.dp, start = 16.dp, end = 16.dp)
+            .onGloballyPositioned(onPositioned),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -287,6 +342,29 @@ private fun RemindersTopBar(
             hazeState = hazeState,
             onClick = onBackClick
         )
+
+        if (collapsedTitleProgress > 0f) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 8.dp)
+                    .graphicsLayer { alpha = collapsedTitleProgress }
+                    .clickable(onClick = onCollapsedTitleClick),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = collapsedTitle,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = defaultContentColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center
+                )
+            }
+        } else {
+            Spacer(Modifier.weight(1f))
+        }
 
         if (!isSelectionMode) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -308,6 +386,8 @@ private fun RemindersTopBar(
                     onClick = onAddClick
                 )
             }
+        } else {
+            Spacer(Modifier.size(1.dp))
         }
     }
 }

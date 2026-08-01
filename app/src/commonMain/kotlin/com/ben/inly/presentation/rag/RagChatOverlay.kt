@@ -911,14 +911,7 @@ private fun ModelPickerPill(viewModel: RagViewModel) {
         Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
             installedLocalModels.forEach { model ->
                 ModelOptionCard(
-                    icon = {
-                        Icon(
-                            Icons.Default.AutoAwesome,
-                            null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    },
+                    icon = null,
                     title = model.displayName,
                     subtitle = null,
                     onClick = { closeAnd { viewModel.selectLocalModel(model.fileName) } },
@@ -937,14 +930,7 @@ private fun ModelPickerPill(viewModel: RagViewModel) {
                     val isConfigured = !config?.apiKey.isNullOrBlank()
                     if (isConfigured) {
                         ModelOptionCard(
-                            icon = {
-                                Icon(
-                                    Icons.Default.Key,
-                                    null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            },
+                            icon = null,
                             title = config?.model?.takeIf { it.isNotBlank() } ?: provider.displayName,
                             subtitle = null,
                             onClick = { closeAnd { viewModel.selectExternalProvider(provider) } },

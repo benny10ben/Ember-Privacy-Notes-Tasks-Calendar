@@ -31,7 +31,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
-import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.node.DelegatableNode
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
@@ -485,7 +484,6 @@ fun NoteScreen(
                             onIconChange = { viewModel.updateIcon(it) },
                             onTitleChange = { viewModel.updateTitle(it) },
                             onIconClick = { showIconPicker = true },
-                            titleCollapseProgress = titleCollapseProgress,
                             onTitlePositioned = { titleTopPx = it.positionInRoot().y }
                         )
                     },
@@ -752,7 +750,6 @@ private fun NoteHeader(
     onIconChange: (String?) -> Unit,
     onTitleChange: (String) -> Unit,
     onIconClick: () -> Unit,
-    titleCollapseProgress: Float = 0f,
     onTitlePositioned: (androidx.compose.ui.layout.LayoutCoordinates) -> Unit = {}
 ) {
     val mediaStorageHelper: com.ben.inly.domain.util.MediaStorageHelper = org.koin.compose.koinInject()
@@ -858,16 +855,10 @@ private fun NoteHeader(
                     .fillMaxWidth()
                     .padding(bottom = 16.dp)
                     .onGloballyPositioned(onTitlePositioned)
-                    .graphicsLayer { alpha = 1f - titleCollapseProgress }
             ) {
-                val expandedStyle = MaterialTheme.typography.titleLarge.let {
+                val titleStyle = MaterialTheme.typography.titleLarge.let {
                     it.copy(fontSize = it.fontSize * 1.5f, lineHeight = it.lineHeight * 1.2f)
                 }
-                val collapsedStyle = MaterialTheme.typography.bodyLarge
-                val titleStyle = expandedStyle.copy(
-                    fontSize = lerp(expandedStyle.fontSize, collapsedStyle.fontSize, titleCollapseProgress),
-                    lineHeight = lerp(expandedStyle.lineHeight, collapsedStyle.lineHeight, titleCollapseProgress)
-                )
                 NoteTitleField(
                     noteTitle = noteTitle,
                     onTitleChange = onTitleChange,
