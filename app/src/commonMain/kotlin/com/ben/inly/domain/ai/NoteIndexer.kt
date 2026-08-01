@@ -16,6 +16,28 @@ class NoteIndexer(
         val embeddingString: String
     )
 
+    private val embeddingChunkCharacterLimit = 1800
+
+    private fun splitIntoEmbeddingSafeChunks(text: String): List<String> {
+        if (text.length <= embeddingChunkCharacterLimit) return listOf(text)
+
+        val chunks = mutableListOf<String>()
+        var startIndex = 0
+        while (startIndex < text.length) {
+            var endIndex = (startIndex + embeddingChunkCharacterLimit).coerceAtMost(text.length)
+            if (endIndex < text.length) {
+                val paragraphBreak = text.lastIndexOf('\n', endIndex)
+                val wordBreak = text.lastIndexOf(' ', endIndex)
+                val breakPoint = maxOf(paragraphBreak, wordBreak)
+                if (breakPoint > startIndex) endIndex = breakPoint
+            }
+            val chunk = text.substring(startIndex, endIndex).trim()
+            if (chunk.isNotBlank()) chunks.add(chunk)
+            startIndex = endIndex
+        }
+        return chunks
+    }
+
     private val dateOnlyFormatter = SimpleDateFormat("MMMM d, yyyy", Locale.getDefault())
     private val dateTimeFormatter = SimpleDateFormat("MMMM d, yyyy 'at' h:mm a", Locale.getDefault())
     private val isoInputFormatter = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
@@ -55,8 +77,12 @@ class NoteIndexer(
             )
 
             if (!blockText.isNullOrBlank()) {
-                blockIds.add(block.id)
-                chunkTexts.add("$baseContext\n$blockText")
+                val subChunks = splitIntoEmbeddingSafeChunks(blockText)
+                subChunks.forEachIndexed { index, subChunk ->
+                    val chunkBlockId = if (subChunks.size == 1) block.id else "${block.id}#$index"
+                    blockIds.add(chunkBlockId)
+                    chunkTexts.add("$baseContext\n$subChunk")
+                }
             }
         }
 

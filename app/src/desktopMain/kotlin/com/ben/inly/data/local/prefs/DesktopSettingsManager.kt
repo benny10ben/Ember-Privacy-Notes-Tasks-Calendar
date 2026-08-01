@@ -209,4 +209,68 @@ class DesktopSettingsManager : SettingsManager {
         prefs.put(SyncConstants.KEY_SUBNOTE_OPEN_MODE, mode)
         _subNoteOpenMode.value = mode
     }
+
+    private val _aiGenerationMode = MutableStateFlow(
+        prefs.get(SyncConstants.KEY_AI_GENERATION_MODE, SyncConstants.DEFAULT_AI_GENERATION_MODE)
+    )
+    override val aiGenerationModeFlow: Flow<String> = _aiGenerationMode
+
+    override fun saveAiGenerationMode(mode: String) {
+        prefs.put(SyncConstants.KEY_AI_GENERATION_MODE, mode)
+        _aiGenerationMode.value = mode
+    }
+
+    private val _selectedExternalAiProvider = MutableStateFlow(
+        prefs.get(SyncConstants.KEY_SELECTED_EXTERNAL_AI_PROVIDER, SyncConstants.DEFAULT_SELECTED_EXTERNAL_AI_PROVIDER)
+    )
+    override val selectedExternalAiProviderFlow: Flow<String> = _selectedExternalAiProvider
+
+    override fun saveSelectedExternalAiProvider(provider: String) {
+        prefs.put(SyncConstants.KEY_SELECTED_EXTERNAL_AI_PROVIDER, provider)
+        _selectedExternalAiProvider.value = provider
+    }
+
+    private val _knowledgeMode = MutableStateFlow(
+        prefs.get(SyncConstants.KEY_KNOWLEDGE_MODE, SyncConstants.DEFAULT_KNOWLEDGE_MODE)
+    )
+    override val knowledgeModeFlow: Flow<String> = _knowledgeMode
+
+    override fun saveKnowledgeMode(mode: String) {
+        prefs.put(SyncConstants.KEY_KNOWLEDGE_MODE, mode)
+        _knowledgeMode.value = mode
+    }
+
+    private val _maxOutputTokens = MutableStateFlow(
+        prefs.getInt(SyncConstants.KEY_MAX_OUTPUT_TOKENS, SyncConstants.DEFAULT_MAX_OUTPUT_TOKENS)
+    )
+    override val maxOutputTokensFlow: Flow<Int> = _maxOutputTokens
+
+    override fun saveMaxOutputTokens(tokens: Int) {
+        prefs.putInt(SyncConstants.KEY_MAX_OUTPUT_TOKENS, tokens)
+        _maxOutputTokens.value = tokens
+    }
+
+    private val _localContextLength = MutableStateFlow(
+        prefs.getInt(SyncConstants.KEY_LOCAL_CONTEXT_LENGTH, SyncConstants.DEFAULT_LOCAL_CONTEXT_LENGTH)
+    )
+    override val localContextLengthFlow: Flow<Int> = _localContextLength
+
+    override fun saveLocalContextLength(tokens: Int) {
+        prefs.putInt(SyncConstants.KEY_LOCAL_CONTEXT_LENGTH, tokens)
+        _localContextLength.value = tokens
+    }
+
+    override fun getInstalledLocalModelsJson(): String =
+        prefs.get(SyncConstants.KEY_INSTALLED_LOCAL_MODELS_JSON, SyncConstants.DEFAULT_INSTALLED_LOCAL_MODELS_JSON)
+
+    override fun saveInstalledLocalModelsJson(json: String) {
+        prefs.put(SyncConstants.KEY_INSTALLED_LOCAL_MODELS_JSON, json)
+    }
+
+    override fun getSelectedLocalModelFileName(): String =
+        prefs.get(SyncConstants.KEY_SELECTED_LOCAL_MODEL_FILE_NAME, "")
+
+    override fun saveSelectedLocalModelFileName(fileName: String) {
+        prefs.put(SyncConstants.KEY_SELECTED_LOCAL_MODEL_FILE_NAME, fileName)
+    }
 }

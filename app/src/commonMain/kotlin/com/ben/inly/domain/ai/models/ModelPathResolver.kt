@@ -1,4 +1,4 @@
-package com.ben.inly.domain.ai
+package com.ben.inly.domain.ai.models
 
 /**
  * Resolves the absolute path to a model file on the current platform.

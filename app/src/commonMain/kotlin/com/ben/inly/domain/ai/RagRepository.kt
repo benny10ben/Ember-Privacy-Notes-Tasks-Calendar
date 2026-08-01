@@ -1,19 +1,51 @@
 package com.ben.inly.domain.ai
 
+import com.ben.inly.domain.ai.chat.ChatTurn
+import com.ben.inly.domain.ai.external.AiSettingsRepository
+import com.ben.inly.domain.ai.external.ExternalAiEngine
 import com.inly.database.InlyDatabase
 import com.ben.inly.domain.util.AiEventBus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlin.math.sqrt
 
 class RagRepository(
     private val database: InlyDatabase,
-    private val aiEngine: LocalAiEngine
+    private val localAiEngine: LocalAiEngine,
+    private val externalAiEngine: ExternalAiEngine,
+    private val aiSettingsRepository: AiSettingsRepository
 ) {
-    fun queryAiStream(userQuestion: String): Flow<String> = flow {
-        val queryVector = aiEngine.generateEmbedding(userQuestion)
+    fun queryAiStream(userQuestion: String, conversationHistory: List<ChatTurn> = emptyList()): Flow<String> = flow {
+        val knowledgeMode = aiSettingsRepository.knowledgeMode.first()
+        val generationMode = aiSettingsRepository.aiGenerationMode.first()
+        val maxOutputTokens = aiSettingsRepository.maxOutputTokens.first()
+        val totalContextTokens = when (generationMode) {
+            AiGenerationMode.LOCAL -> aiSettingsRepository.localContextLength.first()
+            AiGenerationMode.EXTERNAL -> AiContextWindows.EXTERNAL_TOKENS
+        }
+
+        if (knowledgeMode == KnowledgeMode.WORLD_ONLY) {
+            val planned = PromptBudgetPlanner.plan(
+                totalContextTokens = totalContextTokens,
+                outputReservationTokens = maxOutputTokens,
+                systemPrompt = WORLD_ONLY_SYSTEM_PROMPT,
+                userQuestion = userQuestion,
+                candidateHistory = conversationHistory,
+                candidateChunks = emptyList()
+            )
+            activeGenerationEngine().generateResponseStream(
+                systemPrompt = WORLD_ONLY_SYSTEM_PROMPT,
+                userQuestion = userQuestion,
+                contextBlock = "",
+                conversationHistory = planned.history
+            ).collect { token -> emit(token) }
+            return@flow
+        }
+
+        val queryVector = localAiEngine.generateEmbedding(userQuestion)
 
         val allBlocks = database.vectorStoreQueries.getAllBlocks().executeAsList()
 
@@ -93,31 +125,30 @@ class RagRepository(
             return@flow
         }
 
-        val contextBlock = combinedChunks.joinToString("\n\n") { chunk ->
+        val systemInstructions = if (knowledgeMode == KnowledgeMode.NOTES_ONLY) {
+            NOTES_ONLY_SYSTEM_PROMPT
+        } else {
+            DEFAULT_SYSTEM_PROMPT
+        }
+
+        val planned = PromptBudgetPlanner.plan(
+            totalContextTokens = totalContextTokens,
+            outputReservationTokens = maxOutputTokens,
+            systemPrompt = systemInstructions,
+            userQuestion = userQuestion,
+            candidateHistory = conversationHistory,
+            candidateChunks = combinedChunks
+        )
+
+        val contextBlock = planned.contextChunks.joinToString("\n\n") { chunk ->
             "--- Note Fragment ---\n$chunk"
         }
 
-        val systemInstructions = """
-            You are Inly's offline AI assistant embedded in a note-taking app.
-            Answer the user's question using ONLY the provided Note Fragments below.
-            
-            Guidelines:
-            - For specific questions, find the answer in the fragments and respond directly.
-            - For summarization requests ("summarize", "what did I write about", "overview"), 
-              synthesize the key points from all provided fragments into a concise summary.
-            - For "recent notes" or "what have I been working on", describe the main topics 
-              across all the fragments provided, organized by theme or note source if possible.
-            - For "summarize [note name]" requests, focus on fragments from that specific note.
-            - If truly no relevant information exists in the fragments, say: 
-              "I cannot find relevant information in your notes."
-            - Be concise. Do not invent facts not present in the fragments.
-            - Do not mention "fragments" or "chunks" in your response — speak naturally.
-        """.trimIndent()
-
-        aiEngine.generateResponseStream(
+        activeGenerationEngine().generateResponseStream(
             systemPrompt = systemInstructions,
             userQuestion = userQuestion,
-            contextBlock = contextBlock
+            contextBlock = contextBlock,
+            conversationHistory = planned.history
         ).collect { token -> emit(token) }
 
     }.flowOn(Dispatchers.Default)
@@ -163,13 +194,69 @@ class RagRepository(
         return dot / (sqrt(norm1) * sqrt(norm2))
     }
 
-    fun isModelAvailable(): Boolean {
+    suspend fun isModelAvailable(): Boolean {
         return try {
-            val generatorPath = resolveModelPath("qwen2.5-1.5b-instruct-q8_0.gguf")
-            val embedderPath  = resolveModelPath("nomic-embed-text-v1.5.Q8_0.gguf")
-            aiEngine.isModelAvailable()
+            val needsEmbedder = aiSettingsRepository.knowledgeMode.first() != KnowledgeMode.WORLD_ONLY
+            if (needsEmbedder && !localAiEngine.isEmbeddingModelAvailable()) return false
+
+            when (aiSettingsRepository.aiGenerationMode.first()) {
+                AiGenerationMode.LOCAL -> localAiEngine.isGeneratorModelAvailable()
+                AiGenerationMode.EXTERNAL -> externalAiEngine.isModelAvailable()
+            }
         } catch (e: Exception) {
             false
         }
+    }
+
+    fun isLocalGeneratorAvailable(): Boolean = localAiEngine.isGeneratorModelAvailable()
+
+    suspend fun checkLocalGeneratorFinetuneType(): String? = localAiEngine.checkGeneratorFinetuneType()
+
+    fun isEmbeddingModelAvailable(): Boolean = localAiEngine.isEmbeddingModelAvailable()
+
+    private suspend fun activeGenerationEngine(): AiGenerationEngine = when (aiSettingsRepository.aiGenerationMode.first()) {
+        AiGenerationMode.LOCAL -> localAiEngine
+        AiGenerationMode.EXTERNAL -> externalAiEngine
+    }
+
+    private companion object {
+        val DEFAULT_SYSTEM_PROMPT = """
+            You are Inly's AI assistant embedded in a note-taking app, answering questions using the user's notes plus your own general knowledge.
+
+            Guidelines:
+            - Use the provided Note Fragments below as the source of truth for anything specific to the user's own notes, tasks, or plans.
+            - You may use your general knowledge to interpret, classify, or add helpful context to what's in the fragments (e.g. recognizing whether a title is a movie or TV show, explaining a concept mentioned in a note) — but do not invent facts about the user's own notes that aren't actually there.
+            - For summarization requests ("summarize", "what did I write about", "overview"),
+              synthesize the key points from all provided fragments into a concise summary.
+            - For "recent notes" or "what have I been working on", describe the main topics
+              across all the fragments provided, organized by theme or note source if possible.
+            - For "summarize [note name]" requests, focus on fragments from that specific note.
+            - If the question is about the user's own notes and truly no relevant fragment exists,
+              say so honestly rather than making something up about their notes.
+            - Be concise. Do not mention "fragments" or "chunks" in your response — speak naturally.
+        """.trimIndent()
+
+        val NOTES_ONLY_SYSTEM_PROMPT = """
+            You are Inly's offline AI assistant embedded in a note-taking app.
+            Answer the user's question using ONLY the provided Note Fragments below.
+
+            Guidelines:
+            - For specific questions, find the answer in the fragments and respond directly.
+            - For summarization requests ("summarize", "what did I write about", "overview"),
+              synthesize the key points from all provided fragments into a concise summary.
+            - For "recent notes" or "what have I been working on", describe the main topics
+              across all the fragments provided, organized by theme or note source if possible.
+            - For "summarize [note name]" requests, focus on fragments from that specific note.
+            - If truly no relevant information exists in the fragments, say:
+              "I cannot find relevant information in your notes."
+            - Be concise. Do not invent facts not present in the fragments.
+            - Do not mention "fragments" or "chunks" in your response — speak naturally.
+        """.trimIndent()
+
+        val WORLD_ONLY_SYSTEM_PROMPT = """
+            You are Inly's AI assistant, acting as a general-purpose conversational assistant.
+            Answer the user's question using your own general knowledge. You do not have access to the user's notes in this mode.
+            Be concise and speak naturally.
+        """.trimIndent()
     }
 }

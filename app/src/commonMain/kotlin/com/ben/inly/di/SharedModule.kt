@@ -30,6 +30,14 @@ val sharedModule = module {
         )
     }
 
+    single { com.ben.inly.domain.ai.models.ModelDownloadManager() }
+
+    single {
+        com.ben.inly.domain.ai.ReindexAllNotesUseCase(
+            noteRepository = get()
+        )
+    }
+
     single<NoteRepository> {
         NoteRepositoryImpl(
             noteDao = get(),
@@ -55,6 +63,26 @@ val sharedModule = module {
         com.ben.inly.domain.media.LocalMediaGarbageCollector(
             noteRepository = get(),
             mediaStorageHelper = get()
+        )
+    }
+
+    single<com.ben.inly.domain.ai.external.AiSettingsRepository> {
+        com.ben.inly.domain.ai.external.AiSettingsRepositoryImpl(
+            settingsManager = get(),
+            secureAiKeyStorage = get(),
+            selfHostDeletedApiConfigDao = get()
+        )
+    }
+
+    single {
+        com.ben.inly.domain.ai.external.ExternalAiEngine(
+            aiSettingsRepository = get()
+        )
+    }
+
+    single<com.ben.inly.domain.ai.chat.ChatSessionRepository> {
+        com.ben.inly.domain.ai.chat.ChatSessionRepositoryImpl(
+            chatSessionDao = get()
         )
     }
 
@@ -170,7 +198,11 @@ val sharedModule = module {
             settingsManager = get(),
             mediaStorageHelper = get(),
             noteRepository = get(),
-            selfHostDeletedNoteDao = get()
+            selfHostDeletedNoteDao = get(),
+            chatSessionDao = get(),
+            selfHostDeletedApiConfigDao = get(),
+            aiSettingsRepository = get(),
+            database = get()
         )
     }
     single {

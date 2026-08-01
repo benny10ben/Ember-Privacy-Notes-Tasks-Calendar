@@ -104,15 +104,43 @@ val androidModule = module {
     single<DatabaseTemplateDao> { get<AppDatabase>().databaseTemplateDao() }
     single<CategoryDao> { get<AppDatabase>().categoryDao() }
     single<SelfHostDeletedNoteDao> { get<AppDatabase>().selfHostDeletedNoteDao() }
+    single<com.ben.inly.data.local.room.ChatSessionDao> { get<AppDatabase>().chatSessionDao() }
+    single<com.ben.inly.data.local.room.SelfHostDeletedApiConfigDao> { get<AppDatabase>().selfHostDeletedApiConfigDao() }
 
     // SQLDelight
     single<SqlDriver> { DatabaseDriverFactory(androidContext()).createDriver() }
     single { InlyDatabase(get()) }
 
     // AI
-    single { com.ben.inly.domain.ai.LocalAiEngine() }
-    single { RagRepository(database = get(), aiEngine = get()) }
-    viewModel { RagViewModel(ragRepository = get()) }
+    single { com.ben.inly.domain.ai.LocalAiEngine(aiSettingsRepository = get()) }
+    single {
+        RagRepository(
+            database = get(),
+            localAiEngine = get(),
+            externalAiEngine = get(),
+            aiSettingsRepository = get()
+        )
+    }
+    single<com.ben.inly.domain.ai.external.SecureAiKeyStorage> { com.ben.inly.domain.ai.external.SecureAiKeyStorage(androidContext()) }
+    single { com.ben.inly.domain.ai.models.LocalModelUploadManager(androidContext()) }
+    single { com.ben.inly.domain.ai.models.ModelDownloadScheduler(androidContext()) }
+    worker {
+        com.ben.inly.domain.ai.models.ModelDownloadWorker(
+            appContext = get(),
+            workerParams = get(),
+            modelDownloadManager = get()
+        )
+    }
+    viewModel {
+        RagViewModel(
+            ragRepository = get(),
+            aiSettingsRepository = get(),
+            chatSessionRepository = get(),
+            modelDownloadScheduler = get(),
+            reindexAllNotesUseCase = get(),
+            localModelUploadManager = get()
+        )
+    }
 
     // Self-hosted WebDAV sync
     single<KeyDerivationManager> { Pbkdf2KeyDerivationManager() }
@@ -131,7 +159,7 @@ val androidModule = module {
     single<com.ben.inly.core.security.SyncHmacSigner> { com.ben.inly.core.security.HmacSha256Signer() }
     single<SyncDiscoveryManager> { AndroidDiscoveryManager(androidContext()) }
     single<com.ben.inly.domain.sync.SyncClient> { com.ben.inly.domain.sync.SyncClient(get(), get(), get()) }
-    single<SyncRepository> { SyncRepositoryImpl(get(), get(), get(), get(), get()) }
+    single<SyncRepository> { SyncRepositoryImpl(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     viewModel { SyncViewModel(get(), get(), get(), get(), get()) }
 
     // Automatic backups

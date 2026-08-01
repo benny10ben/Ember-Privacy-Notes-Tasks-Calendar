@@ -15,6 +15,20 @@ object SyncConstants {
     const val DEFAULT_FONT_STYLE_PREFERENCE = "POPPINS"
     const val KEY_SUBNOTE_OPEN_MODE = "subnote_open_mode"
     const val DEFAULT_SUBNOTE_OPEN_MODE = "SIDE_PANEL"
+    // AI generation
+    const val KEY_AI_GENERATION_MODE = "ai_generation_mode"
+    const val DEFAULT_AI_GENERATION_MODE = "LOCAL"
+    const val KEY_SELECTED_EXTERNAL_AI_PROVIDER = "selected_external_ai_provider"
+    const val DEFAULT_SELECTED_EXTERNAL_AI_PROVIDER = "OPENAI"
+    const val KEY_KNOWLEDGE_MODE = "ai_knowledge_mode"
+    const val DEFAULT_KNOWLEDGE_MODE = "DEFAULT"
+    const val KEY_MAX_OUTPUT_TOKENS = "ai_max_output_tokens"
+    const val DEFAULT_MAX_OUTPUT_TOKENS = 1024
+    const val KEY_LOCAL_CONTEXT_LENGTH = "ai_local_context_length"
+    const val DEFAULT_LOCAL_CONTEXT_LENGTH = 4096
+    const val KEY_INSTALLED_LOCAL_MODELS_JSON = "ai_installed_local_models_json"
+    const val DEFAULT_INSTALLED_LOCAL_MODELS_JSON = "[]"
+    const val KEY_SELECTED_LOCAL_MODEL_FILE_NAME = "ai_selected_local_model_file_name"
     // Sync Keys
     const val KEY_SYNC_TIMESTAMP = "last_sync_timestamp"
     const val KEY_SELF_HOST_SYNC_TIMESTAMP = "self_host_last_sync_timestamp"

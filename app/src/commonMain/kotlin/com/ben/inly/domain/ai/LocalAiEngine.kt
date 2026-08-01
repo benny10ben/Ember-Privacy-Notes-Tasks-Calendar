@@ -1,23 +1,31 @@
 package com.ben.inly.domain.ai
 
+import com.ben.inly.domain.ai.chat.ChatTurn
+import com.ben.inly.domain.ai.external.AiSettingsRepository
+import com.ben.inly.domain.ai.models.ModelFileNames
+import com.ben.inly.domain.ai.models.modelFileExists
+import com.ben.inly.domain.ai.models.resolveModelPath
 import com.llamatik.library.platform.LlamaBridge
 import com.llamatik.library.platform.GenStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-class LocalAiEngine {
+class LocalAiEngine(
+    private val aiSettingsRepository: AiSettingsRepository
+) : AiGenerationEngine {
 
-    private val generatorFileName = "qwen2.5-1.5b-instruct-q8_0.gguf"
-    private val embedderFileName = "nomic-embed-text-v1.5.Q8_0.gguf"
+    private val embedderFileName = ModelFileNames.EMBEDDER
 
     private val nativeMutex = Mutex()
     private var loadedModel: LoadedModel = LoadedModel.NONE
+    private var loadedGeneratorFileName: String? = null
 
     private enum class LoadedModel { NONE, EMBEDDER, GENERATOR }
 
@@ -36,19 +44,21 @@ class LocalAiEngine {
         generateEmbeddings(listOf(text)).firstOrNull() ?: emptyList()
 
     // Generation (streaming)
-    fun generateResponseStream(
+    override fun generateResponseStream(
         systemPrompt: String,
         userQuestion: String,
-        contextBlock: String
+        contextBlock: String,
+        conversationHistory: List<ChatTurn>
     ): Flow<String> = callbackFlow {
         nativeMutex.withLock {
             ensureGeneratorLoaded()
 
+            val historyMessages = conversationHistory.flatMap { turn ->
+                listOf("user" to turn.userMessage, "assistant" to turn.assistantMessage)
+            }
+
             val formattedPrompt = LlamaBridge.applyChatTemplate(
-                messages = listOf(
-                    "system" to "$systemPrompt\n\n$contextBlock",
-                    "user" to userQuestion
-                ),
+                messages = listOf("system" to "$systemPrompt\n\n$contextBlock") + historyMessages + listOf("user" to userQuestion),
                 addAssistantPrefix = true
             ) ?: "$systemPrompt\n\n$contextBlock\n\nUser: $userQuestion\n\nAssistant:"
 
@@ -62,13 +72,14 @@ class LocalAiEngine {
             )
         }
 
-        awaitClose()
+        awaitClose { LlamaBridge.nativeCancelGenerate() }
     }.flowOn(Dispatchers.Default)
 
     suspend fun shutdown() = nativeMutex.withLock {
         if (loadedModel != LoadedModel.NONE) {
             LlamaBridge.shutdown()
             loadedModel = LoadedModel.NONE
+            loadedGeneratorFileName = null
         }
     }
 
@@ -84,6 +95,7 @@ class LocalAiEngine {
         if (loadedModel == LoadedModel.GENERATOR) {
             LlamaBridge.shutdown()
             loadedModel = LoadedModel.NONE
+            loadedGeneratorFileName = null
         }
 
         val loaded = LlamaBridge.initEmbedModel(embedderPath)
@@ -93,27 +105,40 @@ class LocalAiEngine {
         loadedModel = LoadedModel.EMBEDDER
     }
 
-    private fun ensureGeneratorLoaded() {
-        if (loadedModel == LoadedModel.GENERATOR) return
+    private suspend fun ensureGeneratorLoaded() {
+        val generatorFileName = aiSettingsRepository.getSelectedLocalModelFileName()
+        if (generatorFileName.isBlank()) {
+            throw IllegalStateException("No local model is installed or selected.")
+        }
+
+        if (loadedModel == LoadedModel.GENERATOR && loadedGeneratorFileName == generatorFileName) return
 
         val generatorPath = resolveModelPath(generatorFileName)
         if (!modelFileExists(generatorPath)) {
             throw IllegalStateException("Generator model not found at $generatorPath")
         }
 
-        // If embedder is loaded, free it first
-        if (loadedModel == LoadedModel.EMBEDDER) {
+        // If any model is already loaded (embedder, or a different generator file), free it first
+        if (loadedModel != LoadedModel.NONE) {
             LlamaBridge.shutdown()
             loadedModel = LoadedModel.NONE
+            loadedGeneratorFileName = null
         }
+
+        val configuredContextLength = aiSettingsRepository.localContextLength.first()
+        val configuredMaxOutputTokens = aiSettingsRepository.maxOutputTokens.first()
+        val safeMaxOutputTokens = configuredMaxOutputTokens.coerceIn(
+            MIN_OUTPUT_TOKENS,
+            configuredContextLength / 2
+        )
 
         LlamaBridge.updateGenerateParams(
             temperature    = 0.3f,
-            maxTokens      = 512,
+            maxTokens      = safeMaxOutputTokens,
             topP           = 0.95f,
             topK           = 40,
             repeatPenalty  = 1.1f,
-            contextLength  = 4096,
+            contextLength  = configuredContextLength,
             numThreads     = 6,
             useMmap        = true,
             flashAttention = true,
@@ -122,8 +147,18 @@ class LocalAiEngine {
         )
 
         val loaded = LlamaBridge.initGenerateModel(generatorPath)
-        if (!loaded) throw IllegalStateException("Failed to load native Phi-4 model.")
+        if (!loaded) throw IllegalStateException(
+            "Failed to load native generator model. The file may not be a valid or supported GGUF model."
+        )
         loadedModel = LoadedModel.GENERATOR
+        loadedGeneratorFileName = generatorFileName
+    }
+
+    suspend fun checkGeneratorFinetuneType(): String? = nativeMutex.withLock {
+        withContext(Dispatchers.Default) {
+            ensureGeneratorLoaded()
+            LlamaBridge.getModelFinetuneType()
+        }
     }
 
     suspend fun warmUpGenerator() = nativeMutex.withLock {
@@ -132,12 +167,27 @@ class LocalAiEngine {
         }
     }
 
-    fun isModelAvailable(): Boolean {
+    override suspend fun isModelAvailable(): Boolean =
+        isEmbeddingModelAvailable() && isGeneratorModelAvailable()
+
+    fun isEmbeddingModelAvailable(): Boolean {
         return try {
-            modelFileExists(resolveModelPath(generatorFileName)) &&
-                    modelFileExists(resolveModelPath(embedderFileName))
+            modelFileExists(resolveModelPath(embedderFileName))
         } catch (e: Exception) {
             false
         }
+    }
+
+    fun isGeneratorModelAvailable(): Boolean {
+        return try {
+            val fileName = aiSettingsRepository.getSelectedLocalModelFileName()
+            fileName.isNotBlank() && modelFileExists(resolveModelPath(fileName))
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    private companion object {
+        const val MIN_OUTPUT_TOKENS = 128
     }
 }

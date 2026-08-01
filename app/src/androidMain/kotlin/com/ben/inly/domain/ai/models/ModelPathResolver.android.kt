@@ -1,4 +1,4 @@
-package com.ben.inly.domain.ai
+package com.ben.inly.domain.ai.models
 
 actual fun resolveModelPath(fileName: String): String = "/data/data/com.ben.inly/files/$fileName"
 actual fun modelFileExists(path: String): Boolean {

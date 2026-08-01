@@ -1,4 +1,4 @@
-package com.ben.inly.domain.ai
+package com.ben.inly.domain.ai.models
 
 import java.io.File
 

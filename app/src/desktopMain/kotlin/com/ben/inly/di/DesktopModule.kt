@@ -61,6 +61,8 @@ val desktopModule = module {
     single<DatabaseTemplateDao> { get<AppDatabase>().databaseTemplateDao() }
     single<CategoryDao> { get<AppDatabase>().categoryDao() }
     single<SelfHostDeletedNoteDao> { get<AppDatabase>().selfHostDeletedNoteDao() }
+    single<com.ben.inly.data.local.room.ChatSessionDao> { get<AppDatabase>().chatSessionDao() }
+    single<com.ben.inly.data.local.room.SelfHostDeletedApiConfigDao> { get<AppDatabase>().selfHostDeletedApiConfigDao() }
     single<VoiceRecognizer> { DesktopVoiceRecognizer() }
 
     // SQLDelight
@@ -68,9 +70,12 @@ val desktopModule = module {
     single { InlyDatabase(get()) }
 
     // AI
-    single { LocalAiEngine() }
-    single { RagRepository(get(), get()) }
-    factory { RagViewModel(get()) }
+    single { LocalAiEngine(aiSettingsRepository = get()) }
+    single { RagRepository(get(), get(), get(), get()) }
+    single<com.ben.inly.domain.ai.external.SecureAiKeyStorage> { com.ben.inly.domain.ai.external.SecureAiKeyStorage() }
+    single { com.ben.inly.domain.ai.models.LocalModelUploadManager() }
+    single { com.ben.inly.domain.ai.models.ModelDownloadScheduler(modelDownloadManager = get()) }
+    factory { RagViewModel(get(), get(), get(), get(), get(), get()) }
 
     // Platform implementations
     single<SettingsManager> { DesktopSettingsManager() }
@@ -88,7 +93,7 @@ val desktopModule = module {
     single<com.ben.inly.core.security.SyncHmacSigner> { com.ben.inly.core.security.HmacSha256Signer() }
     single<SyncDiscoveryManager> { DesktopDiscoveryManager() }
     single<com.ben.inly.domain.sync.SyncClient> { com.ben.inly.domain.sync.SyncClient(get(), get(), get()) }
-    single<SyncRepository> { SyncRepositoryImpl(get(), get(), get(), get(), get()) }
+    single<SyncRepository> { SyncRepositoryImpl(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     factory { SyncViewModel(get(), get(), get(), get(), get()) }
 
     // Automatic Backup

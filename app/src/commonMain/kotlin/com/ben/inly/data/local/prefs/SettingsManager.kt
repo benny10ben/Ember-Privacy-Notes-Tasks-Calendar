@@ -69,4 +69,26 @@ interface SettingsManager {
 
     val subNoteOpenModeFlow: Flow<String>
     fun saveSubNoteOpenMode(mode: String)
+
+    // AI generation
+    val aiGenerationModeFlow: Flow<String>
+    fun saveAiGenerationMode(mode: String)
+
+    val selectedExternalAiProviderFlow: Flow<String>
+    fun saveSelectedExternalAiProvider(provider: String)
+
+    val knowledgeModeFlow: Flow<String>
+    fun saveKnowledgeMode(mode: String)
+
+    val maxOutputTokensFlow: Flow<Int>
+    fun saveMaxOutputTokens(tokens: Int)
+
+    val localContextLengthFlow: Flow<Int>
+    fun saveLocalContextLength(tokens: Int)
+
+    fun getInstalledLocalModelsJson(): String
+    fun saveInstalledLocalModelsJson(json: String)
+
+    fun getSelectedLocalModelFileName(): String
+    fun saveSelectedLocalModelFileName(fileName: String)
 }
