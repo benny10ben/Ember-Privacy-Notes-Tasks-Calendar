@@ -3,9 +3,15 @@ package com.ben.inly.domain.sync
 import com.ben.inly.core.security.SyncEncryptionManager
 import com.ben.inly.data.local.prefs.SettingsManager
 import com.ben.inly.data.local.room.CategoryEntity
+import com.ben.inly.data.local.room.ChatSessionDao
+import com.ben.inly.data.local.room.ChatSessionEntity
 import com.ben.inly.data.local.room.FolderEntity
 import com.ben.inly.data.local.room.NoteMetadataEntity
+import com.ben.inly.data.local.room.SelfHostDeletedApiConfigDao
 import com.ben.inly.data.local.room.TagEntity
+import com.ben.inly.domain.ai.external.AiSettingsRepository
+import com.ben.inly.domain.ai.external.ExternalAiProvider
+import com.ben.inly.domain.ai.external.ExternalAiProviderConfig
 import com.ben.inly.domain.model.CellData
 import com.ben.inly.domain.model.ColumnType
 import com.ben.inly.domain.model.DatabaseBlock
@@ -15,9 +21,13 @@ import com.ben.inly.domain.model.NoteBlock
 import com.ben.inly.domain.model.NoteContent
 import com.ben.inly.domain.model.VoiceBlock
 import com.ben.inly.domain.repository.NoteRepository
+import com.ben.inly.domain.selfhost.sync.ApiConfigSyncEntry
+import com.ben.inly.domain.selfhost.translation.EmbeddedBlockPayload
+import com.ben.inly.domain.util.ChatSyncEventBus
 import com.ben.inly.domain.util.MediaStorageHelper
 import com.ben.inly.domain.util.SyncEventBus
 import com.ben.inly.domain.util.withSyncCoordinatorOrSkip
+import com.inly.database.InlyDatabase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -25,6 +35,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import java.io.File
 
@@ -33,7 +44,11 @@ class SyncRepositoryImpl(
     private val mediaStorageHelper: MediaStorageHelper,
     private val settingsManager: SettingsManager,
     private val encryptionManager: SyncEncryptionManager,
-    private val syncClient: SyncClient
+    private val syncClient: SyncClient,
+    private val chatSessionDao: ChatSessionDao,
+    private val selfHostDeletedApiConfigDao: SelfHostDeletedApiConfigDao,
+    private val aiSettingsRepository: AiSettingsRepository,
+    private val database: InlyDatabase
 ) : SyncRepository {
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -223,6 +238,35 @@ class SyncRepositoryImpl(
         const val MEDIA_ORPHAN_GRACE_PERIOD_MS = 24L * 60 * 60 * 1000
     }
 
+    private fun adoptRemoteEmbeddingsIfNeeded(
+        noteId: String,
+        localUpdatedAt: Long?,
+        remoteUpdatedAt: Long,
+        embeddedBlocksJson: String,
+        syncKey: String
+    ) {
+        if (embeddedBlocksJson.isEmpty()) return
+        val decrypted = encryptionManager.decryptPayload(embeddedBlocksJson, syncKey)
+        val remoteEmbeddedBlocks = json.decodeFromString(ListSerializer(EmbeddedBlockPayload.serializer()), decrypted)
+        if (remoteEmbeddedBlocks.isEmpty()) return
+
+        val remoteWon = localUpdatedAt == null || remoteUpdatedAt > localUpdatedAt
+        val hasLocalEmbeddings = database.vectorStoreQueries.getBlocksForNote(noteId).executeAsList().isNotEmpty()
+        if (!remoteWon && hasLocalEmbeddings) return
+
+        database.transaction {
+            database.vectorStoreQueries.deleteBlocksForNote(noteId)
+            remoteEmbeddedBlocks.forEach { block ->
+                database.vectorStoreQueries.insertMetadata(
+                    block_id = block.blockId,
+                    note_id = noteId,
+                    chunk_text = block.chunkText,
+                    embedding = block.embedding
+                )
+            }
+        }
+    }
+
     override suspend fun applyRemoteChanges(changes: List<SyncEnvelope>): Boolean =
         withContext(Dispatchers.IO) {
             val syncKey = settingsManager.getSyncEncryptionKey()
@@ -265,6 +309,10 @@ class SyncRepositoryImpl(
 
                                         // EXPLICIT AI INDEXING CALL
                                         repository.indexNote(remoteMeta, remoteContent)
+                                        adoptRemoteEmbeddingsIfNeeded(
+                                            remoteMeta.noteId, null, envelope.updatedAt,
+                                            envelope.embeddedBlocksJson, syncKey
+                                        )
 
                                         SyncEventBus.emitSyncCompleted(envelope.entityId)
                                         pendingMediaContent = remoteContent
@@ -281,6 +329,10 @@ class SyncRepositoryImpl(
 
                                     // EXPLICIT AI INDEXING CALL
                                     repository.indexNote(trashedMeta, remoteContent)
+                                    adoptRemoteEmbeddingsIfNeeded(
+                                        trashedMeta.noteId, localMeta.updatedAt, envelope.updatedAt,
+                                        envelope.embeddedBlocksJson, syncKey
+                                    )
 
                                     SyncEventBus.emitSyncCompleted(envelope.entityId)
                                 } else if (!envelope.isDeleted) {
@@ -316,6 +368,10 @@ class SyncRepositoryImpl(
 
                                         // EXPLICIT AI INDEXING CALL
                                         repository.indexNote(winningMeta, mergedContent)
+                                        adoptRemoteEmbeddingsIfNeeded(
+                                            winningMeta.noteId, localMeta.updatedAt, envelope.updatedAt,
+                                            envelope.embeddedBlocksJson, syncKey
+                                        )
 
                                         SyncEventBus.emitSyncCompleted(envelope.entityId)
                                     }
@@ -350,6 +406,10 @@ class SyncRepositoryImpl(
                                             dateString,
                                             remoteContent,
                                             finalMeta
+                                        )
+                                        adoptRemoteEmbeddingsIfNeeded(
+                                            finalMeta.noteId, null, envelope.updatedAt,
+                                            envelope.embeddedBlocksJson, syncKey
                                         )
 
                                         SyncEventBus.emitSyncCompleted(dateString)
@@ -390,6 +450,10 @@ class SyncRepositoryImpl(
                                             mergedContent,
                                             mergedMeta
                                         )
+                                        adoptRemoteEmbeddingsIfNeeded(
+                                            mergedMeta.noteId, localMeta.updatedAt, envelope.updatedAt,
+                                            envelope.embeddedBlocksJson, syncKey
+                                        )
 
                                         SyncEventBus.emitSyncCompleted(dateString)
                                     }
@@ -426,6 +490,52 @@ class SyncRepositoryImpl(
                                     if (tombstone.isDaily) tombstone.dateString
                                         ?: tombstone.noteId else tombstone.noteId
                                 )
+                            }
+
+                            SyncType.CHAT_SESSION -> {
+                                val remoteSession =
+                                    json.decodeFromString<ChatSessionEntity>(decryptedMetaJson)
+                                val localSession = chatSessionDao.getSession(remoteSession.id)
+                                val localUpdatedAt = localSession?.updatedAt ?: 0L
+                                if (envelope.updatedAt > localUpdatedAt) {
+                                    if (envelope.isDeleted) {
+                                        chatSessionDao.softDeleteSession(remoteSession.id, envelope.updatedAt)
+                                    } else {
+                                        chatSessionDao.upsertSession(remoteSession)
+                                    }
+                                    ChatSyncEventBus.emitSessionChanged(remoteSession.id)
+                                }
+                            }
+
+                            SyncType.EXTERNAL_API_CONFIG -> {
+                                val remoteEntry =
+                                    json.decodeFromString<ApiConfigSyncEntry>(decryptedMetaJson)
+                                val provider = ExternalAiProvider.entries.find { it.name == remoteEntry.provider }
+                                if (provider != null) {
+                                    val localConfig = aiSettingsRepository.getProviderConfig(provider)
+                                    val localTombstone = selfHostDeletedApiConfigDao.getTombstoneByProvider(provider.name)
+                                    val localUpdatedAt = maxOf(
+                                        localConfig?.updatedAt ?: 0L,
+                                        localTombstone?.deletedAt ?: 0L
+                                    )
+                                    if (remoteEntry.updatedAt > localUpdatedAt) {
+                                        if (remoteEntry.isDeleted) {
+                                            aiSettingsRepository.applyRemoteProviderConfigDeletion(
+                                                provider, remoteEntry.updatedAt
+                                            )
+                                        } else {
+                                            aiSettingsRepository.saveProviderConfig(
+                                                provider,
+                                                ExternalAiProviderConfig(
+                                                    apiKey = remoteEntry.apiKey,
+                                                    model = remoteEntry.model,
+                                                    baseUrl = remoteEntry.baseUrl,
+                                                    updatedAt = remoteEntry.updatedAt
+                                                )
+                                            )
+                                        }
+                                    }
+                                }
                             }
 
                         }
@@ -519,6 +629,17 @@ class SyncRepositoryImpl(
                 val eId =
                     if (meta.isDaily && meta.dateString != null) meta.dateString else meta.noteId
 
+                val embeddedBlocks = database.vectorStoreQueries.getBlocksForNote(meta.noteId).executeAsList()
+                    .map { EmbeddedBlockPayload(blockId = it.block_id, chunkText = it.chunk_text, embedding = it.embedding) }
+                val encryptedEmbeddedBlocks = if (embeddedBlocks.isEmpty()) {
+                    ""
+                } else {
+                    encryptionManager.encryptPayload(
+                        json.encodeToString(ListSerializer(EmbeddedBlockPayload.serializer()), embeddedBlocks),
+                        syncKey
+                    )
+                }
+
                 changes.add(
                     SyncEnvelope(
                         entityId = eId,
@@ -526,7 +647,8 @@ class SyncRepositoryImpl(
                         metadataJson = encryptedMeta,
                         contentJson = encryptedContent,
                         updatedAt = meta.updatedAt,
-                        isDeleted = meta.trashedAt != null
+                        isDeleted = meta.trashedAt != null,
+                        embeddedBlocksJson = encryptedEmbeddedBlocks
                     )
                 )
             }
@@ -589,6 +711,52 @@ class SyncRepositoryImpl(
                         entityId = category.categoryId, entityType = SyncType.CATEGORY,
                         metadataJson = encryptedCategory, contentJson = "",
                         updatedAt = category.updatedAt, isDeleted = category.isDeleted
+                    )
+                )
+            }
+
+            // Collects chat sessions modified since lastSyncTime (so the delete itself propagates as a change).
+            val modifiedSessions = chatSessionDao.getSessionsModifiedSince(lastSyncTime)
+            modifiedSessions.forEach { session ->
+                val encryptedSession =
+                    encryptionManager.encryptPayload(json.encodeToString(session), syncKey)
+                changes.add(
+                    SyncEnvelope(
+                        entityId = session.id, entityType = SyncType.CHAT_SESSION,
+                        metadataJson = encryptedSession, contentJson = "",
+                        updatedAt = session.updatedAt, isDeleted = session.isDeleted
+                    )
+                )
+            }
+
+            for (provider in ExternalAiProvider.entries) {
+                val localConfig = aiSettingsRepository.getProviderConfig(provider)
+                val localTombstone = selfHostDeletedApiConfigDao.getTombstoneByProvider(provider.name)
+                val isDeleted = localConfig == null ||
+                    (localTombstone != null && localTombstone.deletedAt >= localConfig.updatedAt)
+                val updatedAt = maxOf(localConfig?.updatedAt ?: 0L, localTombstone?.deletedAt ?: 0L)
+                if (updatedAt <= lastSyncTime) continue
+
+                val entry = if (isDeleted) {
+                    ApiConfigSyncEntry(
+                        provider = provider.name, apiKey = "", model = "", baseUrl = null,
+                        updatedAt = updatedAt, isDeleted = true
+                    )
+                } else {
+                    ApiConfigSyncEntry(
+                        provider = provider.name,
+                        apiKey = localConfig!!.apiKey,
+                        model = localConfig.model,
+                        baseUrl = localConfig.baseUrl,
+                        updatedAt = localConfig.updatedAt
+                    )
+                }
+                val encryptedEntry = encryptionManager.encryptPayload(json.encodeToString(entry), syncKey)
+                changes.add(
+                    SyncEnvelope(
+                        entityId = provider.name, entityType = SyncType.EXTERNAL_API_CONFIG,
+                        metadataJson = encryptedEntry, contentJson = "",
+                        updatedAt = updatedAt, isDeleted = isDeleted
                     )
                 )
             }

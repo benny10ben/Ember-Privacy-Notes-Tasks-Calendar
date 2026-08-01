@@ -9,7 +9,9 @@ enum class SyncType {
     TAG,
     FOLDER,
     CATEGORY,
-    NOTE_TOMBSTONE
+    NOTE_TOMBSTONE,
+    CHAT_SESSION,
+    EXTERNAL_API_CONFIG
 }
 
 // Carries a permanent (Trash "delete forever", or folder delete) note deletion over the LAN
@@ -36,7 +38,11 @@ data class SyncEnvelope(
     val updatedAt: Long,
     val isDeleted: Boolean,
     val metadataJson: String,
-    val contentJson: String
+    val contentJson: String,
+    // Only populated for NOTE/DAILY_NOTE envelopes that have local embeddings to offer - lets a peer
+    // without the embedding model installed (or one that just never opened this note) adopt already-
+    // computed vectors instead of having no index entry for it at all until it can embed locally.
+    val embeddedBlocksJson: String = ""
 )
 
 @Serializable
