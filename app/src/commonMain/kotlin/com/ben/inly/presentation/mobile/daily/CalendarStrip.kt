@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -24,6 +25,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -32,12 +34,17 @@ import com.ben.inly.domain.util.isDesktopPlatform
 import kotlinx.coroutines.launch
 import kotlinx.datetime.*
 import kotlin.math.abs
+import kotlin.math.floor
+import kotlin.math.roundToInt
 
 @Composable
 fun CollapsedWeekStrip(
     selectedDate: LocalDate,
     modifier: Modifier = Modifier,
-    onDateSelected: (LocalDate) -> Unit
+    onDateSelected: (LocalDate) -> Unit,
+    pagerState: PagerState? = null,
+    initialPage: Int = 0,
+    initialDate: LocalDate = selectedDate
 ) {
     var anchorDate by remember { mutableStateOf(selectedDate) }
     LaunchedEffect(selectedDate) {
@@ -47,11 +54,27 @@ fun CollapsedWeekStrip(
     val dates = remember(anchorDate) { (-15..15).map { anchorDate.plus(it, DateTimeUnit.DAY) } }
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
+    val density = LocalDensity.current
+    val leadingOffset = if (isDesktopPlatform) 3 else 4
 
-    LaunchedEffect(selectedDate, anchorDate) {
-        val targetIndex = dates.indexOf(selectedDate)
-        if (targetIndex != -1 && !listState.isScrollInProgress) {
-            listState.animateScrollToItem(maxOf(0, if (isDesktopPlatform) targetIndex - 3 else targetIndex - 4 ))
+    if (pagerState != null) {
+        LaunchedEffect(pagerState, initialPage, initialDate, anchorDate, dates) {
+            val itemExtentPx = with(density) { (44.dp + 14.dp).toPx() }
+            snapshotFlow { pagerState.currentPage - initialPage + pagerState.currentPageOffsetFraction }
+                .collect { continuousOffsetFromInitial ->
+                    val continuousOffsetFromAnchor = anchorDate.daysUntil(initialDate) + continuousOffsetFromInitial
+                    val continuousIndex = 15f + continuousOffsetFromAnchor - leadingOffset
+                    val flooredIndex = floor(continuousIndex).toInt().coerceIn(0, dates.lastIndex)
+                    val fraction = continuousIndex - floor(continuousIndex)
+                    listState.scrollToItem(flooredIndex, (fraction * itemExtentPx).roundToInt())
+                }
+        }
+    } else {
+        LaunchedEffect(selectedDate, anchorDate) {
+            val targetIndex = dates.indexOf(selectedDate)
+            if (targetIndex != -1 && !listState.isScrollInProgress) {
+                listState.animateScrollToItem(maxOf(0, targetIndex - leadingOffset))
+            }
         }
     }
 

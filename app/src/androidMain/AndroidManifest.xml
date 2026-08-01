@@ -26,6 +26,7 @@
         android:name=".InlyApplication"
         android:theme="@style/Theme.Inly.Splash"
         android:windowSoftInputMode="adjustResize"
+        android:enableOnBackInvokedCallback="true"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"

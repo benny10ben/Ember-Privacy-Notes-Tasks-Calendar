@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -75,8 +74,6 @@ import com.ben.inly.presentation.shared.stableStatusBarsPadding
 import com.ben.inly.ui.theme.LocalInlyFontStyle
 import com.ben.inly.ui.theme.fontFamilyFor
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import inly.app.generated.resources.Res
 import inly.app.generated.resources.chevron_left
@@ -89,16 +86,8 @@ fun SelfHostSetupScreen(
     viewModel: SelfHostSetupViewModel = koinViewModel()
 ) {
     val screenState by viewModel.screenState.collectAsState()
-    val screenKind = when (screenState) {
-        SelfHostScreenState.Checking -> "checking"
-        is SelfHostScreenState.Unconfigured -> "unconfigured"
-        is SelfHostScreenState.Connected -> "connected"
-    }
 
     val internalHazeState = remember { HazeState() }
-    var isScrolled by remember { mutableStateOf(false) }
-    LaunchedEffect(screenKind) { isScrolled = false }
-
     val density = LocalDensity.current
     var topBarHeightPx by remember { mutableFloatStateOf(0f) }
     val topBarHeightDp = with(density) { topBarHeightPx.toDp() }
@@ -110,15 +99,13 @@ fun SelfHostSetupScreen(
                 form = state.form,
                 viewModel = viewModel,
                 hazeState = internalHazeState,
-                topBarHeightDp = topBarHeightDp,
-                onScrolledChanged = { isScrolled = it }
+                topBarHeightDp = topBarHeightDp
             )
             is SelfHostScreenState.Connected -> ConnectedDashboard(
                 state = state.connectedState,
                 viewModel = viewModel,
                 hazeState = internalHazeState,
-                topBarHeightDp = topBarHeightDp,
-                onScrolledChanged = { isScrolled = it }
+                topBarHeightDp = topBarHeightDp
             )
         }
 
@@ -128,17 +115,8 @@ fun SelfHostSetupScreen(
                 .fillMaxWidth()
                 .zIndex(10f)
                 .onGloballyPositioned { coordinates -> topBarHeightPx = coordinates.size.height.toFloat() }
-                .then(
-                    if (isScrolled) {
-                        Modifier
-                            .hazeEffect(state = internalHazeState, style = HazeStyle.Unspecified, block = null)
-                            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.65f))
-                    } else {
-                        Modifier
-                    }
-                )
         ) {
-            SelfHostSetupTopBar(onNavigateBack = onNavigateBack)
+            SelfHostSetupTopBar(onNavigateBack = onNavigateBack, hazeState = internalHazeState)
         }
     }
 }
@@ -161,11 +139,9 @@ private fun SetupForm(
     form: SelfHostSetupFormState,
     viewModel: SelfHostSetupViewModel,
     hazeState: HazeState,
-    topBarHeightDp: Dp,
-    onScrolledChanged: (Boolean) -> Unit
+    topBarHeightDp: Dp
 ) {
     val listState = rememberLazyListState()
-    reportScrollState(listState, onScrolledChanged)
 
     LazyColumn(
         state = listState,
@@ -239,13 +215,11 @@ private fun ConnectedDashboard(
     state: SelfHostConnectedState,
     viewModel: SelfHostSetupViewModel,
     hazeState: HazeState,
-    topBarHeightDp: Dp,
-    onScrolledChanged: (Boolean) -> Unit
+    topBarHeightDp: Dp
 ) {
     var showDisconnectConfirmation by remember { mutableStateOf(false) }
 
     val listState = rememberLazyListState()
-    reportScrollState(listState, onScrolledChanged)
 
     LazyColumn(
         state = listState,
@@ -664,15 +638,7 @@ private fun ErrorMessageCard(message: String) {
 }
 
 @Composable
-private fun reportScrollState(listState: LazyListState, onScrolledChanged: (Boolean) -> Unit) {
-    val isScrolled by remember(listState) {
-        derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0 }
-    }
-    LaunchedEffect(isScrolled) { onScrolledChanged(isScrolled) }
-}
-
-@Composable
-private fun SelfHostSetupTopBar(onNavigateBack: () -> Unit) {
+private fun SelfHostSetupTopBar(onNavigateBack: () -> Unit, hazeState: HazeState) {
     val defaultBgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.45f)
     val defaultContentColor = MaterialTheme.colorScheme.onSurface
 
@@ -693,6 +659,7 @@ private fun SelfHostSetupTopBar(onNavigateBack: () -> Unit) {
             contentDescription = "Back",
             bgColor = defaultBgColor,
             tint = defaultContentColor,
+            hazeState = hazeState,
             onClick = onNavigateBack
         )
 

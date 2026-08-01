@@ -35,12 +35,10 @@ import com.ben.inly.presentation.sync.SyncPairingDialog
 import com.ben.inly.presentation.sync.SyncScannerDialog
 import com.ben.inly.presentation.sync.SyncViewModel
 import com.ben.inly.presentation.sync.showSyncToast
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 import com.ben.inly.ui.theme.FontStylePreference
 import com.ben.inly.ui.theme.fontFamilyFor
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.hazeEffect
-import dev.chrisbanes.haze.hazeSource
 import inly.app.generated.resources.Res
 import inly.app.generated.resources.badge_plus
 import inly.app.generated.resources.badge_question_mark
@@ -112,9 +110,6 @@ fun SettingsScreen(
 
     val internalHazeState = remember { HazeState() }
     val listState = rememberLazyListState()
-    val isScrolled by remember(listState) {
-        derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0 }
-    }
     val density = LocalDensity.current
     var topBarHeightPx by remember { mutableFloatStateOf(0f) }
     val topBarHeightDp = with(density) { topBarHeightPx.toDp() }
@@ -383,17 +378,8 @@ fun SettingsScreen(
                 .fillMaxWidth()
                 .zIndex(10f)
                 .onGloballyPositioned { coordinates -> topBarHeightPx = coordinates.size.height.toFloat() }
-                .then(
-                    if (isScrolled) {
-                        Modifier
-                            .hazeEffect(state = internalHazeState, style = HazeStyle.Unspecified, block = null)
-                            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.65f))
-                    } else {
-                        Modifier
-                    }
-                )
         ) {
-            SettingsTopBar(onNavigateBack = onNavigateBack)
+            SettingsTopBar(onNavigateBack = onNavigateBack, hazeState = internalHazeState)
         }
 
         if (showImportExportSheet) {
@@ -739,7 +725,7 @@ fun SettingsSelectionRow(
 }
 
 @Composable
-private fun SettingsTopBar(onNavigateBack: () -> Unit) {
+private fun SettingsTopBar(onNavigateBack: () -> Unit, hazeState: HazeState) {
     val defaultBgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.45f)
     val defaultContentColor = MaterialTheme.colorScheme.onSurface
 
@@ -760,6 +746,7 @@ private fun SettingsTopBar(onNavigateBack: () -> Unit) {
             contentDescription = "Back",
             bgColor = defaultBgColor,
             tint = defaultContentColor,
+            hazeState = hazeState,
             onClick = onNavigateBack
         )
 

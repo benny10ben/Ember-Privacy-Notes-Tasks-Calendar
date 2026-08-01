@@ -33,6 +33,8 @@ sealed class Screen(val route: String, val title: String? = null, val icon: Imag
 
     object SelfHostSetup : Screen("self_host_setup")
 
+    object RagChat : Screen("rag_chat")
+
     object Splash : Screen("splash_screen")
 
     /**

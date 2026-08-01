@@ -68,11 +68,8 @@ import com.ben.inly.presentation.shared.components.InlyBottomSheet
 import com.ben.inly.presentation.shared.components.InlyButtonPrimary
 import com.ben.inly.presentation.shared.components.InlyButtonSecondary
 import com.ben.inly.presentation.shared.components.InlyTextField
-import com.ben.inly.presentation.shared.components.KmpBackHandler
 import com.ben.inly.presentation.shared.components.MarkdownText
 import com.ben.inly.presentation.shared.components.TopBarIconButton
-import com.ben.inly.presentation.shared.components.TopBarIconButtonGroup
-import com.ben.inly.presentation.shared.components.TopBarIconButtonItem
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.hazeEffect
@@ -83,53 +80,30 @@ import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.painterResource
 import kotlin.time.Duration.Companion.milliseconds
 
-private val DesktopMaxContentWidth = 720.dp
-
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-fun RagChatOverlay(
-    isVisible: Boolean,
+fun RagChatScreen(
     onDismiss: () -> Unit,
     viewModel: RagViewModel,
     sharedTransitionScope: SharedTransitionScope,
+    animatedContentScope: AnimatedVisibilityScope,
     onPickDocument: (onPathSelected: (String) -> Unit) -> Unit = {}
 ) {
-    KmpBackHandler(enabled = isVisible) { onDismiss() }
-
-    AnimatedVisibility(
-        visible = isVisible,
-        enter = slideInHorizontally(animationSpec = tween(300, easing = FastOutSlowInEasing)) { fullWidth -> fullWidth } +
-                fadeIn(tween(250)),
-        exit  = slideOutHorizontally(animationSpec = tween(250, easing = FastOutSlowInEasing)) { fullWidth -> fullWidth } +
-                fadeOut(tween(200)),
-        modifier = Modifier.fillMaxSize()
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp
     ) {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.background,
-            tonalElevation = 0.dp,
-            shadowElevation = 0.dp
-        ) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.TopCenter
-            ) {
-                RagChatContent(
-                    viewModel = viewModel,
-                    onDismiss = onDismiss,
-                    isVisible = isVisible,
-                    sharedTransitionScope = sharedTransitionScope,
-                    chatAnimatedVisibilityScope = this@AnimatedVisibility,
-                    onPickDocument = onPickDocument,
-                    contentModifier = Modifier
-                        .fillMaxHeight()
-                        .then(
-                            if (isDesktopPlatform) Modifier.width(DesktopMaxContentWidth)
-                            else Modifier.fillMaxWidth()
-                        )
-                )
-            }
-        }
+        RagChatContent(
+            viewModel = viewModel,
+            onDismiss = onDismiss,
+            isVisible = true,
+            sharedTransitionScope = sharedTransitionScope,
+            chatAnimatedVisibilityScope = animatedContentScope,
+            onPickDocument = onPickDocument,
+            contentModifier = Modifier.fillMaxSize()
+        )
     }
 }
 
@@ -762,7 +736,7 @@ private fun ChatInputBar(
     // AFTER the modifier chain you pass in, so it painted a flat opaque rectangle on top of the
     // hazeEffect blur — that's what caused the "unblurs / goes translucent" artifact. Switching to
     // a plain Box lets us control paint order ourselves: hazeEffect first (captures + blurs
-    // whatever's behind), then background() on top of that blur — same pattern as StaticDateHeader
+    // whatever's behind), then background() on top of that blur — same pattern as DailyTopBar
     // in DailyScreen.kt.
     Box(
         modifier = modifier
@@ -901,7 +875,10 @@ private fun ModelPickerPill(viewModel: RagViewModel) {
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 110.dp)
             )
             Icon(
                 Icons.Default.ArrowDropDown,

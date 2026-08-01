@@ -2,8 +2,6 @@ package com.ben.inly.presentation.mobile.home
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.IndicationNodeFactory
-import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -11,7 +9,6 @@ import androidx.compose.foundation.gestures.ScrollableState
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -59,6 +56,7 @@ import com.ben.inly.presentation.sync.SyncViewModel
 import com.ben.inly.presentation.sync.showSyncToast
 import com.ben.inly.ui.theme.LocalAppIsDark
 import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DateTimeUnit
@@ -70,9 +68,6 @@ import org.koin.compose.viewmodel.koinViewModel
 import com.ben.inly.presentation.shared.components.InlyButtonPrimary
 import com.ben.inly.presentation.shared.components.InlyButtonSecondary
 import com.ben.inly.presentation.shared.components.InlyTextField
-import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.hazeEffect
-import dev.chrisbanes.haze.hazeSource
 import inly.app.generated.resources.Res
 import inly.app.generated.resources.arrow_up_down
 import inly.app.generated.resources.calendar
@@ -164,7 +159,6 @@ fun HomeScreen(
     val templateSearchQuery by viewModel.templateSearchQuery.collectAsState()
 
     var showSortMenu by remember { mutableStateOf(false) }
-    var showNotesMenu by remember { mutableStateOf(false) }
 
     var showAddNoteDialog by remember { mutableStateOf(false) }
     var showAddFolderDialog by remember { mutableStateOf(false) }
@@ -239,8 +233,7 @@ fun HomeScreen(
         }
     }
 
-    // Mobile grid panel
-    val leftPanelContent = @Composable {
+    val homeGridContent = @Composable {
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val cardWidth = (maxWidth - (HORIZONTAL_PADDING * 2) - 10.dp) / 2
 
@@ -277,16 +270,42 @@ fun HomeScreen(
                     }
                     item {
                         Box(Modifier.padding(end = HORIZONTAL_PADDING)) {
-                            OverviewCard("Documents", "$documentsCount attached", onClick = { onNavigateToDocuments() })
+                            OverviewCard(
+                                "Documents",
+                                "$documentsCount attached",
+                                onClick = { onNavigateToDocuments() })
                         }
                     }
 
                     if (favoriteNotes.isNotEmpty()) {
                         item(span = StaggeredGridItemSpan.FullLine) {
-                            Row(modifier = Modifier.fillMaxWidth().padding(start = HORIZONTAL_PADDING, end = HORIZONTAL_PADDING, top = 14.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Row(modifier = Modifier.clip(RoundedCornerShape(4.dp)).noRippleClickable { isFavoritesExpanded = !isFavoritesExpanded }.padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Text("Favorites", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-                                    Icon(imageVector = if (isFavoritesExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, contentDescription = "Toggle Favorites", modifier = Modifier.padding(start = 4.dp).size(20.dp), tint = MaterialTheme.colorScheme.onSurface)
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(
+                                    start = HORIZONTAL_PADDING,
+                                    end = HORIZONTAL_PADDING,
+                                    top = 14.dp,
+                                    bottom = 8.dp
+                                ), verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    modifier = Modifier.clip(RoundedCornerShape(4.dp))
+                                        .noRippleClickable {
+                                            isFavoritesExpanded = !isFavoritesExpanded
+                                        }.padding(end = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        "Favorites",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Icon(
+                                        imageVector = if (isFavoritesExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                        contentDescription = "Toggle Favorites",
+                                        modifier = Modifier.padding(start = 4.dp).size(20.dp),
+                                        tint = MaterialTheme.colorScheme.onSurface
+                                    )
                                 }
                             }
                         }
@@ -321,16 +340,43 @@ fun HomeScreen(
                         item(span = StaggeredGridItemSpan.FullLine) {
                             Row(modifier = Modifier.fillMaxWidth().padding(start = HORIZONTAL_PADDING, end = HORIZONTAL_PADDING, top = 14.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                                 Row(modifier = Modifier.clip(RoundedCornerShape(4.dp)).noRippleClickable { isNotesExpanded = !isNotesExpanded }.padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Text("Notes", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-                                    Icon(imageVector = if (isNotesExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, contentDescription = "Toggle Notes", modifier = Modifier.padding(start = 4.dp).size(20.dp), tint = MaterialTheme.colorScheme.onSurface)
+                                    Text(
+                                        "Notes",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Icon(
+                                        imageVector = if (isNotesExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                        contentDescription = "Toggle Notes",
+                                        modifier = Modifier.padding(start = 4.dp).size(20.dp),
+                                        tint = MaterialTheme.colorScheme.onSurface
+                                    )
                                 }
                                 if (!isSelectionMode) {
                                     Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
                                         Box {
-                                            Icon(painterResource(Res.drawable.arrow_up_down), "Sort", modifier = Modifier.size(20.dp).clip(CircleShape).noRippleClickable { showSortMenu = true }, tint = MaterialTheme.colorScheme.onSurface)
+                                            Icon(
+                                                painterResource(Res.drawable.arrow_up_down),
+                                                "Sort",
+                                                modifier = Modifier.size(20.dp).clip(CircleShape)
+                                                    .noRippleClickable { showSortMenu = true },
+                                                tint = MaterialTheme.colorScheme.onSurface
+                                            )
                                             if (isDesktopPlatform) {
-                                                InlyDesktopMenu(expanded = showSortMenu, onDismissRequest = { showSortMenu = false }) {
-                                                    DesktopSortMenu(currentSortType = currentSortType, currentSortOrder = currentSortOrder, onDismiss = { showSortMenu = false }, onSortChanged = { type, order -> viewModel.updateSort(type, order); showSortMenu = false })
+                                                InlyDesktopMenu(
+                                                    expanded = showSortMenu,
+                                                    onDismissRequest = { showSortMenu = false }) {
+                                                    DesktopSortMenu(
+                                                        currentSortType = currentSortType,
+                                                        currentSortOrder = currentSortOrder,
+                                                        onDismiss = { showSortMenu = false },
+                                                        onSortChanged = { type, order ->
+                                                            viewModel.updateSort(
+                                                                type,
+                                                                order
+                                                            ); showSortMenu = false
+                                                        })
                                                 }
                                             }
                                         }
@@ -339,22 +385,59 @@ fun HomeScreen(
                                             if (isDesktopPlatform) {
                                                 InlyDesktopMenu(expanded = showAddNotePopup, onDismissRequest = { showAddNotePopup = false }, modifier = Modifier.width(280.dp)) {
                                                     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                                                        Row(modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                                                            Text("New Note", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                                                        Row(
+                                                            modifier = Modifier.fillMaxWidth()
+                                                                .padding(bottom = 10.dp),
+                                                            verticalAlignment = Alignment.CenterVertically,
+                                                            horizontalArrangement = Arrangement.SpaceBetween
+                                                        ) {
+                                                            Text(
+                                                                "New Note",
+                                                                style = MaterialTheme.typography.bodyLarge,
+                                                                fontWeight = FontWeight.Bold,
+                                                                color = MaterialTheme.colorScheme.onSurface
+                                                            )
                                                             Icon(
                                                                 painter = painterResource(Res.drawable.template),
                                                                 contentDescription = "Templates",
                                                                 tint = MaterialTheme.colorScheme.onSurface,
-                                                                modifier = Modifier.size(24.dp).noRippleClickable {
-                                                                    showAddNotePopup = false
-                                                                    handleOpenTemplates()
-                                                                }
+                                                                modifier = Modifier.size(24.dp)
+                                                                    .noRippleClickable {
+                                                                        showAddNotePopup = false
+                                                                        handleOpenTemplates()
+                                                                    }
                                                             )
                                                         }
-                                                        InlyTextField(value = addNoteInput, onValueChange = { addNoteInput = it }, placeholder = "Note title...", modifier = Modifier.fillMaxWidth())
-                                                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                            InlyButtonSecondary(text = "Cancel", onClick = { showAddNotePopup = false }, modifier = Modifier.weight(1f))
-                                                            InlyButtonPrimary(text = "Create", onClick = { if (addNoteInput.isNotBlank()) { handleCreateNote(addNoteInput.trim()); showAddNotePopup = false } }, modifier = Modifier.weight(1f))
+                                                        InlyTextField(
+                                                            value = addNoteInput,
+                                                            onValueChange = { addNoteInput = it },
+                                                            placeholder = "Note title...",
+                                                            modifier = Modifier.fillMaxWidth()
+                                                        )
+                                                        Row(
+                                                            modifier = Modifier.fillMaxWidth(),
+                                                            horizontalArrangement = Arrangement.spacedBy(
+                                                                8.dp
+                                                            )
+                                                        ) {
+                                                            InlyButtonSecondary(
+                                                                text = "Cancel",
+                                                                onClick = {
+                                                                    showAddNotePopup = false
+                                                                },
+                                                                modifier = Modifier.weight(1f)
+                                                            )
+                                                            InlyButtonPrimary(
+                                                                text = "Create",
+                                                                onClick = {
+                                                                    if (addNoteInput.isNotBlank()) {
+                                                                        handleCreateNote(
+                                                                            addNoteInput.trim()
+                                                                        ); showAddNotePopup = false
+                                                                    }
+                                                                },
+                                                                modifier = Modifier.weight(1f)
+                                                            )
                                                         }
                                                     }
                                                 }
@@ -380,25 +463,94 @@ fun HomeScreen(
                     if (isNotesExpanded) {
                         if (subFolders.isNotEmpty() || !isSelectionMode) {
                             item(span = StaggeredGridItemSpan.FullLine) {
-                                LazyRow(state = folderListState, contentPadding = PaddingValues(horizontal = HORIZONTAL_PADDING), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).mouseScrollable(folderListState)) {
+                                LazyRow(
+                                    state = folderListState,
+                                    contentPadding = PaddingValues(horizontal = HORIZONTAL_PADDING),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                                        .mouseScrollable(folderListState)
+                                ) {
                                     if (!isSelectionMode) {
                                         item {
                                             if (isDesktopPlatform) {
-                                                Box(modifier = Modifier.wrapContentSize(Alignment.TopStart).height(36.dp)) {
-                                                    FolderPill(name = "New", isSelected = false, isNewButton = true, onClick = { addFolderInput = ""; showAddFolderPopup = true }, onLongClick = {})
-                                                    InlyDesktopMenu(expanded = showAddFolderPopup, onDismissRequest = { showAddFolderPopup = false }, modifier = Modifier.width(280.dp)) {
-                                                        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                                                            Text("New Folder", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(bottom = 10.dp))
-                                                            InlyTextField(value = addFolderInput, onValueChange = { addFolderInput = it }, placeholder = "e.g. Personal, Work...", modifier = Modifier.fillMaxWidth())
-                                                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                                InlyButtonSecondary(text = "Cancel", onClick = { showAddFolderPopup = false }, modifier = Modifier.weight(1f))
-                                                                InlyButtonPrimary(text = "Create", onClick = { if (addFolderInput.isNotBlank()) { handleCreateFolder(addFolderInput.trim()); showAddFolderPopup = false } }, modifier = Modifier.weight(1f))
+                                                Box(
+                                                    modifier = Modifier.wrapContentSize(Alignment.TopStart)
+                                                        .height(36.dp)
+                                                ) {
+                                                    FolderPill(
+                                                        name = "New",
+                                                        isSelected = false,
+                                                        isNewButton = true,
+                                                        onClick = {
+                                                            addFolderInput =
+                                                                ""; showAddFolderPopup = true
+                                                        },
+                                                        onLongClick = {})
+                                                    InlyDesktopMenu(
+                                                        expanded = showAddFolderPopup,
+                                                        onDismissRequest = {
+                                                            showAddFolderPopup = false
+                                                        },
+                                                        modifier = Modifier.width(280.dp)
+                                                    ) {
+                                                        Column(
+                                                            modifier = Modifier.padding(
+                                                                horizontal = 16.dp,
+                                                                vertical = 12.dp
+                                                            )
+                                                        ) {
+                                                            Text(
+                                                                "New Folder",
+                                                                style = MaterialTheme.typography.bodyLarge,
+                                                                fontWeight = FontWeight.Bold,
+                                                                color = MaterialTheme.colorScheme.onSurface,
+                                                                modifier = Modifier.padding(bottom = 10.dp)
+                                                            )
+                                                            InlyTextField(
+                                                                value = addFolderInput,
+                                                                onValueChange = {
+                                                                    addFolderInput = it
+                                                                },
+                                                                placeholder = "e.g. Personal, Work...",
+                                                                modifier = Modifier.fillMaxWidth()
+                                                            )
+                                                            Row(
+                                                                modifier = Modifier.fillMaxWidth(),
+                                                                horizontalArrangement = Arrangement.spacedBy(
+                                                                    8.dp
+                                                                )
+                                                            ) {
+                                                                InlyButtonSecondary(
+                                                                    text = "Cancel",
+                                                                    onClick = {
+                                                                        showAddFolderPopup = false
+                                                                    },
+                                                                    modifier = Modifier.weight(1f)
+                                                                )
+                                                                InlyButtonPrimary(
+                                                                    text = "Create",
+                                                                    onClick = {
+                                                                        if (addFolderInput.isNotBlank()) {
+                                                                            handleCreateFolder(
+                                                                                addFolderInput.trim()
+                                                                            ); showAddFolderPopup =
+                                                                                false
+                                                                        }
+                                                                    },
+                                                                    modifier = Modifier.weight(1f)
+                                                                )
                                                             }
                                                         }
                                                     }
                                                 }
                                             } else {
-                                                FolderPill(name = "New", isSelected = false, isNewButton = true, onClick = { showAddFolderDialog = true }, onLongClick = {})
+                                                FolderPill(
+                                                    name = "New",
+                                                    isSelected = false,
+                                                    isNewButton = true,
+                                                    onClick = { showAddFolderDialog = true },
+                                                    onLongClick = {})
                                             }
                                         }
                                     }
@@ -446,9 +598,25 @@ fun HomeScreen(
                     if (recentNotes.isNotEmpty()) {
                         item(span = StaggeredGridItemSpan.FullLine) {
                             Row(modifier = Modifier.fillMaxWidth().padding(start = HORIZONTAL_PADDING, end = HORIZONTAL_PADDING, top = 14.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Row(modifier = Modifier.clip(RoundedCornerShape(4.dp)).noRippleClickable { isRecentsExpanded = !isRecentsExpanded }.padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Text("Recents", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-                                    Icon(imageVector = if (isRecentsExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, contentDescription = "Toggle Recents", modifier = Modifier.padding(start = 4.dp).size(20.dp), tint = MaterialTheme.colorScheme.onSurface)
+                                Row(
+                                    modifier = Modifier.clip(RoundedCornerShape(4.dp))
+                                        .noRippleClickable {
+                                            isRecentsExpanded = !isRecentsExpanded
+                                        }.padding(end = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        "Recents",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Icon(
+                                        imageVector = if (isRecentsExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                        contentDescription = "Toggle Recents",
+                                        modifier = Modifier.padding(start = 4.dp).size(20.dp),
+                                        tint = MaterialTheme.colorScheme.onSurface
+                                    )
                                 }
                             }
                         }
@@ -481,129 +649,59 @@ fun HomeScreen(
                 }
             }
 
-            // Scroll state detection
-            val isScrolled by remember {
-                derivedStateOf {
-                    gridState.firstVisibleItemIndex > 0 || gridState.firstVisibleItemScrollOffset > 0
-                }
-            }
-
-            // Sticky Top Bar Overlay
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .fillMaxWidth()
-                    .pointerInput(Unit) { detectTapGestures {} }
-                    .then(
-                        if (isScrolled) {
-                            Modifier
-                                .hazeEffect(
-                                    state = hazeState,
-                                    style = HazeStyle.Unspecified,
-                                    block = null
-                                )
-                                .background(MaterialTheme.colorScheme.background.copy(alpha = 0.65f))
-                        } else {
-                            Modifier
-                        }
-                    )
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .stableStatusBarsPadding()
-                        .padding(
-                            start = 16.dp,
-                            end = 16.dp,
-                            bottom = 16.dp,
-                            top = 10.dp
-                        ),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    // Left side: Title / Breadcrumbs
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        if (!isSelectionMode) {
-                            if (isDesktopPlatform) {
-                                IconButton(
-                                    onClick = onToggleSidebar,
-                                    modifier = Modifier.offset(x = (-8).dp)
-                                ) {
-                                    Icon(
-                                        Icons.Default.Menu,
-                                        null,
-                                        tint = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                                BreadcrumbTrail(
-                                    selectedFolderId = selectedFolderId,
-                                    breadcrumbs = breadcrumbs,
-                                    onNavigate = { viewModel.selectFolder(it) },
-                                    modifier = Modifier.weight(1f).offset(x = (-6).dp)
-                                )
-                            } else {
-                                Text(
-                                    "Home",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onBackground
-                                )
-                            }
-                        }
-                    }
-
-                    // Right side: Settings Menu
-                    Box {
-                        TopBarIconButtonGroup(
-                            bgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.45f),
-                            tint = MaterialTheme.colorScheme.onSurface,
-                            items = listOf(
-                                TopBarIconButtonItem(
-                                    icon = painterResource(Res.drawable.calendar),
-                                    contentDescription = "Open Calendar",
-                                    onClick = onNavigateToCalendar
-                                ),
-                                TopBarIconButtonItem(
-                                    icon = painterResource(Res.drawable.inbox),
-                                    contentDescription = "Notifications",
-                                    onClick = { showScheduledTasksSheet = true }
-                                ),
-                                TopBarIconButtonItem(
-                                    icon = painterResource(Res.drawable.ellipsis),
-                                    contentDescription = "Settings",
-                                    onClick = { showNotesMenu = true }
-                                )
-                            )
-                        )
-
-                        UserSettings(
-                            expanded = showNotesMenu, onDismiss = { showNotesMenu = false },
-                            onNavigateToSettings = {
-                                onNavigateToSettings(); showNotesMenu = false
-                            },
-                            onNavigateToTrash = { onNavigateToTrash(); showNotesMenu = false }
-                        )
-                    }
-                }
-            }
+            HomeTopBar(
+                isSelectionMode = isSelectionMode,
+                onToggleSidebar = onToggleSidebar,
+                hazeState = hazeState,
+                onNavigateToCalendar = onNavigateToCalendar,
+                onOpenScheduledTasks = { showScheduledTasksSheet = true },
+                onNavigateToSettings = onNavigateToSettings,
+                onNavigateToTrash = onNavigateToTrash,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
         }
     }
 
     // Scaffold
     Scaffold(containerColor = MaterialTheme.colorScheme.background, contentWindowInsets = WindowInsets(0)) { paddingValues ->
-        Box(modifier = Modifier.fillMaxSize().padding(paddingValues).consumeWindowInsets(paddingValues)) {
+        Box(
+            modifier = Modifier.fillMaxSize().padding(paddingValues)
+                .consumeWindowInsets(paddingValues)
+        ) {
 
-            leftPanelContent()
+            homeGridContent()
 
-            NotesSelectionPill(isVisible = isSelectionMode, selectedCount = selectedNoteIds.size + selectedFolderIds.size, onClearSelection = { viewModel.clearSelection() }, onDelete = { viewModel.deleteSelectedItems() }, modifier = Modifier.align(Alignment.BottomCenter))
+            NotesSelectionPill(
+                isVisible = isSelectionMode,
+                selectedCount = selectedNoteIds.size + selectedFolderIds.size,
+                onClearSelection = { viewModel.clearSelection() },
+                onDelete = { viewModel.deleteSelectedItems() },
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
 
             if (!isDesktopPlatform) {
-                AddFolderBottomSheet(expanded = showAddFolderDialog, onDismiss = { showAddFolderDialog = false }, onCreate = handleCreateFolder)
-                AddNoteBottomSheet(expanded = showAddNoteDialog, onDismiss = { showAddNoteDialog = false }, onCreate = handleCreateNote, onOpenTemplates = handleOpenTemplates)
-                SortBottomSheet(expanded = showSortMenu, currentSortType = currentSortType, currentSortOrder = currentSortOrder, onDismiss = { showSortMenu = false }, onSortChanged = { type, order -> viewModel.updateSort(type, order); showSortMenu = false })
+                AddFolderBottomSheet(
+                    expanded = showAddFolderDialog,
+                    onDismiss = { showAddFolderDialog = false },
+                    onCreate = handleCreateFolder
+                )
+                AddNoteBottomSheet(
+                    expanded = showAddNoteDialog,
+                    onDismiss = { showAddNoteDialog = false },
+                    onCreate = handleCreateNote,
+                    onOpenTemplates = handleOpenTemplates
+                )
+                SortBottomSheet(
+                    expanded = showSortMenu,
+                    currentSortType = currentSortType,
+                    currentSortOrder = currentSortOrder,
+                    onDismiss = { showSortMenu = false },
+                    onSortChanged = { type, order ->
+                        viewModel.updateSort(
+                            type,
+                            order
+                        ); showSortMenu = false
+                    })
                 TemplatesBottomSheet(
                     expanded = showTemplatesSheet,
                     templates = templates,
@@ -647,15 +745,118 @@ fun HomeScreen(
                             }
 
                             if (todayTasks.isNotEmpty()) {
-                                TaskDaySection("Today", todayTasks, dailyEditorViewModel, onTaskNoteLinkClick)
+                                TaskDaySection(
+                                    "Today",
+                                    todayTasks,
+                                    dailyEditorViewModel,
+                                    onTaskNoteLinkClick
+                                )
                             }
 
                             if (tomorrowTasks.isNotEmpty()) {
-                                TaskDaySection("Tomorrow", tomorrowTasks, dailyEditorViewModel, onTaskNoteLinkClick)
+                                TaskDaySection(
+                                    "Tomorrow",
+                                    tomorrowTasks,
+                                    dailyEditorViewModel,
+                                    onTaskNoteLinkClick
+                                )
                             }
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeTopBar(
+    isSelectionMode: Boolean,
+    onToggleSidebar: () -> Unit,
+    hazeState: HazeState,
+    onNavigateToCalendar: () -> Unit,
+    onOpenScheduledTasks: () -> Unit,
+    onNavigateToSettings: () -> Unit,
+    onNavigateToTrash: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var showNotesMenu by remember { mutableStateOf(false) }
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .pointerInput(Unit) { detectTapGestures {} }
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .stableStatusBarsPadding()
+                .padding(
+                    start = 16.dp,
+                    end = 16.dp,
+                    bottom = 16.dp,
+                    top = 10.dp
+                ),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
+                if (!isSelectionMode) {
+                    if (isDesktopPlatform) {
+                        IconButton(
+                            onClick = onToggleSidebar,
+                            modifier = Modifier.offset(x = (-8).dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Menu,
+                                null,
+                                tint = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                    Text(
+                        "Home",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                }
+            }
+
+            Box {
+                TopBarIconButtonGroup(
+                    bgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.45f),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    hazeState = hazeState,
+                    items = listOf(
+                        TopBarIconButtonItem(
+                            icon = painterResource(Res.drawable.calendar),
+                            contentDescription = "Open Calendar",
+                            onClick = onNavigateToCalendar
+                        ),
+                        TopBarIconButtonItem(
+                            icon = painterResource(Res.drawable.inbox),
+                            contentDescription = "Notifications",
+                            onClick = onOpenScheduledTasks
+                        ),
+                        TopBarIconButtonItem(
+                            icon = painterResource(Res.drawable.ellipsis),
+                            contentDescription = "Settings",
+                            onClick = { showNotesMenu = true }
+                        )
+                    )
+                )
+
+                UserSettings(
+                    expanded = showNotesMenu, onDismiss = { showNotesMenu = false },
+                    onNavigateToSettings = {
+                        onNavigateToSettings(); showNotesMenu = false
+                    },
+                    onNavigateToTrash = { onNavigateToTrash(); showNotesMenu = false }
+                )
             }
         }
     }
@@ -707,8 +908,18 @@ private fun DesktopSortOptionItem(text: String, isSelected: Boolean, onClick: ()
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(text, style = MaterialTheme.typography.bodyLarge, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium, color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
-        if (isSelected) Icon(Icons.Default.Check, "Selected", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+        Text(
+            text,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+        )
+        if (isSelected) Icon(
+            Icons.Default.Check,
+            "Selected",
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(16.dp)
+        )
     }
 }
 
@@ -716,9 +927,18 @@ private fun DesktopSortOptionItem(text: String, isSelected: Boolean, onClick: ()
 fun OverviewCard(title: String, subtitle: String, onClick: () -> Unit) {
     Surface(shape = DefaultCornerShape, color = MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxWidth().clip(DefaultCornerShape).noRippleClickable { onClick() }) {
         Column(modifier = Modifier.padding(14.dp)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
+            Text(
+                title,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
             Spacer(Modifier.height(4.dp))
-            Text(subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface)
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            )
         }
     }
 }
@@ -728,12 +948,27 @@ fun BreadcrumbTrail(selectedFolderId: String?, breadcrumbs: List<FolderEntity>, 
     LazyRow(verticalAlignment = Alignment.CenterVertically, modifier = modifier.fillMaxWidth().padding(top = 10.dp, bottom = 8.dp)) {
         item {
             val isRoot = selectedFolderId == null
-            Text("Home", style = MaterialTheme.typography.bodyLarge, fontWeight = if (isRoot) FontWeight.Bold else FontWeight.Medium, color = if (isRoot) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurface, modifier = Modifier.noRippleClickable { onNavigate(null) })
+            Text(
+                "Home",
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = if (isRoot) FontWeight.Bold else FontWeight.Medium,
+                color = if (isRoot) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.noRippleClickable { onNavigate(null) })
         }
         items(breadcrumbs) { folder ->
-            Icon(Icons.Default.ChevronRight, null, modifier = Modifier.padding(horizontal = 6.dp).size(16.dp), tint = MaterialTheme.colorScheme.onSurface)
+            Icon(
+                Icons.Default.ChevronRight,
+                null,
+                modifier = Modifier.padding(horizontal = 6.dp).size(16.dp),
+                tint = MaterialTheme.colorScheme.onSurface
+            )
             val isLast = folder.folderId == selectedFolderId
-            Text(folder.name, style = MaterialTheme.typography.bodyLarge, fontWeight = if (isLast) FontWeight.Bold else FontWeight.Medium, color = if (isLast) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurface, modifier = Modifier.noRippleClickable { onNavigate(folder.folderId) })
+            Text(
+                folder.name,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = if (isLast) FontWeight.Bold else FontWeight.Medium,
+                color = if (isLast) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.noRippleClickable { onNavigate(folder.folderId) })
         }
     }
 }
@@ -744,11 +979,27 @@ fun FolderPill(name: String, isSelected: Boolean, isNewButton: Boolean = false, 
     val bgColor = when { isNewButton -> MaterialTheme.colorScheme.primary; isSelected -> MaterialTheme.colorScheme.onSurface; isDesktopPlatform -> MaterialTheme.colorScheme.background; else -> MaterialTheme.colorScheme.surface }
     val textColor = when { isNewButton -> MaterialTheme.colorScheme.onPrimary; isSelected -> MaterialTheme.colorScheme.background; else -> MaterialTheme.colorScheme.onSurface }
     Surface(shape = RoundedCornerShape(8.dp), color = bgColor, contentColor = textColor, modifier = Modifier.height(36.dp).defaultMinSize(minWidth = 72.dp).clip(RoundedCornerShape(8.dp)).combinedClickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick, onLongClick = onLongClick)) {
-        Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 0.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-            Icon(if (isNewButton) painterResource(Res.drawable.folder_plus) else painterResource(Res.drawable.folder), null, modifier = Modifier.size(16.dp))
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 0.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                if (isNewButton) painterResource(Res.drawable.folder_plus) else painterResource(Res.drawable.folder),
+                null,
+                modifier = Modifier.size(16.dp)
+            )
             Spacer(Modifier.width(6.dp))
             Text(name, style = MaterialTheme.typography.bodyLarge)
-            AnimatedVisibility(visible = isSelected && !isNewButton) { Row { Spacer(Modifier.width(6.dp)); Icon(Icons.Default.Check, "Selected", modifier = Modifier.size(14.dp)) } }
+            AnimatedVisibility(visible = isSelected && !isNewButton) {
+                Row {
+                    Spacer(Modifier.width(6.dp)); Icon(
+                    Icons.Default.Check,
+                    "Selected",
+                    modifier = Modifier.size(14.dp)
+                )
+                }
+            }
         }
     }
 }
@@ -763,11 +1014,11 @@ fun NoteCard(note: NoteMetadataEntity, isSelected: Boolean, onClick: () -> Unit,
     val titleColor =
         if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
     val mutedColor =
-        if (isSelected) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.onSurface
-    val coverHeight = 72.dp;
+        if (isSelected) MaterialTheme.colorScheme.background.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+    val coverHeight = 72.dp
     val iconOverhang = 12.dp
-    val hasCover = note.coverImagePath != null;
-    val hasIcon = !note.icon.isNullOrEmpty();
+    val hasCover = note.coverImagePath != null
+    val hasIcon = !note.icon.isNullOrEmpty()
     val hasHeader = hasCover || hasIcon
 
     Box(
@@ -863,11 +1114,31 @@ fun NotesSelectionPill(isVisible: Boolean, selectedCount: Int, onClearSelection:
     AnimatedVisibility(visible = isVisible, enter = slideInVertically(initialOffsetY = { it }) + fadeIn(), exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(), modifier = modifier.padding(horizontal = 24.dp)) {
         Surface(shape = DefaultCornerShape, color = pillColor, modifier = Modifier.padding(bottom = 28.dp).shadow(6.dp, DefaultCornerShape, spotColor = Color.Black.copy(alpha = 0.2f))) {
             val pillScroll = rememberScrollState()
-            Row(modifier = Modifier.horizontalScroll(pillScroll).padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                Icon(Icons.Default.Close, "Clear", modifier = Modifier.size(18.dp).noRippleClickable { onClearSelection() }, tint = tint)
-                Text("$selectedCount", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = tint)
+            Row(
+                modifier = Modifier.horizontalScroll(pillScroll)
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(20.dp)
+            ) {
+                Icon(
+                    Icons.Default.Close,
+                    "Clear",
+                    modifier = Modifier.size(18.dp).noRippleClickable { onClearSelection() },
+                    tint = tint
+                )
+                Text(
+                    "$selectedCount",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = tint
+                )
                 Box(Modifier.width(1.dp).height(18.dp).background(tint.copy(alpha = 0.2f)))
-                Icon(Icons.Default.Delete, "Move to Trash", modifier = Modifier.size(18.dp).noRippleClickable { onDelete() }, tint = tint)
+                Icon(
+                    Icons.Default.Delete,
+                    "Move to Trash",
+                    modifier = Modifier.size(18.dp).noRippleClickable { onDelete() },
+                    tint = tint
+                )
             }
         }
     }
@@ -943,9 +1214,6 @@ fun AddNoteBottomSheet(expanded: Boolean, onDismiss: () -> Unit, onCreate: (Stri
     }
 }
 
-// Shared list body for the Templates menu - used both inside the mobile InlyBottomSheet and the
-// desktop InlyDesktopMenu, so search/create/delete only need to be laid out once. horizontalPadding
-// differs per shell (bottom sheet vs. dropdown) to match each container's existing inset.
 @Composable
 fun TemplatesMenuContent(
     modifier: Modifier = Modifier,
@@ -962,7 +1230,10 @@ fun TemplatesMenuContent(
             value = searchQuery,
             onValueChange = onSearchQueryChange,
             placeholder = "Search templates...",
-            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp).padding(horizontal = if (isDesktopPlatform) 12.dp else 0.dp, vertical = if (isDesktopPlatform) 12.dp else 0.dp,)
+            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp).padding(
+                horizontal = if (isDesktopPlatform) 12.dp else 0.dp,
+                vertical = if (isDesktopPlatform) 12.dp else 0.dp,
+            )
         )
 
         Row(
@@ -1087,9 +1358,6 @@ fun TemplatesBottomSheet(
     }
 }
 
-// Desktop shell: same InlyDesktopMenu used by the Sort/New Note/New Folder popups in this file
-// and in DesktopMainScreen.kt, so both call sites (HomeScreen's own desktop branch and the
-// desktop sidebar) share one implementation instead of two copies of this layout.
 @Composable
 fun TemplatesDesktopMenu(
     expanded: Boolean,
@@ -1163,7 +1431,7 @@ private fun SortOptionItem(text: String, isSelected: Boolean, onClick: () -> Uni
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding( vertical = 2.dp)
+            .padding(vertical = 2.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(Color.Transparent)
             .noRippleClickable { onClick() }
@@ -1172,7 +1440,17 @@ private fun SortOptionItem(text: String, isSelected: Boolean, onClick: () -> Uni
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(text, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Normal, color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
-        if (isSelected) Icon(Icons.Default.Check, "Selected", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+        Text(
+            text,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.Normal,
+            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+        )
+        if (isSelected) Icon(
+            Icons.Default.Check,
+            "Selected",
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(18.dp)
+        )
     }
 }

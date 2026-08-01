@@ -65,8 +65,6 @@ import com.ben.inly.presentation.shared.rememberStableStatusBarsPadding
 import com.ben.inly.presentation.shared.stableStatusBarsPadding
 import com.ben.inly.presentation.sync.SyncViewModel
 import com.ben.inly.presentation.sync.showSyncToast
-import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import inly.app.generated.resources.Res
 import inly.app.generated.resources.calendar
@@ -117,8 +115,6 @@ fun DailyScreen(
     val initialDate = remember { Clock.System.todayIn(TimeZone.currentSystemDefault()) }
     val initialPage = remember { Int.MAX_VALUE / 2 }
     val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { Int.MAX_VALUE })
-
-    var scrolledPages by remember { mutableStateOf(setOf<String>()) }
 
     val isSelectionMode = selectedBlockIds.isNotEmpty()
     val selectedBlocksList = blocks.filter { it.id in selectedBlockIds }
@@ -417,13 +413,21 @@ fun DailyScreen(
                         onSlashQueryChange = { slashQuery = it },
                         bottomContentPadding = bottomContentPadding,
                         isCurrentActivePage = isCurrentActivePage,
-                        onScrollStateChange = { scrolled ->
-                            scrolledPages = if (scrolled) scrolledPages + pageDateString else scrolledPages - pageDateString
-                        },
                         topContentPadding = if (isDesktopPlatform) {
                             if (!isSidebarVisible) 68.dp else 16.dp
                         } else {
-                            rememberStableStatusBarsPadding().calculateTopPadding() + 150.dp
+                            rememberStableStatusBarsPadding().calculateTopPadding() + 68.dp
+                        },
+                        headerContent = if (isDesktopPlatform) null else {
+                            {
+                                CollapsedWeekStrip(
+                                    selectedDate = selectedDate,
+                                    onDateSelected = { viewModel.selectDate(it) },
+                                    pagerState = pagerState,
+                                    initialPage = initialPage,
+                                    initialDate = initialDate
+                                )
+                            }
                         }
                     )
                 }
@@ -538,23 +542,13 @@ fun DailyScreen(
                     rightPanelContent()
                 }
 
-                val isHeaderBlurred by remember(pagerState.settledPage, pagerState.targetPage, scrolledPages) {
-                    derivedStateOf {
-                        val settled = initialDate.plus((pagerState.settledPage - initialPage).toLong(), DateTimeUnit.DAY).toString()
-                        val target = initialDate.plus((pagerState.targetPage - initialPage).toLong(), DateTimeUnit.DAY).toString()
-                        scrolledPages.contains(settled) || scrolledPages.contains(target)
-                    }
-                }
-
-                StaticDateHeader(
+                DailyTopBar(
                     selectedDate = selectedDate,
-                    onDateSelected = { viewModel.selectDate(it) },
                     onCalendarIconClick = { showCalendarSheet = true },
                     onNotificationsClick = { showScheduledTasksSheet = true },
                     onOpenCalendarScreenClick = onNavigateToCalendar,
                     onToggleSidebar = onToggleSidebar,
                     hazeState = hazeState,
-                    isScrolled = isHeaderBlurred,
                     showSettingsMenu = showSettingsMenu,
                     onSettingsMenuOpen = { showSettingsMenu = true },
                     onSettingsMenuDismiss = { showSettingsMenu = false },
@@ -565,85 +559,44 @@ fun DailyScreen(
             }
 
             if (showScheduledTasksSheet) {
-                val todayTasks = calendarTaskMap[initialDate] ?: emptyList()
-                val tomorrowTasks = calendarTaskMap[initialDate.plus(1, DateTimeUnit.DAY)] ?: emptyList()
-
-                InlyBottomSheet(
-                    expanded = true,
+                UpcomingTasksSheet(
+                    initialDate = initialDate,
+                    calendarTaskMap = calendarTaskMap,
+                    viewModel = viewModel,
                     onDismiss = { showScheduledTasksSheet = false },
-                    title = "Upcoming Tasks",
-                ) { _ ->
-
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(24.dp)
-                    ) {
-                        if (todayTasks.isEmpty() && tomorrowTasks.isEmpty()) {
-                            Text(
-                                "No tasks scheduled for today or tomorrow.",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                            )
+                    onTaskNoteLinkClick = { noteId ->
+                        showScheduledTasksSheet = false
+                        if (isDesktopPlatform) {
+                            subNotePanelId = noteId
                         } else {
-                            val onTaskNoteLinkClick: (String) -> Unit = { noteId ->
-                                showScheduledTasksSheet = false
-                                if (isDesktopPlatform) {
-                                    subNotePanelId = noteId
-                                } else {
-                                    onNavigateToEditor(noteId)
-                                }
-                            }
-
-                            if (todayTasks.isNotEmpty()) {
-                                TaskDaySection("Today", todayTasks, viewModel, onTaskNoteLinkClick)
-                            }
-
-                            if (tomorrowTasks.isNotEmpty()) {
-                                TaskDaySection("Tomorrow", tomorrowTasks, viewModel, onTaskNoteLinkClick)
-                            }
+                            onNavigateToEditor(noteId)
                         }
                     }
-                }
+                )
             }
 
             if (showCalendarSheet) {
-                InlyBottomSheet(
-                    expanded = true,
+                DailyCalendarSheet(
+                    selectedDate = selectedDate,
+                    initialDate = initialDate,
+                    calendarTaskMap = calendarTaskMap,
                     onDismiss = { showCalendarSheet = false },
-                    title = null,
-                    subtitle = null
-                ) { closeAnd ->
-                    BottomSheetMonthCalendar(
-                        selectedDate = selectedDate,
-                        today = initialDate,
-                        taskMap = calendarTaskMap,
-                        onDateSelected = {
-                            viewModel.selectDate(it)
-                            closeAnd { showCalendarSheet = false }
-                        },
-                        onGoToToday = {
-                            viewModel.selectDate(initialDate)
-                            closeAnd { showCalendarSheet = false }
-                        }
-                    )
-                }
+                    onDateSelected = { viewModel.selectDate(it) },
+                    onGoToToday = { viewModel.selectDate(initialDate) }
+                )
             }
         }
     }
 }
 
 @Composable
-private fun StaticDateHeader(
+private fun DailyTopBar(
     selectedDate: LocalDate,
-    onDateSelected: (LocalDate) -> Unit,
     onCalendarIconClick: () -> Unit,
     onNotificationsClick: () -> Unit,
     onOpenCalendarScreenClick: () -> Unit,
     onToggleSidebar: () -> Unit,
     hazeState: HazeState,
-    isScrolled: Boolean,
     showSettingsMenu: Boolean,
     onSettingsMenuOpen: () -> Unit,
     onSettingsMenuDismiss: () -> Unit,
@@ -655,17 +608,8 @@ private fun StaticDateHeader(
         modifier = modifier
             .fillMaxWidth()
             .pointerInput(Unit) { detectTapGestures {} }
-            .then(
-                if (isScrolled) {
-                    Modifier
-                        .hazeEffect(state = hazeState, style = HazeStyle.Unspecified, block = null)
-                        .background(MaterialTheme.colorScheme.background.copy(alpha = 0.65f))
-                } else {
-                    Modifier
-                }
-            )
             .then(if (isDesktopPlatform) Modifier else Modifier.stableStatusBarsPadding())
-            .padding(top = if (isDesktopPlatform) 16.dp else 10.dp, bottom = 10.dp)
+            .padding(top = if (isDesktopPlatform) 16.dp else 8.dp, bottom = 10.dp)
     ) {
         Row(
             modifier = Modifier
@@ -719,6 +663,7 @@ private fun StaticDateHeader(
                     TopBarIconButtonGroup(
                         bgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.45f),
                         tint = MaterialTheme.colorScheme.onBackground,
+                        hazeState = hazeState,
                         items = listOf(
                             TopBarIconButtonItem(
                                 icon = painterResource(Res.drawable.calendar),
@@ -747,11 +692,77 @@ private fun StaticDateHeader(
                 }
             }
         }
+    }
+}
 
-        CollapsedWeekStrip(
+@Composable
+private fun UpcomingTasksSheet(
+    initialDate: LocalDate,
+    calendarTaskMap: Map<LocalDate, List<CalendarTaskEntity>>,
+    viewModel: DailyEditorViewModel,
+    onDismiss: () -> Unit,
+    onTaskNoteLinkClick: (String) -> Unit
+) {
+    val todayTasks = calendarTaskMap[initialDate] ?: emptyList()
+    val tomorrowTasks = calendarTaskMap[initialDate.plus(1, DateTimeUnit.DAY)] ?: emptyList()
+
+    InlyBottomSheet(
+        expanded = true,
+        onDismiss = onDismiss,
+        title = "Upcoming Tasks",
+    ) { _ ->
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(24.dp)
+        ) {
+            if (todayTasks.isEmpty() && tomorrowTasks.isEmpty()) {
+                Text(
+                    "No tasks scheduled for today or tomorrow.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+            } else {
+                if (todayTasks.isNotEmpty()) {
+                    TaskDaySection("Today", todayTasks, viewModel, onTaskNoteLinkClick)
+                }
+
+                if (tomorrowTasks.isNotEmpty()) {
+                    TaskDaySection("Tomorrow", tomorrowTasks, viewModel, onTaskNoteLinkClick)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DailyCalendarSheet(
+    selectedDate: LocalDate,
+    initialDate: LocalDate,
+    calendarTaskMap: Map<LocalDate, List<CalendarTaskEntity>>,
+    onDismiss: () -> Unit,
+    onDateSelected: (LocalDate) -> Unit,
+    onGoToToday: () -> Unit
+) {
+    InlyBottomSheet(
+        expanded = true,
+        onDismiss = onDismiss,
+        title = null,
+        subtitle = null
+    ) { closeAnd ->
+        BottomSheetMonthCalendar(
             selectedDate = selectedDate,
-            modifier = Modifier.padding(vertical = 8.dp),
-            onDateSelected = onDateSelected
+            today = initialDate,
+            taskMap = calendarTaskMap,
+            onDateSelected = {
+                onDateSelected(it)
+                closeAnd { onDismiss() }
+            },
+            onGoToToday = {
+                onGoToToday()
+                closeAnd { onDismiss() }
+            }
         )
     }
 }

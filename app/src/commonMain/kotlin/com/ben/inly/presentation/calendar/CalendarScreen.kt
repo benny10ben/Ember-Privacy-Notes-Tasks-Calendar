@@ -315,17 +315,6 @@ fun CalendarScreen(
                     .zIndex(10f)
                     .onGloballyPositioned { coordinates -> topBarHeightPx = coordinates.size.height.toFloat() }
                     .pointerInput(Unit) { detectTapGestures {} }
-                    .then(
-                        if (isScrolled) {
-                            Modifier.hazeEffect(
-                                state = internalHazeState,
-                                style = HazeStyle.Unspecified,
-                                block = null)
-                                .background(MaterialTheme.colorScheme.background.copy(alpha = 0.65f))
-                        } else {
-                            Modifier
-                        }
-                    )
                     .then(if (isDesktopPlatform) Modifier else Modifier.stableStatusBarsPadding())
             ) {
                 CalendarTopBar(
@@ -337,7 +326,8 @@ fun CalendarScreen(
                     categories = categories,
                     onAddCategory = viewModel::addCategory,
                     onUpdateCategory = viewModel::updateCategory,
-                    onDeleteCategory = viewModel::deleteCategory
+                    onDeleteCategory = viewModel::deleteCategory,
+                    hazeState = internalHazeState
                 )
             }
 
@@ -459,6 +449,7 @@ private fun CalendarTopBar(
     onAddCategory: (name: String, colorHex: String) -> Unit,
     onUpdateCategory: (id: String, name: String, colorHex: String) -> Unit,
     onDeleteCategory: (id: String) -> Unit,
+    hazeState: HazeState,
     modifier: Modifier = Modifier
 ) {
     val defaultBgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.45f)
@@ -476,6 +467,7 @@ private fun CalendarTopBar(
             contentDescription = "Back",
             bgColor = defaultBgColor,
             tint = defaultContentColor,
+            hazeState = hazeState,
             onClick = onBackClick
         )
 
@@ -530,6 +522,7 @@ private fun CalendarTopBar(
                     contentDescription = "Options",
                     bgColor = defaultBgColor,
                     tint = defaultContentColor,
+                    hazeState = hazeState,
                     onClick = { showOptionsMenu = true }
                 )
                 InlyDesktopMenu(

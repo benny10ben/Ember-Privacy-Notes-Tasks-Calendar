@@ -42,6 +42,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.ben.inly.presentation.mobile.home.HomeScreen
+import com.ben.inly.presentation.shared.rememberStableStatusBarsPadding
 import com.ben.inly.presentation.share.ShareReceiverSheet
 import com.ben.inly.presentation.share.ShareViewModel
 import dev.chrisbanes.haze.hazeSource
@@ -116,7 +117,7 @@ fun InlyApp(
     val isTopLevelScreen = currentRoute == Screen.Daily.route ||
             currentRoute == Screen.Home.route ||
             currentRoute == Screen.Note.route
-    val isBottomBarVisible = isTopLevelScreen && !isSelectionActive && !showRagChatOverlay
+    val isBottomBarVisible = isTopLevelScreen && !isSelectionActive
     var bottomBarHeightDp by remember { mutableStateOf(0.dp) }
     var suppressBottomBarEnterAnimation by remember { mutableStateOf(true) }
     LaunchedEffect(isBottomBarVisible) {
@@ -164,14 +165,26 @@ fun InlyApp(
     }
 
     val openAiChat: () -> Unit = {
-        if (showRagChatOverlay) {
-            dismissRagChat()
+        if (isDesktopPlatform) {
+            if (showRagChatOverlay) {
+                dismissRagChat()
+            } else {
+                pendingRagChatClearJob?.cancel()
+                pendingRagChatClearJob = null
+                ragViewModel.clearChat()
+                AiEventBus.requestImmediateIndex()
+                showRagChatOverlay = true
+            }
         } else {
-            pendingRagChatClearJob?.cancel()
-            pendingRagChatClearJob = null
-            ragViewModel.clearChat()
-            AiEventBus.requestImmediateIndex()
-            showRagChatOverlay = true
+            if (currentRoute == Screen.RagChat.route) {
+                navController.popBackStack()
+            } else {
+                pendingRagChatClearJob?.cancel()
+                pendingRagChatClearJob = null
+                ragViewModel.clearChat()
+                AiEventBus.requestImmediateIndex()
+                navController.navigate(Screen.RagChat.route)
+            }
         }
     }
 
@@ -718,7 +731,68 @@ fun InlyApp(
                             onNavigateBack = { navController.popBackStack() }
                         )
                     }
+
+                    composable(
+                        route = Screen.RagChat.route,
+                        enterTransition = {
+                            slideIntoContainer(
+                                AnimatedContentTransitionScope.SlideDirection.Left,
+                                tween(300)
+                            )
+                        },
+                        exitTransition = {
+                            slideOutOfContainer(
+                                AnimatedContentTransitionScope.SlideDirection.Left,
+                                tween(300)
+                            )
+                        },
+                        popEnterTransition = {
+                            slideIntoContainer(
+                                AnimatedContentTransitionScope.SlideDirection.Right,
+                                tween(300)
+                            )
+                        },
+                        popExitTransition = {
+                            slideOutOfContainer(
+                                AnimatedContentTransitionScope.SlideDirection.Right,
+                                tween(300)
+                            )
+                        }
+                    ) {
+                        DisposableEffect(Unit) {
+                            onDispose {
+                                pendingRagChatClearJob?.cancel()
+                                pendingRagChatClearJob = ragChatCoroutineScope.launch {
+                                    delay(2000.milliseconds)
+                                    ragViewModel.clearChat()
+                                }
+                            }
+                        }
+
+                        com.ben.inly.presentation.rag.RagChatScreen(
+                            onDismiss = { navController.popBackStack() },
+                            viewModel = ragViewModel,
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedContentScope = this,
+                            onPickDocument = onPickDocument
+                        )
+                    }
                 }
+
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .height(rememberStableStatusBarsPadding().calculateTopPadding() + 24.dp)
+                        .background(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    MaterialTheme.colorScheme.background,
+                                    MaterialTheme.colorScheme.background.copy(alpha = 0f)
+                                )
+                            )
+                        )
+                )
 
                 if (!isDesktopPlatform) {
                     AnimatedVisibility(
@@ -795,15 +869,6 @@ fun InlyApp(
                         )
                     }
                 }
-
-                // AI chat overlay
-                com.ben.inly.presentation.rag.RagChatOverlay(
-                    isVisible = showRagChatOverlay,
-                    onDismiss = dismissRagChat,
-                    viewModel = ragViewModel,
-                    sharedTransitionScope = sharedTransitionScope,
-                    onPickDocument = onPickDocument
-                )
 
                 ShareReceiverSheet(
                     share = currentShare,
