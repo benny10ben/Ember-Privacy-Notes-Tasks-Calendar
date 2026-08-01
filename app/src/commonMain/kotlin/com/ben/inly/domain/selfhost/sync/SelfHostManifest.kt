@@ -3,7 +3,7 @@ package com.ben.inly.domain.selfhost.sync
 import kotlinx.serialization.Serializable
 
 @Serializable
-enum class SelfHostEntryType { NOTE, DAILY, MEDIA }
+enum class SelfHostEntryType { NOTE, DAILY, MEDIA, CHAT_SESSION }
 
 @Serializable
 data class SelfHostManifestEntry(

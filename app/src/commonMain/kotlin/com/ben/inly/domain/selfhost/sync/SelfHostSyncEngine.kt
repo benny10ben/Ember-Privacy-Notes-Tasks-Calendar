@@ -4,14 +4,21 @@ import com.ben.inly.data.local.prefs.SettingsManager
 import com.ben.inly.data.local.room.BlockDao
 import com.ben.inly.data.local.room.CategoryDao
 import com.ben.inly.data.local.room.CategoryEntity
+import com.ben.inly.data.local.room.ChatSessionDao
+import com.ben.inly.data.local.room.ChatSessionEntity
 import com.ben.inly.data.local.room.FolderDao
 import com.ben.inly.data.local.room.FolderEntity
 import com.ben.inly.data.local.room.NoteBlockEntity
 import com.ben.inly.data.local.room.NoteDao
 import com.ben.inly.data.local.room.NoteMetadataEntity
+import com.ben.inly.data.local.room.SelfHostDeletedApiConfigDao
+import com.ben.inly.data.local.room.SelfHostDeletedApiConfigEntity
 import com.ben.inly.data.local.room.SelfHostDeletedNoteDao
 import com.ben.inly.data.local.room.TagDao
 import com.ben.inly.data.local.room.TagEntity
+import com.ben.inly.domain.ai.external.AiSettingsRepository
+import com.ben.inly.domain.ai.external.ExternalAiProvider
+import com.ben.inly.domain.ai.external.ExternalAiProviderConfig
 import com.ben.inly.domain.model.DocumentBlock
 import com.ben.inly.domain.model.ImageBlock
 import com.ben.inly.domain.model.NoteBlock
@@ -20,6 +27,7 @@ import com.ben.inly.domain.model.VoiceBlock
 import com.ben.inly.domain.repository.NoteRepository
 import com.ben.inly.domain.selfhost.media.MediaReferenceScanner
 import com.ben.inly.domain.selfhost.merge.NoteMergeHelper
+import com.ben.inly.domain.selfhost.translation.EmbeddedBlockPayload
 import com.ben.inly.domain.selfhost.translation.NoteJsonCompiler
 import com.ben.inly.domain.selfhost.translation.NoteJsonParser
 import com.ben.inly.domain.selfhost.webdav.WebDavConfigurationException
@@ -30,6 +38,7 @@ import com.ben.inly.domain.sync.MediaTransferPhase
 import com.ben.inly.domain.sync.MediaTransferStatusBus
 import com.ben.inly.domain.util.MediaStorageHelper
 import com.ben.inly.domain.util.withSyncCoordinatorOrSkip
+import com.inly.database.InlyDatabase
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -58,7 +67,11 @@ class SelfHostSyncEngine(
     private val settingsManager: SettingsManager,
     private val mediaStorageHelper: MediaStorageHelper,
     private val noteRepository: NoteRepository,
-    private val selfHostDeletedNoteDao: SelfHostDeletedNoteDao
+    private val selfHostDeletedNoteDao: SelfHostDeletedNoteDao,
+    private val chatSessionDao: ChatSessionDao,
+    private val selfHostDeletedApiConfigDao: SelfHostDeletedApiConfigDao,
+    private val aiSettingsRepository: AiSettingsRepository,
+    private val database: InlyDatabase
 ) {
 
     private enum class ReconcileOutcome { SYNCED, CONFLICT_SKIPPED, LOCK_BUSY, UNCHANGED }
@@ -442,11 +455,23 @@ class SelfHostSyncEngine(
             if (withSyncCoordinatorOrSkip { reconcileCategories() } == null) {
                 SelfHostSyncLog.d("TextSync: categories skipped this cycle, SyncCoordinator.mutex busy - will retry next trigger")
             }
+            if (withSyncCoordinatorOrSkip { reconcileApiConfigs() } == null) {
+                SelfHostSyncLog.d("TextSync: api configs skipped this cycle, SyncCoordinator.mutex busy - will retry next trigger")
+            }
+            val chatSessionEntries = withSyncCoordinatorOrSkip { reconcileChatSessions(manifest) } ?: run {
+                SelfHostSyncLog.d("TextSync: chat sessions skipped this cycle, SyncCoordinator.mutex busy - will retry next trigger")
+                manifest.entries.filter { it.entryType == SelfHostEntryType.CHAT_SESSION }
+            }
 
             // Always publish the manifest, even if some individual notes had conflicts.
             // Conflicted notes retain their downloaded state until locally resolved and pushed.
             // This runs without locks to read a fresh, unlocked database snapshot.
-            uploadManifest(manifest, conflictedNoteIds, manifestEtag)
+            uploadManifest(
+                previousManifest = manifest,
+                conflictedNoteIds = conflictedNoteIds,
+                chatSessionEntries = chatSessionEntries,
+                previousManifestEtag = manifestEtag
+            )
 
             // Update the global last sync timestamp purely for UI and polling checks.
             // It's safe to advance this even if some notes had conflicts.
@@ -572,6 +597,144 @@ class SelfHostSyncEngine(
         }
     }
 
+    // API provider configs are few (one per ExternalAiProvider entry) and small, so they sync as a
+    // single whole-file JSON blob, merged provider-by-provider by "last-write-wins" on updatedAt -
+    // the same approach as folders/tags/categories above. Deletions use a dedicated tombstone table
+    // (rather than an in-place isDeleted flag) since the config itself lives in encrypted key/value
+    // storage, not a Room table we can just flag a row on.
+    private suspend fun reconcileApiConfigs() {
+        try {
+            val remoteJsonWithEtag = webDavSyncClient.downloadAndDecryptJsonWithEtag(WebDavSyncPaths.API_CONFIGS_FILE)
+            val remoteEntriesByProvider = remoteJsonWithEtag?.first
+                ?.let { collectionJson.decodeFromString(ListSerializer(ApiConfigSyncEntry.serializer()), it) }
+                .orEmpty()
+                .associateBy { it.provider }
+            val localTombstonesByProvider = selfHostDeletedApiConfigDao.getAllTombstones().associateBy { it.provider }
+
+            val mergedEntries = mutableListOf<ApiConfigSyncEntry>()
+
+            for (provider in ExternalAiProvider.entries) {
+                val localConfig = aiSettingsRepository.getProviderConfig(provider)
+                val localTombstone = localTombstonesByProvider[provider.name]
+                val localIsDeleted = localConfig == null ||
+                    (localTombstone != null && localTombstone.deletedAt >= localConfig.updatedAt)
+                val localUpdatedAt = maxOf(localConfig?.updatedAt ?: 0L, localTombstone?.deletedAt ?: 0L)
+                val remoteEntry = remoteEntriesByProvider[provider.name]
+
+                when {
+                    remoteEntry != null && remoteEntry.updatedAt > localUpdatedAt -> {
+                        if (remoteEntry.isDeleted) {
+                            aiSettingsRepository.applyRemoteProviderConfigDeletion(provider, remoteEntry.updatedAt)
+                        } else {
+                            aiSettingsRepository.saveProviderConfig(
+                                provider,
+                                ExternalAiProviderConfig(
+                                    apiKey = remoteEntry.apiKey,
+                                    model = remoteEntry.model,
+                                    baseUrl = remoteEntry.baseUrl,
+                                    updatedAt = remoteEntry.updatedAt
+                                )
+                            )
+                        }
+                        mergedEntries += remoteEntry
+                    }
+                    !localIsDeleted && localConfig != null -> mergedEntries += ApiConfigSyncEntry(
+                        provider = provider.name,
+                        apiKey = localConfig.apiKey,
+                        model = localConfig.model,
+                        baseUrl = localConfig.baseUrl,
+                        updatedAt = localConfig.updatedAt
+                    )
+                    localTombstone != null -> mergedEntries += ApiConfigSyncEntry(
+                        provider = provider.name,
+                        apiKey = "",
+                        model = "",
+                        baseUrl = null,
+                        updatedAt = localTombstone.deletedAt,
+                        isDeleted = true
+                    )
+                }
+            }
+
+            if (mergedEntries.toSet() != remoteEntriesByProvider.values.toSet()) {
+                webDavSyncClient.uploadEncryptedJson(
+                    WebDavSyncPaths.API_CONFIGS_FILE,
+                    collectionJson.encodeToString(ListSerializer(ApiConfigSyncEntry.serializer()), mergedEntries),
+                    remoteJsonWithEtag?.second
+                )
+            }
+            SelfHostSyncLog.d("ApiConfigSync: complete, ${mergedEntries.size} provider config(s) reconciled")
+        } catch (cause: WebDavConflictException) {
+            SelfHostSyncLog.d("ApiConfigSync: remote api_configs.json changed concurrently, will retry next cycle")
+        } catch (cause: Exception) {
+            SelfHostSyncLog.e("ApiConfigSync: failed to sync api configs: ${cause.message}", cause)
+        }
+    }
+
+    // Each chat session is its own encrypted file on the server (mirroring notes), tracked as a
+    // CHAT_SESSION entry in the same manifest notes use. Unlike notes there is no block-level merge -
+    // a session's message list is replaced wholesale by whichever side has the newer `updatedAt`,
+    // since two devices editing the exact same conversation at the same instant is not a realistic
+    // case worth the complexity full note merging needs.
+    private suspend fun reconcileChatSessions(manifest: SelfHostManifest): List<SelfHostManifestEntry> {
+        val remoteEntriesById = manifest.entries
+            .filter { it.entryType == SelfHostEntryType.CHAT_SESSION }
+            .associateBy { it.entryId }
+        val localSessionsById = chatSessionDao.getAllSessionsIncludingDeleted().associateBy { it.id }
+        val candidateIds = remoteEntriesById.keys + localSessionsById.keys
+
+        val entries = mutableListOf<SelfHostManifestEntry>()
+        for (sessionId in candidateIds) {
+            try {
+                val entry = reconcileChatSession(sessionId, localSessionsById[sessionId], remoteEntriesById[sessionId])
+                if (entry != null) entries += entry
+            } catch (cause: Exception) {
+                SelfHostSyncLog.e("ChatSessionSync: failed to reconcile $sessionId: ${cause.message}", cause)
+                remoteEntriesById[sessionId]?.let { entries += it }
+            }
+        }
+        SelfHostSyncLog.d("ChatSessionSync: complete, ${entries.size} session(s) reconciled")
+        return entries
+    }
+
+    private suspend fun reconcileChatSession(
+        sessionId: String,
+        localSession: ChatSessionEntity?,
+        remoteEntry: SelfHostManifestEntry?
+    ): SelfHostManifestEntry? {
+        val localUpdatedAt = localSession?.updatedAt ?: 0L
+
+        if (remoteEntry == null || localUpdatedAt > remoteEntry.updatedAt) {
+            if (localSession == null) return null
+            webDavSyncClient.uploadEncryptedJson(
+                WebDavSyncPaths.chatSessionPath(sessionId),
+                collectionJson.encodeToString(ChatSessionEntity.serializer(), localSession),
+                null
+            )
+            return SelfHostManifestEntry(
+                entryId = sessionId,
+                entryType = SelfHostEntryType.CHAT_SESSION,
+                updatedAt = localSession.updatedAt,
+                isDeleted = localSession.isDeleted
+            )
+        }
+
+        if (localUpdatedAt == remoteEntry.updatedAt) {
+            return remoteEntry
+        }
+
+        // Remote is newer than what we have locally.
+        if (remoteEntry.isDeleted) {
+            chatSessionDao.softDeleteSession(sessionId, remoteEntry.updatedAt)
+        } else {
+            val remoteJson = webDavSyncClient.downloadAndDecryptJsonWithEtag(WebDavSyncPaths.chatSessionPath(sessionId))?.first
+            val remoteSession = remoteJson?.let { collectionJson.decodeFromString(ChatSessionEntity.serializer(), it) }
+            if (remoteSession != null) chatSessionDao.upsertSession(remoteSession)
+        }
+        com.ben.inly.domain.util.ChatSyncEventBus.emitSessionChanged(sessionId)
+        return remoteEntry
+    }
+
     private suspend fun reconcileNote(candidateId: String, remoteEntry: SelfHostManifestEntry?): ReconcileOutcome {
         if (remoteEntry?.isDeleted == true) {
             return applyRemoteTombstone(candidateId, remoteEntry)
@@ -660,6 +823,8 @@ class SelfHostSyncEngine(
                 if (mergedMetadata.isDaily) mergedMetadata.dateString ?: noteId else noteId
             )
 
+            adoptRemoteEmbeddingsIfWinning(noteId, localMetadata, remoteOps?.metadataUpsert, remoteOps?.embeddedBlocks.orEmpty())
+
             pushMergedNote(mergedMetadata, mergedBlocks, downloadTimeEtag)
 
             // Only update `selfHostSyncedAt` if the push succeeds.
@@ -701,12 +866,47 @@ class SelfHostSyncEngine(
         return ReconcileOutcome.SYNCED
     }
 
+    // A note's embeddings are only meaningful on a device that has actually run them locally, so a
+    // device that never opened this note (and thus never indexed it) has nothing of its own to lose
+    // by adopting whatever another device already computed. If the remote note content just won this
+    // merge, its embeddings describe that exact winning content, so we adopt those too rather than
+    // leaving this device's block_metadata rows out of date until it happens to re-index locally.
+    private suspend fun adoptRemoteEmbeddingsIfWinning(
+        noteId: String,
+        localMetadata: NoteMetadataEntity?,
+        remoteMetadata: NoteMetadataEntity?,
+        remoteEmbeddedBlocks: List<EmbeddedBlockPayload>
+    ) {
+        if (remoteEmbeddedBlocks.isEmpty()) return
+
+        val remoteMetadataWon = remoteMetadata != null &&
+            (localMetadata == null || remoteMetadata.updatedAt > localMetadata.updatedAt)
+        val hasLocalEmbeddings = database.vectorStoreQueries.getBlocksForNote(noteId).executeAsList().isNotEmpty()
+
+        if (!remoteMetadataWon && hasLocalEmbeddings) return
+
+        database.transaction {
+            database.vectorStoreQueries.deleteBlocksForNote(noteId)
+            remoteEmbeddedBlocks.forEach { block ->
+                database.vectorStoreQueries.insertMetadata(
+                    block_id = block.blockId,
+                    note_id = noteId,
+                    chunk_text = block.chunkText,
+                    embedding = block.embedding
+                )
+            }
+        }
+        SelfHostSyncLog.d("TextSync: adopted ${remoteEmbeddedBlocks.size} synced embedding(s) for note $noteId")
+    }
+
     private suspend fun pushMergedNote(
         metadata: NoteMetadataEntity,
         blocks: List<NoteBlockEntity>,
         ifMatchEtag: String?
     ) {
-        val json = NoteJsonCompiler.compileNoteToJson(metadata, blocks)
+        val embeddedBlocks = database.vectorStoreQueries.getBlocksForNote(metadata.noteId).executeAsList()
+            .map { EmbeddedBlockPayload(blockId = it.block_id, chunkText = it.chunk_text, embedding = it.embedding) }
+        val json = NoteJsonCompiler.compileNoteToJson(metadata, blocks, embeddedBlocks)
 
         if (metadata.isDaily) {
             webDavSyncClient.uploadDaily(metadata.dateString ?: metadata.noteId, json, ifMatchEtag)
@@ -739,6 +939,7 @@ class SelfHostSyncEngine(
     private suspend fun uploadManifest(
         previousManifest: SelfHostManifest,
         conflictedNoteIds: Set<String> = emptySet(),
+        chatSessionEntries: List<SelfHostManifestEntry> = emptyList(),
         previousManifestEtag: String? = null,
         attempt: Int = 0
     ) {
@@ -813,7 +1014,7 @@ class SelfHostSyncEngine(
             }
         val preservedMediaEntries = previousManifest.entries.filter { it.entryType == SelfHostEntryType.MEDIA }
         val newManifest = SelfHostManifest(
-            entries = noteEntries + mergedTombstonesById.values + preservedMediaEntries
+            entries = noteEntries + mergedTombstonesById.values + preservedMediaEntries + chatSessionEntries
         )
 
         // The If-Match ETag check prevents concurrent manifest uploads from overwriting each other.
@@ -833,7 +1034,7 @@ class SelfHostSyncEngine(
                 return
             }
             val (freshManifest, freshEtag) = downloadManifestWithEtag()
-            uploadManifest(freshManifest, conflictedNoteIds, freshEtag, attempt + 1)
+            uploadManifest(freshManifest, conflictedNoteIds, chatSessionEntries, freshEtag, attempt + 1)
         }
     }
 }

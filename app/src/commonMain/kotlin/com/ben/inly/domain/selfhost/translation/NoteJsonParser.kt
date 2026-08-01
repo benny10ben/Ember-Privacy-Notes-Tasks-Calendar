@@ -64,7 +64,8 @@ object NoteJsonParser {
         return PreparedSyncOperations(
             metadataUpsert = metadataUpsert,
             blockUpserts = blockUpserts,
-            blockDeletions = dedupedTombstones
+            blockDeletions = dedupedTombstones,
+            embeddedBlocks = payload.embeddedBlocks
         )
     }
 

@@ -26,7 +26,8 @@ data class NotePayload(
     val sortOrder: Int = 0,
     val isTemplate: Boolean = false,
     val blocks: List<NoteBlockPayload> = emptyList(),
-    val tombstones: List<BlockTombstone> = emptyList()
+    val tombstones: List<BlockTombstone> = emptyList(),
+    val embeddedBlocks: List<EmbeddedBlockPayload> = emptyList()
 )
 
 @Serializable
@@ -41,4 +42,11 @@ data class NoteBlockPayload(
 data class BlockTombstone(
     val blockId: String,
     val deletedAt: Long
+)
+
+@Serializable
+data class EmbeddedBlockPayload(
+    val blockId: String,
+    val chunkText: String,
+    val embedding: String
 )

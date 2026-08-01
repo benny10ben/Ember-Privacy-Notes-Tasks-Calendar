@@ -101,6 +101,7 @@ class WebDavSyncClient(
         createDirectory(WebDavSyncPaths.NOTES_DIR)
         createDirectory(WebDavSyncPaths.DAILY_DIR)
         createDirectory(WebDavSyncPaths.MEDIA_DIR)
+        createDirectory(WebDavSyncPaths.CHAT_SESSIONS_DIR)
     }
 
     suspend fun createDirectory(remotePath: String): Boolean {

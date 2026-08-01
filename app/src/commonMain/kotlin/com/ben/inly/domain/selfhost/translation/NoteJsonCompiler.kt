@@ -13,7 +13,11 @@ object NoteJsonCompiler {
         encodeDefaults = true
     }
 
-    fun compileNoteToJson(metadata: NoteMetadataEntity, blocks: List<NoteBlockEntity>): String {
+    fun compileNoteToJson(
+        metadata: NoteMetadataEntity,
+        blocks: List<NoteBlockEntity>,
+        embeddedBlocks: List<EmbeddedBlockPayload> = emptyList()
+    ): String {
         val foreignBlocks = blocks.filter { it.noteId != metadata.noteId }
         if (foreignBlocks.isNotEmpty()) {
             SelfHostSyncLog.e(
@@ -43,7 +47,8 @@ object NoteJsonCompiler {
             isTemplate = metadata.isTemplate,
             blocks = ownBlocks.filter { !it.isDeleted }.map { it.toPayload() },
             tombstones = ownBlocks.filter { it.isDeleted }
-                .map { BlockTombstone(it.blockId, it.updatedAt) }
+                .map { BlockTombstone(it.blockId, it.updatedAt) },
+            embeddedBlocks = embeddedBlocks
         )
 
         return try {
