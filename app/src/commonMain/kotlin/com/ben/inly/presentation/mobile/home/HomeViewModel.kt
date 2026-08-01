@@ -27,6 +27,7 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.datetime.todayIn
 import java.util.UUID
+import kotlin.time.Duration.Companion.milliseconds
 
 enum class SortType { LAST_EDITED, DATE_CREATED, NAME, MANUAL }
 enum class SortOrder { ASCENDING, DESCENDING }
@@ -286,8 +287,9 @@ class HomeViewModel(
             _isLoading.value = false
         }
         viewModelScope.launch(Dispatchers.IO) {
-            delay(5_000)
+            delay(2_000.milliseconds)
             localMediaGarbageCollector.collectAndDeleteOrphanedMedia()
+            com.ben.inly.domain.ai.models.cleanupPendingModelDeletions()
         }
         viewModelScope.launch {
             repository.getIncompleteTasksCount().collect { count ->

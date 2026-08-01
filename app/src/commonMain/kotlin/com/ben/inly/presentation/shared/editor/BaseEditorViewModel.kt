@@ -1330,9 +1330,17 @@ abstract class BaseEditorViewModel(
         super.onCleared()
         ActiveEditorRegistry.unregister(this)
         autosaveJob?.cancel()
+        val needsIndexing = computeBlocksHash() != lastIndexedContentHash
         appScope.launch(Dispatchers.IO) {
             withContext(NonCancellable) {
                 performSave()
+                if (needsIndexing) {
+                    try {
+                        performIndexing()
+                    } catch (_: Exception) {
+                        // Handle error
+                    }
+                }
             }
         }
     }

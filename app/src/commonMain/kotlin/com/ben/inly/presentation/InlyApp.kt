@@ -38,7 +38,9 @@ import com.ben.inly.domain.repository.EmojiRepository
 import com.ben.inly.domain.util.rememberMicrophonePermissionLauncher
 import inly.app.generated.resources.Res
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import com.ben.inly.presentation.mobile.home.HomeScreen
 import com.ben.inly.presentation.share.ShareReceiverSheet
 import com.ben.inly.presentation.share.ShareViewModel
@@ -149,11 +151,24 @@ fun InlyApp(
         }
     }
 
+    val ragChatCoroutineScope = rememberCoroutineScope()
+    var pendingRagChatClearJob by remember { mutableStateOf<Job?>(null) }
+
+    val dismissRagChat: () -> Unit = {
+        showRagChatOverlay = false
+        pendingRagChatClearJob?.cancel()
+        pendingRagChatClearJob = ragChatCoroutineScope.launch {
+            delay(2000.milliseconds)
+            ragViewModel.clearChat()
+        }
+    }
+
     val openAiChat: () -> Unit = {
         if (showRagChatOverlay) {
-            showRagChatOverlay = false
-            ragViewModel.clearChat()
+            dismissRagChat()
         } else {
+            pendingRagChatClearJob?.cancel()
+            pendingRagChatClearJob = null
             ragViewModel.clearChat()
             AiEventBus.requestImmediateIndex()
             showRagChatOverlay = true
@@ -197,10 +212,7 @@ fun InlyApp(
                     onAiIconTap = openAiChat,
                     isRagChatVisible = showRagChatOverlay,
                     ragViewModel = ragViewModel,
-                    onDismissRagChat = {
-                        showRagChatOverlay = false
-                        ragViewModel.clearChat()
-                    }
+                    onDismissRagChat = dismissRagChat
                 )
 
                 fullScreenContent?.invoke()
@@ -787,12 +799,10 @@ fun InlyApp(
                 // AI chat overlay
                 com.ben.inly.presentation.rag.RagChatOverlay(
                     isVisible = showRagChatOverlay,
-                    onDismiss = {
-                        showRagChatOverlay = false
-                        ragViewModel.clearChat()
-                    },
+                    onDismiss = dismissRagChat,
                     viewModel = ragViewModel,
                     sharedTransitionScope = sharedTransitionScope,
+                    onPickDocument = onPickDocument
                 )
 
                 ShareReceiverSheet(

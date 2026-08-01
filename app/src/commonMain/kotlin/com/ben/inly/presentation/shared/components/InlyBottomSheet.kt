@@ -122,7 +122,7 @@ private fun InlyFloatingDialog(
                                 TopBarIconButton(
                                     icon = headerAction.icon,
                                     contentDescription = headerAction.contentDescription,
-                                    bgColor = Color.Transparent,
+                                    bgColor = if (LocalAppIsDark.current) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.background,
                                     tint = headerAction.tint ?: MaterialTheme.colorScheme.onSurface,
                                     onClick = headerAction.onClick
                                 )
@@ -132,7 +132,7 @@ private fun InlyFloatingDialog(
                             TopBarIconButton(
                                 icon = Icons.Default.Close,
                                 contentDescription = "Close",
-                                bgColor = Color.Transparent,
+                                bgColor = if (LocalAppIsDark.current) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.background,
                                 tint = MaterialTheme.colorScheme.onSurface,
                                 onClick = onDismiss
                             )
@@ -185,6 +185,7 @@ private fun InlyModalBottomSheet(
                 }
             } finally {
                 action()
+                onDismiss()
             }
         }
     }
@@ -248,7 +249,7 @@ private fun InlyModalBottomSheet(
                                 TopBarIconButton(
                                     icon = headerAction.icon,
                                     contentDescription = headerAction.contentDescription,
-                                    bgColor = Color.Transparent,
+                                    bgColor = if (LocalAppIsDark.current) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.background,
                                     tint = headerAction.tint ?: MaterialTheme.colorScheme.onSurface,
                                     onClick = headerAction.onClick
                                 )
@@ -258,7 +259,7 @@ private fun InlyModalBottomSheet(
                             TopBarIconButton(
                                 icon = Icons.Default.Close,
                                 contentDescription = "Close",
-                                bgColor = Color.Transparent,
+                                bgColor = if (LocalAppIsDark.current) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.background,
                                 tint = MaterialTheme.colorScheme.onSurface,
                                 onClick = onDismiss
                             )

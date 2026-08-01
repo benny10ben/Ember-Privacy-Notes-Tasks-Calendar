@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
@@ -1018,7 +1019,8 @@ fun DesktopMainScreen(
                             com.ben.inly.presentation.rag.RagChatPanel(
                                 onDismiss = onDismissRagChat,
                                 viewModel = ragViewModel,
-                                modifier = Modifier.fillMaxSize()
+                                modifier = Modifier.fillMaxSize(),
+                                onPickDocument = onPickDocument
                             )
                         }
                     }
@@ -1094,17 +1096,23 @@ fun DesktopMainScreen(
                     onDismissRequest = { showSearchDialog = false },
                     properties = DialogProperties(usePlatformDefaultWidth = false)
                 ) {
-                    Surface(
-                        modifier = Modifier.width(560.dp).heightIn(max = 640.dp),
-                        shape = DesktopPanelShape,
-                        color = MaterialTheme.colorScheme.surface,
-                        shadowElevation = 24.dp
-                    ) {
-                        SearchScreen(
-                            onBack = { showSearchDialog = false },
-                            onNoteClick = { noteId -> showSearchDialog = false; openNote(noteId) },
-                            onDailyNoteClick = { dateString -> showSearchDialog = false; openDaily(LocalDate.parse(dateString)) }
-                        )
+                    SharedTransitionLayout {
+                        AnimatedVisibility(visible = true) {
+                            Surface(
+                                modifier = Modifier.width(560.dp).heightIn(max = 640.dp),
+                                shape = DesktopPanelShape,
+                                color = MaterialTheme.colorScheme.surface,
+                                shadowElevation = 24.dp
+                            ) {
+                                SearchScreen(
+                                    onBack = { showSearchDialog = false },
+                                    onNoteClick = { noteId -> showSearchDialog = false; openNote(noteId) },
+                                    onDailyNoteClick = { dateString -> showSearchDialog = false; openDaily(LocalDate.parse(dateString)) },
+                                    sharedTransitionScope = this@SharedTransitionLayout,
+                                    searchIconAnimatedVisibilityScope = this@AnimatedVisibility
+                                )
+                            }
+                        }
                     }
                 }
             }
