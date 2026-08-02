@@ -288,6 +288,301 @@ abstract class BaseEditorViewModel(
         if (currentList == newList) return
 
         lastLocalMutationTime = System.currentTimeMillis()
+        if (!isApplyingHistory) recordHistory(currentList, newList)
+    }
+
+    private data class HistoryEntry(
+        val before: List<NoteBlock>,
+        val after: List<NoteBlock>,
+        val coalescingKey: String?
+    )
+
+    private val undoStack = ArrayDeque<HistoryEntry>()
+    private val redoStack = ArrayDeque<HistoryEntry>()
+    private var isApplyingHistory = false
+    private var historyCoalescingSealed = true
+    private val maxHistoryDepth = 100
+
+    private val _canUndo = MutableStateFlow(false)
+    val canUndo: StateFlow<Boolean> = _canUndo.asStateFlow()
+    private val _canRedo = MutableStateFlow(false)
+    val canRedo: StateFlow<Boolean> = _canRedo.asStateFlow()
+
+    private fun historyTextOf(block: NoteBlock): String? = when (block) {
+        is TextBlock -> block.text
+        is HeadingBlock -> block.text
+        is CheckboxBlock -> block.text
+        is BulletedListBlock -> block.text
+        is NumberedListBlock -> block.text
+        is ToggleBlock -> block.text
+        is QuoteBlock -> block.text
+        is CodeBlock -> block.code
+        else -> null
+    }
+
+    private fun changedBlockIds(before: List<NoteBlock>, after: List<NoteBlock>): Set<String> {
+        val beforeById = before.associateBy { it.id }
+        val afterById = after.associateBy { it.id }
+        return (beforeById.keys + afterById.keys).filterTo(mutableSetOf()) { beforeById[it] != afterById[it] }
+    }
+
+    private fun coalescingKeyFor(before: List<NoteBlock>, after: List<NoteBlock>): String? {
+        val changed = changedBlockIds(before, after)
+        if (changed.size != 1) return null
+        val id = changed.first()
+        val previous = before.firstOrNull { it.id == id } ?: return null
+        val current = after.firstOrNull { it.id == id } ?: return null
+        if (previous::class != current::class || previous.isDeleted != current.isDeleted) return null
+        val previousText = historyTextOf(previous) ?: return null
+        val currentText = historyTextOf(current) ?: return null
+        return if (previousText == currentText) null else id
+    }
+
+    private fun endsOnWordBoundary(after: List<NoteBlock>, id: String): Boolean {
+        val text = after.firstOrNull { it.id == id }?.let { historyTextOf(it) } ?: return true
+        return text.isEmpty() || text.last().isWhitespace()
+    }
+
+    private fun mergesIntoCreationStreak(before: List<NoteBlock>, after: List<NoteBlock>, top: HistoryEntry?): Boolean {
+        if (top == null) return false
+        val id = changedBlockIds(before, after).singleOrNull() ?: return false
+        val newBlock = after.firstOrNull { it.id == id } ?: return false
+        if (historyTextOf(newBlock) != null) return false
+        return changedBlockIds(top.before, top.after) == setOf(id) && top.before.none { it.id == id }
+    }
+
+    private fun recordHistory(before: List<NoteBlock>, after: List<NoteBlock>) {
+        redoStack.clear()
+        val top = undoStack.lastOrNull()
+
+        if (mergesIntoCreationStreak(before, after, top)) {
+            undoStack[undoStack.lastIndex] = top!!.copy(after = after)
+            historyCoalescingSealed = true
+            updateHistoryFlags()
+            return
+        }
+
+        val key = coalescingKeyFor(before, after)
+        val coalesced = key != null && !historyCoalescingSealed && top != null && top.coalescingKey == key
+        if (coalesced) {
+            undoStack[undoStack.lastIndex] = top!!.copy(after = after)
+        } else {
+            undoStack.addLast(HistoryEntry(before, after, key))
+            while (undoStack.size > maxHistoryDepth) undoStack.removeFirst()
+        }
+        historyCoalescingSealed = key == null || endsOnWordBoundary(after, key)
+        updateHistoryFlags()
+    }
+
+    private fun sealHistoryCoalescing() { historyCoalescingSealed = true }
+
+    private fun updateHistoryFlags() {
+        _canUndo.value = undoStack.isNotEmpty()
+        _canRedo.value = redoStack.isNotEmpty()
+    }
+
+    protected fun clearUndoHistory() {
+        undoStack.clear()
+        redoStack.clear()
+        historyCoalescingSealed = true
+        updateHistoryFlags()
+    }
+
+    fun undo() {
+        val entry = undoStack.removeLastOrNull() ?: return
+        applyHistory(entry, restoreBefore = true)
+        focusHistoryTarget(entry, restoreBefore = true)
+        redoStack.addLast(entry)
+        historyCoalescingSealed = true
+        updateHistoryFlags()
+        scheduleAutosave()
+    }
+
+    fun redo() {
+        val entry = redoStack.removeLastOrNull() ?: return
+        applyHistory(entry, restoreBefore = false)
+        focusHistoryTarget(entry, restoreBefore = false)
+        undoStack.addLast(entry)
+        historyCoalescingSealed = true
+        updateHistoryFlags()
+        scheduleAutosave()
+    }
+
+    private fun focusHistoryTarget(entry: HistoryEntry, restoreBefore: Boolean) {
+        val changed = changedBlockIds(entry.before, entry.after)
+        val current = _blocks.value
+
+        // Only blocks that host a text field can take focus. NoteBlockItem attaches its
+        // FocusRequester exclusively inside the isTextBased branch, so targeting an
+        // ImageBlock/VoiceBlock/DatabaseBlock leaves the requester unattached:
+        // requestFocus() throws, nothing claims the input session, and the IME closes.
+        val target = current.firstOrNull { it.id in changed && !it.isDeleted && historyTextOf(it) != null }
+            ?: nearestTextNeighbour(current, changed)
+            ?: return
+
+        val toText = historyTextOf(target)
+        val fromSnapshot = if (restoreBefore) entry.after else entry.before
+        val fromText = fromSnapshot.firstOrNull { it.id == target.id }?.let { historyTextOf(it) }
+        val offset = if (toText != null && fromText != null) cursorOffsetAfterChange(fromText, toText) else null
+
+        if (target.id != currentlyFocusedBlockId) {
+            currentlyFocusedBlockId = target.id
+            _focusRequest.value = FocusRequest(id = target.id, placeCursorAtEnd = offset == null)
+        }
+        if (offset != null) {
+            _selectionRequest.value = SelectionRequest(blockId = target.id, selection = TextRange(offset))
+        }
+    }
+
+    // When the only thing an entry touched is a media block, park the caret on the closest
+    // text block instead - preferring the one after it, which is normally the trailing empty block.
+    private fun nearestTextNeighbour(current: List<NoteBlock>, changed: Set<String>): NoteBlock? {
+        val anchor = current.indexOfFirst { it.id in changed && !it.isDeleted }
+        if (anchor == -1) return null
+        for (i in anchor + 1 until current.size) {
+            val b = current[i]
+            if (!b.isDeleted && historyTextOf(b) != null) return b
+        }
+        for (i in anchor - 1 downTo 0) {
+            val b = current[i]
+            if (!b.isDeleted && historyTextOf(b) != null) return b
+        }
+        return null
+    }
+
+    private fun cursorOffsetAfterChange(fromText: String, toText: String): Int {
+        val prefix = fromText.commonPrefixWith(toText).length
+        val suffix = fromText.commonSuffixWith(toText).length
+            .coerceAtMost(minOf(fromText.length, toText.length) - prefix)
+        return (toText.length - suffix).coerceIn(0, toText.length)
+    }
+
+    private fun historySameContent(a: NoteBlock, b: NoteBlock): Boolean =
+        a.withUpdatedAt(0L) == b.withUpdatedAt(0L)
+
+    private fun applyHistory(entry: HistoryEntry, restoreBefore: Boolean) {
+        val target = if (restoreBefore) entry.before else entry.after
+        val expected = if (restoreBefore) entry.after else entry.before
+        val changed = changedBlockIds(entry.before, entry.after)
+        val targetById = target.associateBy { it.id }
+        val expectedById = expected.associateBy { it.id }
+        val now = System.currentTimeMillis()
+
+        isApplyingHistory = true
+        modifyBlocks { live ->
+            val liveById = live.associateBy { it.id }
+            val placed = HashSet<String>()
+            val result = mutableListOf<NoteBlock>()
+
+            for (targetBlock in target) {
+                if (!placed.add(targetBlock.id)) continue
+                val liveBlock = liveById[targetBlock.id]
+                if (targetBlock.id in changed) {
+                    val expectedBlock = expectedById[targetBlock.id]
+                    if (targetBlock is DatabaseBlock && liveBlock is DatabaseBlock && expectedBlock is DatabaseBlock &&
+                        (targetBlock.rows != expectedBlock.rows || targetBlock.columns != expectedBlock.columns)) {
+                        result.add(reconcileDatabaseHistory(targetBlock, expectedBlock, liveBlock, now))
+                    } else if (liveBlock != null && expectedBlock != null && !historySameContent(liveBlock, expectedBlock)) {
+                        result.add(liveBlock)
+                    } else {
+                        result.add(targetBlock.withUpdatedAt(now))
+                    }
+                } else {
+                    result.add(liveBlock ?: targetBlock)
+                }
+            }
+
+            for (liveBlock in live) {
+                if (!placed.add(liveBlock.id)) continue
+                val createdByEntry = liveBlock.id in changed &&
+                        !targetById.containsKey(liveBlock.id) &&
+                        expectedById.containsKey(liveBlock.id)
+                if (createdByEntry) {
+                    val expectedBlock = expectedById[liveBlock.id]
+                    if (expectedBlock != null && !historySameContent(liveBlock, expectedBlock)) result.add(liveBlock)
+                    else result.add(liveBlock.markDeleted())
+                } else {
+                    result.add(liveBlock)
+                }
+            }
+            result
+        }
+        isApplyingHistory = false
+    }
+
+    private fun reconcileDatabaseHistory(
+        target: DatabaseBlock,
+        expected: DatabaseBlock,
+        live: DatabaseBlock,
+        now: Long
+    ): DatabaseBlock = live.copy(
+        rows = reconcileDbRows(target.rows, expected.rows, live.rows, now),
+        columns = reconcileDbColumns(target.columns, expected.columns, live.columns, now),
+        updatedAt = now
+    )
+
+    private fun reconcileDbRows(
+        targetRows: List<DatabaseRow>,
+        expectedRows: List<DatabaseRow>,
+        liveRows: List<DatabaseRow>,
+        now: Long
+    ): List<DatabaseRow> {
+        val targetById = targetRows.associateBy { it.id }
+        val expectedById = expectedRows.associateBy { it.id }
+        val touched = (targetById.keys + expectedById.keys).filterTo(mutableSetOf()) { targetById[it] != expectedById[it] }
+        val result = mutableListOf<DatabaseRow>()
+        val placed = HashSet<String>()
+        for (liveRow in liveRows) {
+            if (!placed.add(liveRow.id)) continue
+            if (liveRow.id in touched) {
+                val expectedRow = expectedById[liveRow.id]
+                if (expectedRow != null && liveRow.copy(updatedAt = 0L) != expectedRow.copy(updatedAt = 0L)) {
+                    result.add(liveRow)
+                } else {
+                    val targetRow = targetById[liveRow.id]
+                    if (targetRow != null) result.add(targetRow.copy(updatedAt = now))
+                    else result.add(liveRow.copy(isDeleted = true, updatedAt = now))
+                }
+            } else {
+                result.add(liveRow)
+            }
+        }
+        for (targetRow in targetRows) {
+            if (placed.add(targetRow.id)) result.add(targetRow.copy(updatedAt = now))
+        }
+        return result
+    }
+
+    private fun reconcileDbColumns(
+        targetColumns: List<DatabaseColumn>,
+        expectedColumns: List<DatabaseColumn>,
+        liveColumns: List<DatabaseColumn>,
+        now: Long
+    ): List<DatabaseColumn> {
+        val targetById = targetColumns.associateBy { it.id }
+        val expectedById = expectedColumns.associateBy { it.id }
+        val touched = (targetById.keys + expectedById.keys).filterTo(mutableSetOf()) { targetById[it] != expectedById[it] }
+        val result = mutableListOf<DatabaseColumn>()
+        val placed = HashSet<String>()
+        for (liveColumn in liveColumns) {
+            if (!placed.add(liveColumn.id)) continue
+            if (liveColumn.id in touched) {
+                val expectedColumn = expectedById[liveColumn.id]
+                if (expectedColumn != null && liveColumn.copy(updatedAt = 0L) != expectedColumn.copy(updatedAt = 0L)) {
+                    result.add(liveColumn)
+                } else {
+                    val targetColumn = targetById[liveColumn.id]
+                    if (targetColumn != null) result.add(targetColumn.copy(updatedAt = now))
+                    else result.add(liveColumn.copy(isDeleted = true, updatedAt = now))
+                }
+            } else {
+                result.add(liveColumn)
+            }
+        }
+        for (targetColumn in targetColumns) {
+            if (placed.add(targetColumn.id)) result.add(targetColumn.copy(updatedAt = now))
+        }
+        return result
     }
 
     fun startHardwareRecording() {
@@ -309,7 +604,7 @@ abstract class BaseEditorViewModel(
                     val cleanFileName = mediaInfo.localFileName.substringAfterLast("/")
                     val now = System.currentTimeMillis()
                     modifyBlocks { list ->
-                        mapBlockById(list, blockId, now) { db ->
+                        mapBlockById(list, blockId) { db ->
                             if (db is DatabaseBlock) {
                                 val updatedRows = db.rows.map { row ->
                                     if (row.id == rowId) {
@@ -337,7 +632,7 @@ abstract class BaseEditorViewModel(
             val cleanFileName = result.first.substringAfterLast("/")
             val now = System.currentTimeMillis()
             modifyBlocks { list ->
-                mapBlockById(list, blockId, now) { db ->
+                mapBlockById(list, blockId) { db ->
                     if (db is DatabaseBlock) {
                         val updatedRows = db.rows.map { row ->
                             if (row.id == rowId) {
@@ -368,7 +663,7 @@ abstract class BaseEditorViewModel(
     fun toggleCheckbox(blockId: String, isChecked: Boolean) {
         val now = System.currentTimeMillis()
         modifyBlocks { list ->
-            mapBlockById(list, blockId, now) {
+            mapBlockById(list, blockId) {
                 if (it is CheckboxBlock) {
                     if (isChecked) reminderScheduler.cancel(blockId)
                     it.copy(isChecked = isChecked, updatedAt = now)
@@ -381,7 +676,7 @@ abstract class BaseEditorViewModel(
     fun toggleToggleBlock(blockId: String) {
         val now = System.currentTimeMillis()
         modifyBlocks { list ->
-            mapBlockById(list, blockId, now) {
+            mapBlockById(list, blockId) {
                 if (it is ToggleBlock) it.copy(isExpanded = !it.isExpanded, updatedAt = now) else it
             }
         }
@@ -399,7 +694,7 @@ abstract class BaseEditorViewModel(
         }
         val now = System.currentTimeMillis()
         modifyBlocks { list ->
-            mapBlockById(list, id, now) { b ->
+            mapBlockById(list, id) { b ->
                 when (format) {
                     "bold" -> updateFormat(b, !b.isBold, b.isItalic, b.isStrikeThrough, b.isUnderlined, now)
                     "italic" -> updateFormat(b, b.isBold, !b.isItalic, b.isStrikeThrough, b.isUnderlined, now)
@@ -462,7 +757,7 @@ abstract class BaseEditorViewModel(
         val now = System.currentTimeMillis()
         var newSelection: TextRange? = null
         modifyBlocks { list ->
-            mapBlockById(list, blockId, now) { b ->
+            mapBlockById(list, blockId) { b ->
                 val text = getBlockText(b)
                 val start = selection.min.coerceIn(0, text.length)
                 val end = selection.max.coerceIn(0, text.length)
@@ -572,7 +867,7 @@ abstract class BaseEditorViewModel(
     fun setFocusedBlockAlignment(alignment: TextAlignment) {
         val id = currentlyFocusedBlockId ?: return
         val now = System.currentTimeMillis()
-        modifyBlocks { list -> mapBlockById(list, id, now) { it.withTextAlignment(alignment, now) } }
+        modifyBlocks { list -> mapBlockById(list, id) { it.withTextAlignment(alignment, now) } }
         scheduleAutosave()
     }
 
@@ -591,7 +886,7 @@ abstract class BaseEditorViewModel(
         val id = currentlyFocusedBlockId ?: return
         val now = System.currentTimeMillis()
         modifyBlocks { list ->
-            mapBlockById(list, id, now) { b ->
+            mapBlockById(list, id) { b ->
                 val newLevel = if (increment) b.indentationLevel + 1 else maxOf(0, b.indentationLevel - 1)
                 withIndentation(b, newLevel, now)
             }
@@ -617,7 +912,7 @@ abstract class BaseEditorViewModel(
         val id = currentlyFocusedBlockId ?: return
         val now = System.currentTimeMillis()
         modifyBlocks { list ->
-            spliceAtBlock(list, id, now) { mutable, idx ->
+            spliceAtBlock(list, id) { mutable, idx ->
                 val b = mutable[idx]
                 val rawText = getBlockText(b)
 
@@ -711,6 +1006,19 @@ abstract class BaseEditorViewModel(
         scheduleAutosave()
     }
 
+    // The single authoritative slash strip. Runs synchronously against _blocks.value rather than a
+    // composition snapshot, and uses the text itself rather than slashQuery - which desyncs the moment
+    // isSlashKilled forces it to "" while the block text keeps its "/whatever".
+    fun clearActiveSlashQuery() {
+        val id = currentlyFocusedBlockId ?: return
+        val block = _blocks.value.firstOrNull { it.id == id } ?: return
+        val raw = getBlockText(block)
+        val slashIndex = raw.lastIndexOf('/')
+        if (slashIndex == -1) return
+        if (raw.substring(slashIndex).contains(" ")) return
+        updateBlockText(id, raw.substring(0, slashIndex))
+    }
+
     private fun getBlockText(b: NoteBlock) = when (b) {
         is TextBlock -> b.text
         is HeadingBlock -> b.text
@@ -746,7 +1054,7 @@ abstract class BaseEditorViewModel(
         var blockToFocusId = ""
         val now = System.currentTimeMillis()
         modifyBlocks { list ->
-            spliceAtBlock(list, id, now) { mutable, idx ->
+            spliceAtBlock(list, id) { mutable, idx ->
                 val cur = mutable[idx]
                 val newId = UUID.randomUUID().toString()
                 blockToFocusId = newId
@@ -797,7 +1105,7 @@ abstract class BaseEditorViewModel(
         if (cur !is TextBlock) {
             val inheritedAlignment = cur.textAlignmentOrNull() ?: TextAlignment.LEFT
             modifyBlocks { list ->
-                spliceAtBlock(list, id, now) { mutable, i ->
+                spliceAtBlock(list, id) { mutable, i ->
                     mutable[i] = TextBlock(cur.id, "", cur.indentationLevel, inheritedAlignment, isPinned = cur.isPinned, updatedAt = now)
                 }
             }
@@ -823,7 +1131,7 @@ abstract class BaseEditorViewModel(
 
             if (isMediaOrDivider) {
                 modifyBlocks { list ->
-                    deleteBlockEverywhereById(list, prevBlock.id, now)
+                    deleteBlockEverywhereById(list, prevBlock.id)
                 }
                 scheduleAutosave()
             } else {
@@ -831,7 +1139,7 @@ abstract class BaseEditorViewModel(
                 viewModelScope.launch {
                     delay(50.milliseconds)
                     modifyBlocks { list ->
-                        deleteBlockEverywhereById(list, id, now)
+                        deleteBlockEverywhereById(list, id)
                     }
                     scheduleAutosave()
                 }
@@ -843,7 +1151,7 @@ abstract class BaseEditorViewModel(
                 viewModelScope.launch {
                     delay(50.milliseconds)
                     modifyBlocks { list ->
-                        deleteBlockEverywhereById(list, id, now)
+                        deleteBlockEverywhereById(list, id)
                     }
                     scheduleAutosave()
                 }
@@ -851,9 +1159,9 @@ abstract class BaseEditorViewModel(
         }
     }
 
-    private fun deleteBlockEverywhereById(list: List<NoteBlock>, id: String, now: Long): List<NoteBlock> {
-        val spliced = spliceAtBlock(list, id, now) { mutable, i -> mutable[i] = mutable[i].markDeleted() }
-        return mapBlockById(spliced, id, now) { it.markDeleted() }
+    private fun deleteBlockEverywhereById(list: List<NoteBlock>, id: String): List<NoteBlock> {
+        val spliced = spliceAtBlock(list, id) { mutable, i -> mutable[i] = mutable[i].markDeleted() }
+        return mapBlockById(spliced, id) { it.markDeleted() }
     }
 
     fun addBlankBlockBelowFocused() {
@@ -874,7 +1182,10 @@ abstract class BaseEditorViewModel(
         scheduleAutosave()
     }
 
-    fun setFocusedBlock(id: String) { currentlyFocusedBlockId = id }
+    fun setFocusedBlock(id: String) {
+        if (id != currentlyFocusedBlockId) sealHistoryCoalescing()
+        currentlyFocusedBlockId = id
+    }
 
     // Tapping an unfocused block's text goes through a separate tap-detection overlay first (to
     // distinguish tapping a note-link from tapping plain text - see NoteBlockItem), which already
@@ -925,7 +1236,7 @@ abstract class BaseEditorViewModel(
         if (selected.isEmpty()) return
         val now = System.currentTimeMillis()
         modifyBlocks { list ->
-            spliceAtBlock(list, selected.first(), now) { mutable, idx ->
+            spliceAtBlock(list, selected.first()) { mutable, idx ->
                 val targetLevel = mutable[idx].indentationLevel
                 val targetAlignment = mutable[idx].textAlignmentOrNull() ?: TextAlignment.LEFT
                 mutable.add(idx, TextBlock(id = UUID.randomUUID().toString(), text = "", indentationLevel = targetLevel, textAlignment = targetAlignment, updatedAt = now))
@@ -940,7 +1251,7 @@ abstract class BaseEditorViewModel(
         if (selected.isEmpty()) return
         val now = System.currentTimeMillis()
         modifyBlocks { list ->
-            spliceAtBlock(list, selected.last(), now) { mutable, idx ->
+            spliceAtBlock(list, selected.last()) { mutable, idx ->
                 val targetLevel = mutable[idx].indentationLevel
                 val targetAlignment = mutable[idx].textAlignmentOrNull() ?: TextAlignment.LEFT
                 mutable.add(idx + 1, TextBlock(id = UUID.randomUUID().toString(), text = "", indentationLevel = targetLevel, textAlignment = targetAlignment, updatedAt = now))
@@ -963,10 +1274,13 @@ abstract class BaseEditorViewModel(
     }
 
     fun updateBlockText(blockId: String, newText: String) {
+        val existing = _blocks.value.firstOrNull { it.id == blockId }
+        if (existing != null && !existing.isDeleted && getBlockText(existing) == newText) return
+
         val now = System.currentTimeMillis()
 
         modifyBlocks { list ->
-            mapBlockById(list, blockId, now) { b ->
+            mapBlockById(list, blockId) { b ->
                 val shiftedSpans = shiftSpansForEdit(b.inlineSpansOrEmpty(), getBlockText(b), newText)
                 withText(b, newText, now, shiftedSpans)
             }
@@ -980,14 +1294,12 @@ abstract class BaseEditorViewModel(
     protected fun mapBlockById(
         blocks: List<NoteBlock>,
         id: String,
-        now: Long,
         transform: (NoteBlock) -> NoteBlock
     ): List<NoteBlock> = blocks.map { b -> if (b.id == id) transform(b) else b }
 
     protected fun spliceAtBlock(
         blocks: List<NoteBlock>,
         id: String,
-        now: Long,
         onFound: (MutableList<NoteBlock>, Int) -> Unit
     ): List<NoteBlock> {
         val idx = blocks.indexOfFirst { it.id == id }
@@ -1020,7 +1332,7 @@ abstract class BaseEditorViewModel(
         val now = System.currentTimeMillis()
         val blockText = (findBlockById(_blocks.value, blockId) as? CheckboxBlock)?.text ?: ""
         modifyBlocks { list ->
-            mapBlockById(list, blockId, now) {
+            mapBlockById(list, blockId) {
                 if (it is CheckboxBlock) it.copy(reminderTimestamp = timestamp, updatedAt = now) else it
             }
         }
@@ -1169,7 +1481,7 @@ abstract class BaseEditorViewModel(
     fun updateSketchStrokes(blockId: String, strokes: List<Stroke>) {
         val now = System.currentTimeMillis()
         modifyBlocks { list ->
-            mapBlockById(list, blockId, now) {
+            mapBlockById(list, blockId) {
                 if (it is SketchBlock) it.copy(strokes = strokes, updatedAt = now) else it
             }
         }
@@ -1178,12 +1490,12 @@ abstract class BaseEditorViewModel(
 
     fun handleUrlSubmit(blockId: String, url: String) {
         val now = System.currentTimeMillis()
-        modifyBlocks { list -> mapBlockById(list, blockId, now) { if (it is BookmarkBlock) it.copy(url = url, title = "Loading...", updatedAt = now) else it } }
+        modifyBlocks { list -> mapBlockById(list, blockId) { if (it is BookmarkBlock) it.copy(url = url, title = "Loading...", updatedAt = now) else it } }
         viewModelScope.launch(Dispatchers.IO) {
             val metadata = HtmlMetadataFetcher.fetchMetadata(url)
             val fetchedAt = System.currentTimeMillis()
             modifyBlocks { list ->
-                mapBlockById(list, blockId, fetchedAt) {
+                mapBlockById(list, blockId) {
                     if (it is BookmarkBlock)
                         it.copy(title = metadata.title, description = metadata.description, previewImageUrl = metadata.imageUrl, updatedAt = fetchedAt)
                     else it
@@ -1199,7 +1511,7 @@ abstract class BaseEditorViewModel(
             if (mediaInfo != null) {
                 withContext(Dispatchers.Main) {
                     val now = System.currentTimeMillis()
-                    modifyBlocks { list -> mapBlockById(list, blockId, now) { if (it is ImageBlock) it.copy(localFilePath = mediaInfo.localFileName, updatedAt = now) else it } }
+                    modifyBlocks { list -> mapBlockById(list, blockId) { if (it is ImageBlock) it.copy(localFilePath = mediaInfo.localFileName, updatedAt = now) else it } }
                     scheduleAutosave()
                 }
             }
@@ -1213,7 +1525,7 @@ abstract class BaseEditorViewModel(
                 withContext(Dispatchers.Main) {
                     val now = System.currentTimeMillis()
                     modifyBlocks { list ->
-                        mapBlockById(list, blockId, now) {
+                        mapBlockById(list, blockId) {
                             if (it is DocumentBlock) {
                                 it.copy(localFilePath = mediaInfo.localFileName, fileName = mediaInfo.originalName, mimeType = mediaInfo.mimeType, fileSizeString = mediaInfo.formattedSize, updatedAt = now)
                             } else it
@@ -1226,20 +1538,19 @@ abstract class BaseEditorViewModel(
     }
 
     fun deleteImageBlock(blockId: String) {
-        val now = System.currentTimeMillis()
-        modifyBlocks { list -> mapBlockById(list, blockId, now) { it.markDeleted() } }
+        modifyBlocks { list -> mapBlockById(list, blockId) { it.markDeleted() } }
         scheduleAutosave()
     }
 
     fun handleVoiceRecorded(blockId: String, filePath: String, duration: Int) {
         val now = System.currentTimeMillis()
-        modifyBlocks { list -> mapBlockById(list, blockId, now) { if (it is VoiceBlock) it.copy(localFilePath = filePath, durationSeconds = duration, updatedAt = now) else it } }
+        modifyBlocks { list -> mapBlockById(list, blockId) { if (it is VoiceBlock) it.copy(localFilePath = filePath, durationSeconds = duration, updatedAt = now) else it } }
         scheduleAutosave()
     }
 
     fun handleRemoveVoice(blockId: String) {
         val now = System.currentTimeMillis()
-        modifyBlocks { list -> mapBlockById(list, blockId, now) { if (it is VoiceBlock) it.copy(localFilePath = null, durationSeconds = 0, updatedAt = now) else it } }
+        modifyBlocks { list -> mapBlockById(list, blockId) { if (it is VoiceBlock) it.copy(localFilePath = null, durationSeconds = 0, updatedAt = now) else it } }
         scheduleAutosave()
     }
 
@@ -1256,19 +1567,19 @@ abstract class BaseEditorViewModel(
 
     fun updateDbTitle(blockId: String, newTitle: String) {
         val now = System.currentTimeMillis()
-        modifyBlocks { list -> mapBlockById(list, blockId, now) { if (it is DatabaseBlock) it.copy(title = newTitle, updatedAt = now) else it } }
+        modifyBlocks { list -> mapBlockById(list, blockId) { if (it is DatabaseBlock) it.copy(title = newTitle, updatedAt = now) else it } }
         scheduleAutosave()
     }
 
     fun addDbRow(blockId: String) {
         val now = System.currentTimeMillis()
-        modifyBlocks { list -> mapBlockById(list, blockId, now) { if (it is DatabaseBlock) it.copy(rows = it.rows + DatabaseRow(id = UUID.randomUUID().toString(), databaseId = blockId, cells = emptyMap(), updatedAt = now), updatedAt = now) else it } }
+        modifyBlocks { list -> mapBlockById(list, blockId) { if (it is DatabaseBlock) it.copy(rows = it.rows + DatabaseRow(id = UUID.randomUUID().toString(), databaseId = blockId, cells = emptyMap(), updatedAt = now), updatedAt = now) else it } }
         scheduleAutosave()
     }
 
     fun addDbColumn(blockId: String) {
         val now = System.currentTimeMillis()
-        modifyBlocks { list -> mapBlockById(list, blockId, now) { if (it is DatabaseBlock) it.copy(columns = it.columns + DatabaseColumn(id = UUID.randomUUID().toString(), databaseId = blockId, name = "New Column", type = ColumnType.TEXT, updatedAt = now), updatedAt = now) else it } }
+        modifyBlocks { list -> mapBlockById(list, blockId) { if (it is DatabaseBlock) it.copy(columns = it.columns + DatabaseColumn(id = UUID.randomUUID().toString(), databaseId = blockId, name = "New Column", type = ColumnType.TEXT, updatedAt = now), updatedAt = now) else it } }
         scheduleAutosave()
     }
 
@@ -1283,7 +1594,7 @@ abstract class BaseEditorViewModel(
     fun updateLinkedNoteOptions(blockId: String, showIcon: Boolean, showCoverImage: Boolean) {
         val now = System.currentTimeMillis()
         modifyBlocks { list ->
-            mapBlockById(list, blockId, now) {
+            mapBlockById(list, blockId) {
                 if (it is LinkedNoteBlock) it.copy(showIcon = showIcon, showCoverImage = showCoverImage, updatedAt = now) else it
             }
         }
@@ -1293,7 +1604,7 @@ abstract class BaseEditorViewModel(
     fun updateDbCell(blockId: String, rowId: String, colId: String, newValue: CellData) {
         val now = System.currentTimeMillis()
         modifyBlocks { list ->
-            mapBlockById(list, blockId, now) { block ->
+            mapBlockById(list, blockId) { block ->
                 if (block is DatabaseBlock) {
                     val updatedRows = block.rows.map { row ->
                         if (row.id == rowId) {
@@ -1317,7 +1628,7 @@ abstract class BaseEditorViewModel(
     fun updateDbFormula(blockId: String, colId: String, expression: String) {
         val now = System.currentTimeMillis()
         modifyBlocks { list ->
-            mapBlockById(list, blockId, now) { db ->
+            mapBlockById(list, blockId) { db ->
                 if (db is DatabaseBlock) {
                     val updatedCols = db.columns.map { col -> if (col.id == colId) col.copy(formulaExpression = expression, updatedAt = now) else col }
                     val updatedRows = db.rows.map { row ->
@@ -1334,20 +1645,20 @@ abstract class BaseEditorViewModel(
 
     fun updateDbColumn(blockId: String, colId: String, newName: String, newType: ColumnType, isManualNameChange: Boolean = true) {
         val now = System.currentTimeMillis()
-        modifyBlocks { list -> mapBlockById(list, blockId, now) { db -> if (db is DatabaseBlock) db.copy(columns = db.columns.map { col -> if (col.id == colId) col.copy(name = newName, type = newType, isNameManuallySet = col.isNameManuallySet || isManualNameChange, updatedAt = now) else col }, updatedAt = now) else db } }
+        modifyBlocks { list -> mapBlockById(list, blockId) { db -> if (db is DatabaseBlock) db.copy(columns = db.columns.map { col -> if (col.id == colId) col.copy(name = newName, type = newType, isNameManuallySet = col.isNameManuallySet || isManualNameChange, updatedAt = now) else col }, updatedAt = now) else db } }
         scheduleAutosave()
     }
 
     fun updateDbColumnWidth(blockId: String, colId: String, newWidth: Int) {
         val now = System.currentTimeMillis()
-        modifyBlocks { list -> mapBlockById(list, blockId, now) { db -> if (db is DatabaseBlock) db.copy(columns = db.columns.map { col -> if (col.id == colId) col.copy(width = newWidth.coerceIn(40, 600), updatedAt = now) else col }, updatedAt = now) else db } }
+        modifyBlocks { list -> mapBlockById(list, blockId) { db -> if (db is DatabaseBlock) db.copy(columns = db.columns.map { col -> if (col.id == colId) col.copy(width = newWidth.coerceIn(40, 600), updatedAt = now) else col }, updatedAt = now) else db } }
         scheduleAutosave()
     }
 
     fun updateDbSort(blockId: String, colId: String, isAscending: Boolean?) {
         val now = System.currentTimeMillis()
         modifyBlocks { list ->
-            mapBlockById(list, blockId, now) { db ->
+            mapBlockById(list, blockId) { db ->
                 if (db is DatabaseBlock) {
                     db.withActiveViewUpdated(now) { view ->
                         val modifiedSortList = view.activeSorts.toMutableList()
@@ -1366,7 +1677,7 @@ abstract class BaseEditorViewModel(
     fun updateDbGroupBy(blockId: String, colId: String?) {
         val now = System.currentTimeMillis()
         modifyBlocks { list ->
-            mapBlockById(list, blockId, now) { db ->
+            mapBlockById(list, blockId) { db ->
                 if (db is DatabaseBlock) {
                     db.withActiveViewUpdated(now) { view -> view.copy(groupByColumnId = colId) }
                 } else db
@@ -1378,7 +1689,7 @@ abstract class BaseEditorViewModel(
     fun updateDbGalleryCardSize(blockId: String, size: GalleryCardSize) {
         val now = System.currentTimeMillis()
         modifyBlocks { list ->
-            mapBlockById(list, blockId, now) { db ->
+            mapBlockById(list, blockId) { db ->
                 if (db is DatabaseBlock) {
                     db.withActiveViewUpdated(now) { view -> view.copy(galleryCardSize = size) }
                 } else db
@@ -1391,7 +1702,7 @@ abstract class BaseEditorViewModel(
     fun toggleKanbanGroupVisibility(blockId: String, viewId: String, groupName: String, isHidden: Boolean) {
         val now = System.currentTimeMillis()
         modifyBlocks { list ->
-            mapBlockById(list, blockId, now) { db ->
+            mapBlockById(list, blockId) { db ->
                 if (db is DatabaseBlock) {
                     db.copy(
                         views = db.views.map { view ->
@@ -1412,7 +1723,7 @@ abstract class BaseEditorViewModel(
     fun reorderKanbanGroups(blockId: String, viewId: String, orderedGroupKeys: List<String>) {
         val now = System.currentTimeMillis()
         modifyBlocks { list ->
-            mapBlockById(list, blockId, now) { db ->
+            mapBlockById(list, blockId) { db ->
                 if (db is DatabaseBlock) {
                     db.copy(
                         views = db.views.map { view ->
@@ -1429,7 +1740,7 @@ abstract class BaseEditorViewModel(
     fun addDbFilter(blockId: String, colId: String, operator: String, value: String) {
         val now = System.currentTimeMillis()
         modifyBlocks { list ->
-            mapBlockById(list, blockId, now) { db ->
+            mapBlockById(list, blockId) { db ->
                 if (db is DatabaseBlock) {
                     db.withActiveViewUpdated(now) { view -> view.copy(activeFilters = view.activeFilters + FilterConfig(colId, operator, value)) }
                 } else db
@@ -1441,7 +1752,7 @@ abstract class BaseEditorViewModel(
     fun removeDbFilter(blockId: String, filter: FilterConfig) {
         val now = System.currentTimeMillis()
         modifyBlocks { list ->
-            mapBlockById(list, blockId, now) { db ->
+            mapBlockById(list, blockId) { db ->
                 if (db is DatabaseBlock) {
                     db.withActiveViewUpdated(now) { view -> view.copy(activeFilters = view.activeFilters - filter) }
                 } else db
@@ -1455,7 +1766,7 @@ abstract class BaseEditorViewModel(
         val now = System.currentTimeMillis()
         val newViewId = UUID.randomUUID().toString()
         modifyBlocks { list ->
-            mapBlockById(list, blockId, now) { db ->
+            mapBlockById(list, blockId) { db ->
                 if (db is DatabaseBlock) {
                     val baseName = when (type) {
                         ViewType.TABLE -> "Table"
@@ -1475,7 +1786,7 @@ abstract class BaseEditorViewModel(
     fun deleteDatabaseView(blockId: String, viewId: String) {
         val now = System.currentTimeMillis()
         modifyBlocks { list ->
-            mapBlockById(list, blockId, now) { db ->
+            mapBlockById(list, blockId) { db ->
                 if (db is DatabaseBlock && db.views.size > 1) {
                     val remainingViews = db.views.filter { it.id != viewId }
                     val newActiveViewId = if (db.activeViewId == viewId) remainingViews.firstOrNull()?.id else db.activeViewId
@@ -1488,14 +1799,14 @@ abstract class BaseEditorViewModel(
 
     fun setActiveDatabaseView(blockId: String, viewId: String) {
         val now = System.currentTimeMillis()
-        modifyBlocks { list -> mapBlockById(list, blockId, now) { db -> if (db is DatabaseBlock) db.copy(activeViewId = viewId, updatedAt = now) else db } }
+        modifyBlocks { list -> mapBlockById(list, blockId) { db -> if (db is DatabaseBlock) db.copy(activeViewId = viewId, updatedAt = now) else db } }
         scheduleAutosave()
     }
 
     fun renameDatabaseView(blockId: String, viewId: String, newName: String) {
         val now = System.currentTimeMillis()
         modifyBlocks { list ->
-            mapBlockById(list, blockId, now) { db ->
+            mapBlockById(list, blockId) { db ->
                 if (db is DatabaseBlock) {
                     db.copy(views = db.views.map { if (it.id == viewId) it.copy(name = newName) else it }, updatedAt = now)
                 } else db
@@ -1507,7 +1818,7 @@ abstract class BaseEditorViewModel(
     fun reorderDbColumns(blockId: String, fromIndex: Int, toIndex: Int) {
         val now = System.currentTimeMillis()
         modifyBlocks { list ->
-            mapBlockById(list, blockId, now) { db ->
+            mapBlockById(list, blockId) { db ->
                 if (db is DatabaseBlock) {
                     val cols = db.columns.toMutableList()
                     val moved = cols.removeAt(fromIndex)
@@ -1522,7 +1833,7 @@ abstract class BaseEditorViewModel(
     fun reorderDatabaseViews(blockId: String, fromIndex: Int, toIndex: Int) {
         val now = System.currentTimeMillis()
         modifyBlocks { list ->
-            mapBlockById(list, blockId, now) { db ->
+            mapBlockById(list, blockId) { db ->
                 if (db is DatabaseBlock) {
                     val views = db.views.toMutableList()
                     val moved = views.removeAt(fromIndex)
@@ -1537,7 +1848,7 @@ abstract class BaseEditorViewModel(
     fun deleteDbColumn(blockId: String, colId: String) {
         val now = System.currentTimeMillis()
         modifyBlocks { list ->
-            mapBlockById(list, blockId, now) { db ->
+            mapBlockById(list, blockId) { db ->
                 if (db is DatabaseBlock) {
                     val updatedCols = db.columns.map { col ->
                         if (col.id == colId) col.copy(isDeleted = true, updatedAt = now) else col
@@ -1552,7 +1863,7 @@ abstract class BaseEditorViewModel(
     fun deleteDbRow(blockId: String, rowId: String) {
         val now = System.currentTimeMillis()
         modifyBlocks { list ->
-            mapBlockById(list, blockId, now) { db ->
+            mapBlockById(list, blockId) { db ->
                 if (db is DatabaseBlock) {
                     val updatedRows = db.rows.map { row ->
                         if (row.id == rowId) row.copy(isDeleted = true, updatedAt = now) else row
@@ -1567,7 +1878,7 @@ abstract class BaseEditorViewModel(
     fun addDbRowAt(blockId: String, index: Int) {
         val now = System.currentTimeMillis()
         modifyBlocks { list ->
-            mapBlockById(list, blockId, now) { db ->
+            mapBlockById(list, blockId) { db ->
                 if (db is DatabaseBlock) {
                     val rows = db.rows.toMutableList()
                     rows.add(index.coerceIn(0, rows.size), DatabaseRow(id = UUID.randomUUID().toString(), databaseId = blockId, cells = emptyMap(), updatedAt = now))
@@ -1581,7 +1892,7 @@ abstract class BaseEditorViewModel(
     fun addDbColumnAt(blockId: String, index: Int) {
         val now = System.currentTimeMillis()
         modifyBlocks { list ->
-            mapBlockById(list, blockId, now) { db ->
+            mapBlockById(list, blockId) { db ->
                 if (db is DatabaseBlock) {
                     val cols = db.columns.toMutableList()
                     cols.add(index.coerceIn(0, cols.size), DatabaseColumn(id = UUID.randomUUID().toString(), databaseId = blockId, name = "New Column", type = ColumnType.TEXT, updatedAt = now))
@@ -1627,7 +1938,7 @@ abstract class BaseEditorViewModel(
         val now = System.currentTimeMillis()
         val newId = UUID.randomUUID().toString()
         modifyBlocks { list ->
-            spliceAtBlock(list, id, now) { mutable, idx ->
+            spliceAtBlock(list, id) { mutable, idx ->
                 val indent = mutable[idx].indentationLevel
                 val alignment = mutable[idx].textAlignmentOrNull() ?: TextAlignment.LEFT
                 mutable.add(idx, TextBlock(id = newId, text = "", indentationLevel = indent, textAlignment = alignment, updatedAt = now))
@@ -1641,7 +1952,7 @@ abstract class BaseEditorViewModel(
         val now = System.currentTimeMillis()
         val newId = UUID.randomUUID().toString()
         modifyBlocks { list ->
-            spliceAtBlock(list, id, now) { mutable, idx ->
+            spliceAtBlock(list, id) { mutable, idx ->
                 val indent = mutable[idx].indentationLevel
                 val alignment = mutable[idx].textAlignmentOrNull() ?: TextAlignment.LEFT
                 mutable.add(idx + 1, TextBlock(id = newId, text = "", indentationLevel = indent, textAlignment = alignment, updatedAt = now))
@@ -1655,7 +1966,7 @@ abstract class BaseEditorViewModel(
     fun updateDbAggregation(blockId: String, colId: String, aggregationType: String?) {
         val now = System.currentTimeMillis()
         modifyBlocks { list ->
-            mapBlockById(list, blockId, now) { db ->
+            mapBlockById(list, blockId) { db ->
                 if (db is DatabaseBlock)
                     db.copy(columns = db.columns.map { c ->
                         if (c.id == colId) c.copy(aggregationType = aggregationType, updatedAt = now) else c
@@ -1669,7 +1980,7 @@ abstract class BaseEditorViewModel(
     fun updateDbCurrency(blockId: String, colId: String, symbol: String) {
         val now = System.currentTimeMillis()
         modifyBlocks { list ->
-            mapBlockById(list, blockId, now) { db ->
+            mapBlockById(list, blockId) { db ->
                 if (db is DatabaseBlock)
                     db.copy(columns = db.columns.map { c ->
                         if (c.id == colId) c.copy(currencySymbol = symbol, updatedAt = now) else c
@@ -1683,7 +1994,7 @@ abstract class BaseEditorViewModel(
     fun updateDbFormulaCurrency(blockId: String, colId: String, enabled: Boolean) {
         val now = System.currentTimeMillis()
         modifyBlocks { list ->
-            mapBlockById(list, blockId, now) { db ->
+            mapBlockById(list, blockId) { db ->
                 if (db is DatabaseBlock)
                     db.copy(columns = db.columns.map { c ->
                         if (c.id == colId) c.copy(isFormulaCurrency = enabled, updatedAt = now) else c
