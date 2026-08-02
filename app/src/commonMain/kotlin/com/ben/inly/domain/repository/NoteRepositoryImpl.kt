@@ -3,7 +3,11 @@ package com.ben.inly.domain.repository
 import com.ben.inly.data.local.room.BlockDao
 import com.ben.inly.data.local.room.BookmarkBlockDao
 import com.ben.inly.data.local.room.BookmarkBlockEntity
+import com.ben.inly.data.local.room.CalendarEventExceptionDao
+import com.ben.inly.data.local.room.CalendarEventExceptionEntity
 import com.ben.inly.data.local.room.CalendarTaskEntity
+import com.ben.inly.data.local.room.toEntityColumns
+import com.ben.inly.data.local.room.toRecurrenceRule
 import com.ben.inly.data.local.room.DatabaseTemplateDao
 import com.ben.inly.data.local.room.DatabaseTemplateEntity
 import com.ben.inly.data.local.room.FolderDao
@@ -35,8 +39,21 @@ import com.ben.inly.domain.model.NoteBlock
 import com.ben.inly.domain.model.NoteContent
 import com.ben.inly.domain.model.NoteSearchResult
 import com.ben.inly.domain.model.NumberedListBlock
+import com.ben.inly.domain.model.RecurrenceEditScope
+import com.ben.inly.domain.model.RecurrenceEngine
+import com.ben.inly.domain.model.RecurrenceRule
 import com.ben.inly.domain.model.TextBlock
 import com.ben.inly.domain.model.ToggleBlock
+import com.ben.inly.domain.model.markDeleted
+import com.ben.inly.domain.util.SyncCoordinator
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.sync.withLock
+import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.minus
+import kotlinx.datetime.plus
+import kotlinx.datetime.toInstant
 import com.ben.inly.domain.sync.AutoSyncTrigger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -95,6 +112,7 @@ class NoteRepositoryImpl(
     private val blockDao: BlockDao,
     private val noteIndexer: NoteIndexer,
     private val calendarTaskDao: CalendarTaskDao,
+    private val calendarEventExceptionDao: CalendarEventExceptionDao,
     private val imageBlockDao: ImageBlockDao,
     private val documentBlockDao: DocumentBlockDao,
     private val bookmarkBlockDao: BookmarkBlockDao,
@@ -781,6 +799,9 @@ class NoteRepositoryImpl(
                 }
             }
 
+            val (recurrenceFrequency, recurrenceInterval, recurrenceDaysOfWeek) =
+                block.recurrenceRule?.toEntityColumns() ?: Triple(null, 1, null)
+
             CalendarTaskEntity(
                 blockId = block.id,
                 noteId = noteId,
@@ -792,7 +813,11 @@ class NoteRepositoryImpl(
                 categoryId = block.categoryId,
                 durationMinutes = block.durationMinutes,
                 url = block.url,
-                description = block.description
+                description = block.description,
+                recurrenceFrequency = recurrenceFrequency,
+                recurrenceInterval = recurrenceInterval,
+                recurrenceDaysOfWeek = recurrenceDaysOfWeek,
+                recurrenceUntil = block.recurrenceRule?.untilDateString
             )
         }
 
@@ -801,16 +826,338 @@ class NoteRepositoryImpl(
         }
     }
 
+    // Recurring rows in calendar_tasks store only their anchor occurrence - this expands them
+    // into one synthetic row per occurrence date that falls in [rangeStart, rangeEnd], applying
+    // any per-occurrence exception (cancellation, completion, or field override) on top. Both
+    // Calendar and the Daily screen's virtual-occurrence materialization read through this.
+    private fun expandOccurrences(
+        tasks: List<CalendarTaskEntity>,
+        exceptions: List<CalendarEventExceptionEntity>,
+        rangeStart: LocalDate,
+        rangeEnd: LocalDate
+    ): List<CalendarTaskEntity> {
+        val exceptionsByKey = exceptions.associateBy { it.blockId to it.occurrenceDate }
+        val result = mutableListOf<CalendarTaskEntity>()
+
+        for (task in tasks) {
+            val rule = task.toRecurrenceRule()
+            if (rule == null) {
+                val targetDate = task.targetDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+                if (targetDate != null && targetDate in rangeStart..rangeEnd) result.add(task)
+                continue
+            }
+
+            val anchor = task.targetDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: continue
+            val occurrenceDates = RecurrenceEngine.occurrenceDatesInRange(rule, anchor, rangeStart, rangeEnd)
+
+            for (occurrenceDate in occurrenceDates) {
+                val occurrenceDateString = occurrenceDate.toString()
+                val exception = exceptionsByKey[task.blockId to occurrenceDateString]
+                if (exception?.isCancelled == true) continue
+
+                val occurrenceTimestamp = exception?.overrideTimestamp
+                    ?: task.reminderTimestamp?.let { retargetTimestampToDate(it, occurrenceDate) }
+
+                result.add(
+                    task.copy(
+                        targetDate = occurrenceDateString,
+                        reminderTimestamp = occurrenceTimestamp,
+                        isChecked = exception?.isChecked ?: false,
+                        text = exception?.overrideText ?: task.text,
+                        categoryId = exception?.overrideCategoryId ?: task.categoryId,
+                        durationMinutes = exception?.overrideDurationMinutes ?: task.durationMinutes,
+                        url = exception?.overrideUrl ?: task.url,
+                        description = exception?.overrideDescription ?: task.description
+                    )
+                )
+            }
+        }
+        return result
+    }
+
+    private fun retargetTimestampToDate(originalTimestamp: Long, newDate: LocalDate): Long {
+        val originalDateTime = Instant.fromEpochMilliseconds(originalTimestamp).toLocalDateTime(TimeZone.currentSystemDefault())
+        val retargeted = LocalDateTime(
+            newDate.year, newDate.monthNumber, newDate.dayOfMonth,
+            originalDateTime.hour, originalDateTime.minute, originalDateTime.second
+        )
+        return retargeted.toInstant(TimeZone.currentSystemDefault()).toEpochMilliseconds()
+    }
+
     override fun getCalendarTasksForMonth(yearMonth: String): Flow<List<CalendarTaskEntity>> {
-        return calendarTaskDao.getTasksForMonth(yearMonth)
+        val (year, month) = yearMonth.split("-").map { it.toInt() }
+        val monthStart = LocalDate(year, month, 1)
+        val monthEnd = monthStart.plus(1, DateTimeUnit.MONTH).minus(1, DateTimeUnit.DAY)
+        return combine(calendarTaskDao.getAllTasksFlow(), calendarEventExceptionDao.getAllExceptionsFlow()) { tasks, exceptions ->
+            expandOccurrences(tasks, exceptions, monthStart, monthEnd)
+        }
     }
 
     override fun getCalendarTasksForDate(dateString: String): Flow<List<CalendarTaskEntity>> {
-        return calendarTaskDao.getTasksForDate(dateString)
+        val date = LocalDate.parse(dateString)
+        return combine(calendarTaskDao.getAllTasksFlow(), calendarEventExceptionDao.getAllExceptionsFlow()) { tasks, exceptions ->
+            expandOccurrences(tasks, exceptions, date, date)
+        }
     }
 
     override fun getAllTasksFlow(): Flow<List<CalendarTaskEntity>> {
         return calendarTaskDao.getAllTasksFlow()
+    }
+
+    override suspend fun upsertOccurrenceCompletion(blockId: String, occurrenceDate: String, isChecked: Boolean) =
+        withContext(Dispatchers.IO) {
+            val existing = calendarEventExceptionDao.getAllExceptionsFlow().first()
+                .firstOrNull { it.blockId == blockId && it.occurrenceDate == occurrenceDate }
+            calendarEventExceptionDao.upsert(
+                (existing ?: CalendarEventExceptionEntity(blockId = blockId, occurrenceDate = occurrenceDate)).copy(
+                    isChecked = isChecked,
+                    completedAt = if (isChecked) System.currentTimeMillis() else null
+                )
+            )
+        }
+
+    override suspend fun toggleTaskCompletion(blockId: String, isChecked: Boolean) =
+        withContext(Dispatchers.IO) {
+            SyncCoordinator.mutex.withLock {
+                val task = calendarTaskDao.getTaskById(blockId) ?: return@withLock
+                val blocks = loadOwnerBlocks(task)
+                val now = System.currentTimeMillis()
+                val updated = blocks.map { block ->
+                    if (block.id == blockId && block is CheckboxBlock) {
+                        block.copy(isChecked = isChecked, completedAt = if (isChecked) now else null, updatedAt = now)
+                    } else block
+                }
+                saveOwnerBlocks(task, updated)
+            }
+        }
+
+    override suspend fun updateTaskText(blockId: String, text: String) =
+        withContext(Dispatchers.IO) {
+            SyncCoordinator.mutex.withLock {
+                val task = calendarTaskDao.getTaskById(blockId) ?: return@withLock
+                val blocks = loadOwnerBlocks(task)
+                val now = System.currentTimeMillis()
+                val updated = blocks.map { block ->
+                    if (block.id == blockId && block is CheckboxBlock) block.copy(text = text, updatedAt = now) else block
+                }
+                saveOwnerBlocks(task, updated)
+            }
+        }
+
+    private suspend fun loadOwnerBlocks(task: CalendarTaskEntity): List<NoteBlock> = when (task.sourceType) {
+        TaskSource.DAILY -> getDailyNote(task.noteId)?.blocks ?: emptyList()
+        TaskSource.NOTE -> getNoteContent(task.noteId)?.blocks ?: emptyList()
+    }
+
+    private suspend fun saveOwnerBlocks(task: CalendarTaskEntity, blocks: List<NoteBlock>) {
+        when (task.sourceType) {
+            TaskSource.DAILY -> saveDailyNote(task.noteId, NoteContent(blocks = blocks))
+            TaskSource.NOTE -> {
+                val meta = getNoteById(task.noteId) ?: return
+                saveNote(meta, NoteContent(blocks = blocks))
+            }
+        }
+    }
+
+    override suspend fun applyRecurrenceScopedDelete(blockId: String, occurrenceDate: String, scope: RecurrenceEditScope) =
+        withContext(Dispatchers.IO) {
+            SyncCoordinator.mutex.withLock {
+                val task = calendarTaskDao.getTaskById(blockId) ?: return@withLock
+                val rule = task.toRecurrenceRule()
+                if (rule == null || scope == RecurrenceEditScope.ALL_EVENTS) {
+                    deleteEntireSeries(task)
+                    return@withLock
+                }
+
+                val anchor = task.targetDate?.let { LocalDate.parse(it) } ?: return@withLock
+                val d = LocalDate.parse(occurrenceDate)
+
+                when (scope) {
+                    RecurrenceEditScope.THIS_EVENT -> {
+                        upsertException(blockId, occurrenceDate) { it.copy(isCancelled = true) }
+                    }
+                    RecurrenceEditScope.ALL_FUTURE_EVENTS -> {
+                        if (d == anchor) {
+                            deleteEntireSeries(task)
+                        } else {
+                            val previous = RecurrenceEngine.previousOccurrence(rule, anchor, before = d)
+                            truncateSeriesUntil(task, previous?.toString())
+                            calendarEventExceptionDao.deleteExceptionsFrom(blockId, occurrenceDate)
+                        }
+                    }
+                    RecurrenceEditScope.ALL_PAST_EVENTS -> {
+                        val next = RecurrenceEngine.nextOccurrence(rule, anchor, after = d)
+                        if (next == null) {
+                            deleteEntireSeries(task)
+                        } else {
+                            moveSeriesAnchor(task, next)
+                            calendarEventExceptionDao.deleteExceptionsUpTo(blockId, occurrenceDate)
+                        }
+                    }
+                    RecurrenceEditScope.ALL_EVENTS -> Unit
+                }
+            }
+        }
+
+    override suspend fun applyRecurrenceScopedEdit(
+        blockId: String,
+        occurrenceDate: String,
+        scope: RecurrenceEditScope,
+        text: String,
+        timestamp: Long,
+        categoryId: String?,
+        durationMinutes: Int,
+        url: String?,
+        description: String?
+    ) = withContext(Dispatchers.IO) {
+        SyncCoordinator.mutex.withLock {
+            val task = calendarTaskDao.getTaskById(blockId) ?: return@withLock
+            val rule = task.toRecurrenceRule()
+            if (rule == null || scope == RecurrenceEditScope.ALL_EVENTS) {
+                editEntireSeries(task, text, timestamp, categoryId, durationMinutes, url, description)
+                return@withLock
+            }
+
+            val anchor = task.targetDate?.let { LocalDate.parse(it) } ?: return@withLock
+            val d = LocalDate.parse(occurrenceDate)
+
+            when (scope) {
+                RecurrenceEditScope.THIS_EVENT -> {
+                    upsertException(blockId, occurrenceDate) {
+                        it.copy(
+                            overrideText = text,
+                            overrideTimestamp = timestamp,
+                            overrideCategoryId = categoryId,
+                            overrideDurationMinutes = durationMinutes,
+                            overrideUrl = url,
+                            overrideDescription = description
+                        )
+                    }
+                }
+                RecurrenceEditScope.ALL_FUTURE_EVENTS -> {
+                    if (d == anchor) {
+                        editEntireSeries(task, text, timestamp, categoryId, durationMinutes, url, description)
+                    } else {
+                        val previous = RecurrenceEngine.previousOccurrence(rule, anchor, before = d)
+                        truncateSeriesUntil(task, previous?.toString())
+                        val newBlockId = createSplitSeries(
+                            task, rule, anchor = d, until = rule.untilDateString,
+                            text = text, timestamp = timestamp, categoryId = categoryId,
+                            durationMinutes = durationMinutes, url = url, description = description
+                        )
+                        calendarEventExceptionDao.rekeyExceptionsFrom(blockId, newBlockId, occurrenceDate)
+                    }
+                }
+                RecurrenceEditScope.ALL_PAST_EVENTS -> {
+                    val next = RecurrenceEngine.nextOccurrence(rule, anchor, after = d)
+                    val newBlockId = createSplitSeries(
+                        task, rule, anchor = anchor, until = occurrenceDate,
+                        text = text, timestamp = timestamp, categoryId = categoryId,
+                        durationMinutes = durationMinutes, url = url, description = description
+                    )
+                    calendarEventExceptionDao.rekeyExceptionsUpTo(blockId, newBlockId, occurrenceDate)
+                    if (next == null) {
+                        deleteEntireSeries(task)
+                    } else {
+                        moveSeriesAnchor(task, next)
+                    }
+                }
+                RecurrenceEditScope.ALL_EVENTS -> Unit
+            }
+        }
+    }
+
+    private suspend fun upsertException(
+        blockId: String,
+        occurrenceDate: String,
+        transform: (CalendarEventExceptionEntity) -> CalendarEventExceptionEntity
+    ) {
+        val existing = calendarEventExceptionDao.getAllExceptionsFlow().first()
+            .firstOrNull { it.blockId == blockId && it.occurrenceDate == occurrenceDate }
+        val base = existing ?: CalendarEventExceptionEntity(blockId = blockId, occurrenceDate = occurrenceDate)
+        calendarEventExceptionDao.upsert(transform(base))
+    }
+
+    private suspend fun deleteEntireSeries(task: CalendarTaskEntity) {
+        val blocks = loadOwnerBlocks(task)
+        saveOwnerBlocks(task, blocks.map { if (it.id == task.blockId) it.markDeleted() else it })
+        calendarEventExceptionDao.deleteExceptionsForBlock(task.blockId)
+    }
+
+    private suspend fun editEntireSeries(
+        task: CalendarTaskEntity, text: String, timestamp: Long, categoryId: String?,
+        durationMinutes: Int, url: String?, description: String?
+    ) {
+        val blocks = loadOwnerBlocks(task)
+        val now = System.currentTimeMillis()
+        val updated = blocks.map { block ->
+            if (block.id == task.blockId && block is CheckboxBlock) {
+                block.copy(
+                    text = text, reminderTimestamp = timestamp, categoryId = categoryId,
+                    durationMinutes = durationMinutes, url = url, description = description, updatedAt = now
+                )
+            } else block
+        }
+        saveOwnerBlocks(task, updated)
+    }
+
+    private suspend fun truncateSeriesUntil(task: CalendarTaskEntity, untilDateString: String?) {
+        val blocks = loadOwnerBlocks(task)
+        val now = System.currentTimeMillis()
+        val updated = blocks.map { block ->
+            if (block.id == task.blockId && block is CheckboxBlock && block.recurrenceRule != null) {
+                block.copy(recurrenceRule = block.recurrenceRule.copy(untilDateString = untilDateString), updatedAt = now)
+            } else block
+        }
+        saveOwnerBlocks(task, updated)
+    }
+
+    private suspend fun moveSeriesAnchor(task: CalendarTaskEntity, newAnchor: LocalDate) {
+        val blocks = loadOwnerBlocks(task)
+        val now = System.currentTimeMillis()
+        val newTimestamp = task.reminderTimestamp?.let { retargetTimestampToDate(it, newAnchor) }
+        val updated = blocks.map { block ->
+            if (block.id == task.blockId && block is CheckboxBlock) {
+                block.copy(reminderTimestamp = newTimestamp ?: block.reminderTimestamp, updatedAt = now)
+            } else block
+        }
+        saveOwnerBlocks(task, updated)
+    }
+
+    // Creates the "split-off" continuation of a series when a future/past-scoped edit needs to
+    // keep a differently-configured portion alive alongside the (truncated or anchor-shifted)
+    // original - e.g. editing "this and following events" leaves earlier occurrences on the
+    // original block and puts the edited occurrence onward on a brand new one.
+    private suspend fun createSplitSeries(
+        task: CalendarTaskEntity, rule: RecurrenceRule, anchor: LocalDate, until: String?,
+        text: String, timestamp: Long, categoryId: String?, durationMinutes: Int, url: String?, description: String?
+    ): String {
+        val newBlockId = UUID.randomUUID().toString()
+        val now = System.currentTimeMillis()
+        val newBlock = CheckboxBlock(
+            id = newBlockId,
+            text = text,
+            reminderTimestamp = timestamp,
+            categoryId = categoryId,
+            durationMinutes = durationMinutes,
+            url = url,
+            description = description,
+            recurrenceRule = rule.copy(untilDateString = until),
+            updatedAt = now
+        )
+
+        when (task.sourceType) {
+            TaskSource.DAILY -> {
+                val anchorDateString = anchor.toString()
+                val targetBlocks = getDailyNote(anchorDateString)?.blocks ?: emptyList()
+                saveDailyNote(anchorDateString, NoteContent(blocks = listOf(newBlock) + targetBlocks))
+            }
+            TaskSource.NOTE -> {
+                val blocks = loadOwnerBlocks(task)
+                saveOwnerBlocks(task, blocks + newBlock)
+            }
+        }
+        return newBlockId
     }
 
     override fun getIncompleteTasksCount(): Flow<Int> = noteDao.getIncompleteTasksCount()

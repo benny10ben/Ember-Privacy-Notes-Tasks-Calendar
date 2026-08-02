@@ -147,6 +147,7 @@ data class CheckboxBlock(
     val durationMinutes: Int = 30,
     val url: String? = null,
     val description: String? = null,
+    val recurrenceRule: RecurrenceRule? = null,
     override val isDeleted: Boolean = false,
     override val isPinned: Boolean = false,
     override val updatedAt: Long = 0L

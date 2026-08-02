@@ -12,6 +12,7 @@ import com.ben.inly.data.local.room.TagEntity
 import com.ben.inly.domain.model.NoteBlock
 import com.ben.inly.domain.model.NoteContent
 import com.ben.inly.domain.model.NoteSearchResult
+import com.ben.inly.domain.model.RecurrenceEditScope
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -22,6 +23,36 @@ interface NoteRepository {
 
     fun getCalendarTasksForMonth(yearMonth: String): Flow<List<CalendarTaskEntity>>
     fun getCalendarTasksForDate(dateString: String): Flow<List<CalendarTaskEntity>>
+    fun getAllTasksFlow(): Flow<List<CalendarTaskEntity>>
+
+    // Marks a single occurrence of a recurring checkbox as done/undone without touching the
+    // base block or any other occurrence - see CalendarEventExceptionEntity.
+    suspend fun upsertOccurrenceCompletion(blockId: String, occurrenceDate: String, isChecked: Boolean)
+
+    // For a NON-recurring checkbox surfaced as a virtual occurrence on some other day/note's
+    // screen (e.g. a NOTE-sourced reminder shown on the Daily screen) - there's only ever one
+    // occurrence, so unlike upsertOccurrenceCompletion above, the base block itself is the sole
+    // source of truth and is what gets toggled/edited directly, wherever it actually lives.
+    suspend fun toggleTaskCompletion(blockId: String, isChecked: Boolean)
+    suspend fun updateTaskText(blockId: String, text: String)
+
+    // Applies an edit/delete to a recurring event under the given scope, splitting the series
+    // into two (a truncated original + a fresh continuation) when the scope is FUTURE/PAST and
+    // the acted-on occurrence isn't the series' first/last. See NoteRepositoryImpl for the full
+    // per-scope mechanics.
+    suspend fun applyRecurrenceScopedDelete(blockId: String, occurrenceDate: String, scope: RecurrenceEditScope)
+
+    suspend fun applyRecurrenceScopedEdit(
+        blockId: String,
+        occurrenceDate: String,
+        scope: RecurrenceEditScope,
+        text: String,
+        timestamp: Long,
+        categoryId: String?,
+        durationMinutes: Int,
+        url: String?,
+        description: String?
+    )
 
     // Daily Tab operations
     suspend fun getDailyNoteMetadata(dateString: String): NoteMetadataEntity?
@@ -109,7 +140,6 @@ interface NoteRepository {
     suspend fun indexNote(metadata: NoteMetadataEntity, content: NoteContent)
     suspend fun indexDailyNote(dateString: String, content: NoteContent, metadata: NoteMetadataEntity)
 
-    fun getAllTasksFlow(): Flow<List<CalendarTaskEntity>>
     fun getIncompleteTasksCount(): Flow<Int>
 
     fun getAllImagesFlow(): Flow<List<ImageBlockEntity>>
