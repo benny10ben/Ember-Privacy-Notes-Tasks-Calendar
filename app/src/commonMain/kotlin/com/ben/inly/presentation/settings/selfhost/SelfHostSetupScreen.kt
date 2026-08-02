@@ -310,7 +310,7 @@ private fun ConnectedDashboard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
-                    .clip(RoundedCornerShape(14.dp))
+                    .clip(RoundedCornerShape(12.dp))
                     .background(MaterialTheme.colorScheme.error.copy(alpha = 0.07f))
                     .clickable(enabled = !state.isDisconnecting) { showDisconnectConfirmation = true }
                     .padding(horizontal = 14.dp, vertical = 15.dp),
@@ -571,7 +571,7 @@ private fun ZeroKnowledgeWarningCard(acknowledged: Boolean, onAcknowledgedChange
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
+                .clip(RoundedCornerShape(12.dp))
                 .background(MaterialTheme.colorScheme.error.copy(alpha = 0.07f))
                 .padding(14.dp)
         ) {
@@ -618,7 +618,7 @@ private fun ErrorMessageCard(message: String) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(12.dp))
             .background(MaterialTheme.colorScheme.error.copy(alpha = 0.07f))
             .padding(14.dp)
     ) {

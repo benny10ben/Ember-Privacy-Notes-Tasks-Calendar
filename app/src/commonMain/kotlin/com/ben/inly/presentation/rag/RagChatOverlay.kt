@@ -471,13 +471,13 @@ internal fun ModelOptionCard(
     trailing: (@Composable () -> Unit)? = null
 ) {
     Surface(
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(12.dp),
         color = Color.Transparent,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
     ) {
         Row(
@@ -559,7 +559,7 @@ private fun EmptyState(
             val chipOffset by animateDpAsState(if (chipVisible) 0.dp else 10.dp, tween(250), label = "o$index")
 
             Surface(
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(12.dp),
                 color = MaterialTheme.colorScheme.surface,
                 tonalElevation = 0.dp,
                 shadowElevation = 0.dp,
@@ -567,7 +567,7 @@ private fun EmptyState(
                     .fillMaxWidth()
                     .padding(vertical = 5.dp)
                     .graphicsLayer { alpha = chipAlpha; translationY = chipOffset.toPx() }
-                    .clip(RoundedCornerShape(14.dp))
+                    .clip(RoundedCornerShape(12.dp))
                     .clickable { onSuggestionTap(suggestion) }
             ) {
                 Text(
@@ -1324,13 +1324,13 @@ private fun KnowledgeModeOption(
     onClick: () -> Unit
 ) {
     Surface(
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(12.dp),
         color = Color.Transparent,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
     ) {
         Row(
@@ -1385,13 +1385,13 @@ private fun ChatHistorySheet(
             Spacer(Modifier.height(10.dp))
 
             Surface(
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(12.dp),
                 color = Color.Transparent,
                 tonalElevation = 0.dp,
                 shadowElevation = 0.dp,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
+                    .clip(RoundedCornerShape(12.dp))
                     .clickable { closeAnd { viewModel.clearChat() } }
             ) {
                 Row(
@@ -1467,13 +1467,13 @@ private fun ChatSessionRow(
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
     Surface(
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(12.dp),
         color = Color.Transparent,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
     ) {
         Row(

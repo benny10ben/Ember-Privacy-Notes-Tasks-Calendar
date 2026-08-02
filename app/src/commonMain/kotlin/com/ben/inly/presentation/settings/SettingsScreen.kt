@@ -332,7 +332,7 @@ fun SettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp)
-                        .clip(RoundedCornerShape(14.dp))
+                        .clip(RoundedCornerShape(12.dp))
                         .background(MaterialTheme.colorScheme.error.copy(alpha = 0.07f))
                         .clickable {}
                         .padding(horizontal = 14.dp, vertical = 15.dp),
@@ -789,7 +789,7 @@ fun SettingsGroup(
         )
 
         Surface(
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(12.dp),
             color = MaterialTheme.colorScheme.surface.copy(alpha = 1f),
             tonalElevation = 0.dp,
             modifier = Modifier.fillMaxWidth()

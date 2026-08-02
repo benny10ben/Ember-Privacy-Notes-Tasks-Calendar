@@ -25,7 +25,7 @@ import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
 
 private val BottomSheetShape = RoundedCornerShape(topEnd = 26.dp, topStart = 26.dp)
-private val FloatingDialogShape = RoundedCornerShape(16.dp)
+private val FloatingDialogShape = RoundedCornerShape(12.dp)
 private val SheetHorizontalPadding = 20.dp
 
 class InlyBottomSheetAction(

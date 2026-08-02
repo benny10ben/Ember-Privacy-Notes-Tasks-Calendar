@@ -40,7 +40,13 @@ fun NotePickerDialog(
         allLinkableNotes.filter { it.title.contains(query, ignoreCase = true) }
     }
 
-    val headerContent: @Composable () -> Unit = {
+    // Every row action runs through this instead of firing its callback directly. On mobile it is
+    // InlyBottomSheet's closeAnd, which plays sheetState.hide() first and only then runs the action
+    // and dismisses - without it the sheet is yanked out of composition the instant a row is tapped
+    // (mentionQuery goes null -> the `if (!expanded) return` above trips) with no exit animation.
+    // Running the action after the hide also stops the inserted link from appearing in the editor
+    // underneath a sheet that is still on screen.
+    val headerContent: @Composable (closeAnd: (() -> Unit) -> Unit) -> Unit = { closeAnd ->
         InlyTextField(
             value = query,
             onValueChange = { query = it },
@@ -52,7 +58,7 @@ fun NotePickerDialog(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { onCreateBlankNote() }
+                .clickable { closeAnd { onCreateBlankNote() } }
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -64,12 +70,12 @@ fun NotePickerDialog(
         HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
     }
 
-    val listContent: @Composable ColumnScope.() -> Unit = {
+    val listContent: @Composable ColumnScope.(closeAnd: (() -> Unit) -> Unit) -> Unit = { closeAnd ->
         filteredNotes.forEach { note ->
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { onNoteSelected(note.noteId) }
+                    .clickable { closeAnd { onNoteSelected(note.noteId) } }
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -96,7 +102,7 @@ fun NotePickerDialog(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { onCreateNote(query.trim()) }
+                    .clickable { closeAnd { onCreateNote(query.trim()) } }
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -130,6 +136,9 @@ fun NotePickerDialog(
             }
         }
 
+        // A Popup has no exit animation to wait on, so the desktop closer is a straight pass-through.
+        val immediateClose: ((() -> Unit) -> Unit) = { action -> action(); onDismiss() }
+
         Popup(
             popupPositionProvider = positionProvider,
             onDismissRequest = onDismiss,
@@ -151,13 +160,13 @@ fun NotePickerDialog(
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                     )
-                    headerContent()
+                    headerContent(immediateClose)
                     Column(
                         modifier = Modifier
                             .weight(1f, fill = false)
                             .verticalScroll(rememberScrollState())
                     ) {
-                        listContent()
+                        listContent(immediateClose)
                     }
                 }
             }
@@ -167,8 +176,8 @@ fun NotePickerDialog(
             expanded = true,
             onDismiss = onDismiss,
             title = "Link to Note"
-        ) { _ ->
-            headerContent()
+        ) { closeAnd ->
+            headerContent(closeAnd)
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -176,7 +185,7 @@ fun NotePickerDialog(
                     .verticalScroll(rememberScrollState())
             ) {
                 Column(modifier = Modifier.fillMaxWidth().padding(bottom = 26.dp)) {
-                    listContent()
+                    listContent(closeAnd)
                 }
             }
         }
