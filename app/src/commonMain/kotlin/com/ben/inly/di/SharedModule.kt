@@ -46,6 +46,7 @@ val sharedModule = module {
             blockDao = get(),
             noteIndexer = get(),
             calendarTaskDao = get(),
+            calendarEventExceptionDao = get(),
             imageBlockDao = get(),
             documentBlockDao = get(),
             bookmarkBlockDao = get(),

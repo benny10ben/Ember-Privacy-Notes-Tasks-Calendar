@@ -188,6 +188,9 @@ interface CalendarTaskDao {
     @Query("SELECT * FROM calendar_tasks WHERE targetDate = :dateString")
     fun getTasksForDate(dateString: String): Flow<List<CalendarTaskEntity>>
 
+    @Query("SELECT * FROM calendar_tasks WHERE blockId = :blockId LIMIT 1")
+    suspend fun getTaskById(blockId: String): CalendarTaskEntity?
+
     // Allows the Bottom Sheet to instantly toggle a checkbox without loading the full note.
     @Query("UPDATE calendar_tasks SET isChecked = :isChecked WHERE blockId = :blockId")
     suspend fun updateTaskStatus(blockId: String, isChecked: Boolean)
@@ -202,6 +205,35 @@ interface CalendarTaskDao {
 
     @Query("SELECT * FROM calendar_tasks")
     fun getAllTasksFlow(): Flow<List<CalendarTaskEntity>>
+}
+
+@Dao
+interface CalendarEventExceptionDao {
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(exception: CalendarEventExceptionEntity)
+
+    @Query("SELECT * FROM calendar_event_exceptions")
+    fun getAllExceptionsFlow(): Flow<List<CalendarEventExceptionEntity>>
+
+    @Query("DELETE FROM calendar_event_exceptions WHERE blockId = :blockId")
+    suspend fun deleteExceptionsForBlock(blockId: String)
+
+    // Used when a series is split by an "all future events" edit/delete - the truncated
+    // original block keeps only exceptions dated before the split point.
+    @Query("DELETE FROM calendar_event_exceptions WHERE blockId = :blockId AND occurrenceDate >= :fromDateInclusive")
+    suspend fun deleteExceptionsFrom(blockId: String, fromDateInclusive: String)
+
+    // Symmetric case for "all past events" - the original block's anchor moves forward, so
+    // exceptions dated at/before the split point no longer belong to it.
+    @Query("DELETE FROM calendar_event_exceptions WHERE blockId = :blockId AND occurrenceDate <= :toDateInclusive")
+    suspend fun deleteExceptionsUpTo(blockId: String, toDateInclusive: String)
+
+    @Query("UPDATE calendar_event_exceptions SET blockId = :newBlockId WHERE blockId = :oldBlockId AND occurrenceDate >= :fromDateInclusive")
+    suspend fun rekeyExceptionsFrom(oldBlockId: String, newBlockId: String, fromDateInclusive: String)
+
+    @Query("UPDATE calendar_event_exceptions SET blockId = :newBlockId WHERE blockId = :oldBlockId AND occurrenceDate <= :toDateInclusive")
+    suspend fun rekeyExceptionsUpTo(oldBlockId: String, newBlockId: String, toDateInclusive: String)
 }
 
 @Dao

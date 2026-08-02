@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "64c455cc3b02a238ef86fbf686b542ac",
+    "identityHash": "1e5a43159a19a01d9f6a3426ed4e5cb2",
     "entities": [
       {
         "tableName": "notes_metadata",
@@ -284,7 +284,7 @@
       },
       {
         "tableName": "calendar_tasks",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`blockId` TEXT NOT NULL, `noteId` TEXT NOT NULL, `text` TEXT NOT NULL, `isChecked` INTEGER NOT NULL, `targetDate` TEXT, `reminderTimestamp` INTEGER, `sourceType` TEXT NOT NULL, `categoryId` TEXT, `durationMinutes` INTEGER NOT NULL DEFAULT 30, `url` TEXT, `description` TEXT, PRIMARY KEY(`blockId`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`blockId` TEXT NOT NULL, `noteId` TEXT NOT NULL, `text` TEXT NOT NULL, `isChecked` INTEGER NOT NULL, `targetDate` TEXT, `reminderTimestamp` INTEGER, `sourceType` TEXT NOT NULL, `categoryId` TEXT, `durationMinutes` INTEGER NOT NULL DEFAULT 30, `url` TEXT, `description` TEXT, `recurrenceFrequency` TEXT, `recurrenceInterval` INTEGER NOT NULL DEFAULT 1, `recurrenceDaysOfWeek` TEXT, `recurrenceUntil` TEXT, PRIMARY KEY(`blockId`))",
         "fields": [
           {
             "fieldPath": "blockId",
@@ -346,6 +346,28 @@
           {
             "fieldPath": "description",
             "columnName": "description",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "recurrenceFrequency",
+            "columnName": "recurrenceFrequency",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "recurrenceInterval",
+            "columnName": "recurrenceInterval",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "1"
+          },
+          {
+            "fieldPath": "recurrenceDaysOfWeek",
+            "columnName": "recurrenceDaysOfWeek",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "recurrenceUntil",
+            "columnName": "recurrenceUntil",
             "affinity": "TEXT"
           }
         ],
@@ -802,11 +824,83 @@
             "provider"
           ]
         }
+      },
+      {
+        "tableName": "calendar_event_exceptions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`blockId` TEXT NOT NULL, `occurrenceDate` TEXT NOT NULL, `isCancelled` INTEGER NOT NULL, `isChecked` INTEGER NOT NULL, `completedAt` INTEGER, `overrideTimestamp` INTEGER, `overrideDurationMinutes` INTEGER, `overrideText` TEXT, `overrideCategoryId` TEXT, `overrideUrl` TEXT, `overrideDescription` TEXT, PRIMARY KEY(`blockId`, `occurrenceDate`))",
+        "fields": [
+          {
+            "fieldPath": "blockId",
+            "columnName": "blockId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "occurrenceDate",
+            "columnName": "occurrenceDate",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isCancelled",
+            "columnName": "isCancelled",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isChecked",
+            "columnName": "isChecked",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "completedAt",
+            "columnName": "completedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "overrideTimestamp",
+            "columnName": "overrideTimestamp",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "overrideDurationMinutes",
+            "columnName": "overrideDurationMinutes",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "overrideText",
+            "columnName": "overrideText",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "overrideCategoryId",
+            "columnName": "overrideCategoryId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "overrideUrl",
+            "columnName": "overrideUrl",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "overrideDescription",
+            "columnName": "overrideDescription",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "blockId",
+            "occurrenceDate"
+          ]
+        }
       }
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '64c455cc3b02a238ef86fbf686b542ac')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '1e5a43159a19a01d9f6a3426ed4e5cb2')"
     ]
   }
 }

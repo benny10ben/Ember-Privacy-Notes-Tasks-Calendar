@@ -98,6 +98,7 @@ val androidModule = module {
     single<TagDao> { get<AppDatabase>().tagDao() }
     single<BlockDao> { get<AppDatabase>().blockDao() }
     single<CalendarTaskDao> { get<AppDatabase>().calendarTaskDao() }
+    single<com.ben.inly.data.local.room.CalendarEventExceptionDao> { get<AppDatabase>().calendarEventExceptionDao() }
     single<ImageBlockDao> { get<AppDatabase>().imageBlockDao() }
     single<DocumentBlockDao> { get<AppDatabase>().documentBlockDao() }
     single<BookmarkBlockDao> { get<AppDatabase>().bookmarkBlockDao() }
