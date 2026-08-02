@@ -177,8 +177,6 @@ class SyncRepositoryImpl(
             orphaned.forEach { entry ->
                 try {
                     syncClient.deleteRemoteMedia(entry.fileName)
-                    val localFile = File(mediaStorageHelper.getAbsoluteMediaPath(entry.fileName))
-                    if (localFile.exists()) localFile.delete()
                 } catch (e: Exception) {
                     LanSyncLog.e("cleanupOrphanedMedia: failed to delete orphaned ${entry.fileName}: ${e.message}", e)
                 }

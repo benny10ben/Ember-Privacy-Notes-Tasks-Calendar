@@ -278,10 +278,8 @@ class SelfHostSyncEngine(
             for (fileName in orphanedFileNames) {
                 try {
                     webDavSyncClient.deleteFile(WebDavSyncPaths.mediaPath(fileName))
-                    val localFile = File(mediaStorageHelper.getAbsoluteMediaPath(fileName))
-                    if (localFile.exists()) localFile.delete()
                     deletedCount++
-                    SelfHostSyncLog.d("MediaSync: deleted orphaned $fileName (unreferenced for over ${MEDIA_ORPHAN_GRACE_PERIOD_MS / 3_600_000}h)")
+                    SelfHostSyncLog.d("MediaSync: deleted orphaned remote $fileName (unreferenced for over ${MEDIA_ORPHAN_GRACE_PERIOD_MS / 3_600_000}h)")
                 } catch (cause: Exception) {
                     SelfHostSyncLog.e("MediaSync Error: failed to delete orphaned $fileName: ${cause.message}", cause)
                 }

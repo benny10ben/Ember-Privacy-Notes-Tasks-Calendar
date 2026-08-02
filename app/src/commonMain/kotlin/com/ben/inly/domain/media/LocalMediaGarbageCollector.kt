@@ -44,6 +44,30 @@ class LocalMediaGarbageCollector(
         }
     }
 
+    suspend fun deleteExpiredTempFiles() = withContext(Dispatchers.IO) {
+        try {
+            val nowMs = System.currentTimeMillis()
+            var deletedCount = 0
+
+            mediaStorageHelper.listAllMediaFileNames()
+                .filter { it.endsWith(".tmp") }
+                .forEach { fileName ->
+                    try {
+                        val file = File(mediaStorageHelper.getAbsoluteMediaPath(fileName))
+                        if (file.exists() && (nowMs - file.lastModified()) > STALE_TEMP_FILE_THRESHOLD_MS && file.delete()) {
+                            deletedCount++
+                        }
+                    } catch (e: Exception) {
+                        LocalMediaGcLog.e("deleteExpiredTempFiles: failed to delete $fileName: ${e.message}", e)
+                    }
+                }
+
+            LocalMediaGcLog.d("deleteExpiredTempFiles: deleted $deletedCount expired temp file(s)")
+        } catch (e: Exception) {
+            LocalMediaGcLog.e("deleteExpiredTempFiles: failed with ${e::class.simpleName}: ${e.message}", e)
+        }
+    }
+
     private companion object {
         const val STALE_TEMP_FILE_THRESHOLD_MS = 48L * 60 * 60 * 1000
     }

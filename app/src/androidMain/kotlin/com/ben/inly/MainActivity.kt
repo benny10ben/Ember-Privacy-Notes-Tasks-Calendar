@@ -132,7 +132,7 @@ class MainActivity : ComponentActivity() {
             LocalMediaGcTrigger.cleanupRequests
                 .debounce(2000L.milliseconds)
                 .collect {
-                    localMediaGarbageCollector.collectAndDeleteOrphanedMedia()
+                    localMediaGarbageCollector.deleteExpiredTempFiles()
                 }
         }
 
