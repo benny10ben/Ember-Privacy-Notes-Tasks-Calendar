@@ -17,7 +17,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
@@ -117,6 +116,8 @@ fun DailyScreen(
     var topBarBottomPx by remember { mutableFloatStateOf(0f) }
     val loadedDateString by viewModel.loadedDateString.collectAsState()
     val previewCache by viewModel.previewCache.collectAsState()
+    val canUndo by viewModel.canUndo.collectAsState()
+    val canRedo by viewModel.canRedo.collectAsState()
 
     val initialDate = remember { Clock.System.todayIn(TimeZone.currentSystemDefault()) }
     val initialPage = remember { Int.MAX_VALUE / 2 }
@@ -222,6 +223,7 @@ fun DailyScreen(
 
     val sharedEditorActions = remember(viewModel, onOpenFile) {
         object : EditorActions {
+            override fun onClearSlashQuery() = viewModel.clearActiveSlashQuery()
             override fun onClearFocusRequest() = viewModel.clearFocusRequest()
             override fun onUpdateText(id: String, text: String) = viewModel.updateBlockText(id, text)
             override fun onToggleCheckbox(id: String, checked: Boolean) = viewModel.toggleCheckbox(id, checked)
@@ -388,65 +390,71 @@ fun DailyScreen(
             }
 
             Box(modifier = Modifier.fillMaxSize().hazeSource(state = hazeState).background(MaterialTheme.colorScheme.background)) {
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier
-                    .fillMaxSize(),
-                userScrollEnabled = false,
-                beyondViewportPageCount = 1,
-                key = { page -> initialDate.plus((page - initialPage).toLong(), DateTimeUnit.DAY).toString() }
-            ) { page ->
-                val pageDate = initialDate.plus((page - initialPage).toLong(), DateTimeUnit.DAY)
-                val pageDateString = pageDate.toString()
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier
+                        .fillMaxSize(),
+                    userScrollEnabled = false,
+                    beyondViewportPageCount = 1,
+                    key = { page ->
+                        initialDate.plus(
+                            (page - initialPage).toLong(),
+                            DateTimeUnit.DAY
+                        ).toString()
+                    }
+                ) { page ->
+                    val pageDate = initialDate.plus((page - initialPage).toLong(), DateTimeUnit.DAY)
+                    val pageDateString = pageDate.toString()
 
-                LaunchedEffect(pageDateString) {
-                    viewModel.prefetchDateIfNeeded(pageDateString)
-                }
+                    LaunchedEffect(pageDateString) {
+                        viewModel.prefetchDateIfNeeded(pageDateString)
+                    }
 
-                val isCurrentActivePage =
-                    pageDate == selectedDate && loadedDateString == pageDateString
+                    val isCurrentActivePage =
+                        pageDate == selectedDate && loadedDateString == pageDateString
 
-                val displayBlocks: List<NoteBlock> = if (isCurrentActivePage) {
-                    blocks
-                } else {
-                    previewCache[pageDateString] ?: emptyList()
-                }
+                    val displayBlocks: List<NoteBlock> = if (isCurrentActivePage) {
+                        blocks
+                    } else {
+                        previewCache[pageDateString] ?: emptyList()
+                    }
 
-                Box(modifier = Modifier.fillMaxSize()) {
-                    EditorScreen(
-                        blocks = displayBlocks,
-                        allLinkableNotes = allLinkableNotes,
-                        globalTags = globalTags,
-                        actions = sharedEditorActions,
-                        focusRequest = if (isCurrentActivePage) focusRequest else null,
-                        selectionRequest = if (isCurrentActivePage) selectionRequest else null,
-                        topBarClearancePx = topBarBottomPx,
-                        selectedBlockIds = selectedBlockIds,
-                        mobileMenuState = mobileMenuState,
-                        onMobileMenuStateChange = { mobileMenuState = it },
-                        slashQuery = slashQuery,
-                        onSlashQueryChange = { slashQuery = it },
-                        bottomContentPadding = bottomContentPadding,
-                        isCurrentActivePage = isCurrentActivePage,
-                        topContentPadding = if (isDesktopPlatform) {
-                            if (!isSidebarVisible) 68.dp else 16.dp
-                        } else {
-                            rememberStableStatusBarsPadding().calculateTopPadding() + 68.dp
-                        },
-                        headerContent = if (isDesktopPlatform) null else {
-                            {
-                                CollapsedWeekStrip(
-                                    selectedDate = selectedDate,
-                                    onDateSelected = { viewModel.selectDate(it) },
-                                    pagerState = pagerState,
-                                    initialPage = initialPage,
-                                    initialDate = initialDate
-                                )
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        EditorScreen(
+                            blocks = displayBlocks,
+                            allLinkableNotes = allLinkableNotes,
+                            globalTags = globalTags,
+                            actions = sharedEditorActions,
+                            focusRequest = if (isCurrentActivePage) focusRequest else null,
+                            selectionRequest = if (isCurrentActivePage) selectionRequest else null,
+                            topBarClearancePx = topBarBottomPx,
+                            selectedBlockIds = selectedBlockIds,
+                            mobileMenuState = mobileMenuState,
+                            onMobileMenuStateChange = { mobileMenuState = it },
+                            slashQuery = slashQuery,
+                            onSlashQueryChange = { slashQuery = it },
+                            bottomContentPadding = bottomContentPadding,
+                            isCurrentActivePage = isCurrentActivePage,
+                            topContentPadding = if (isDesktopPlatform) {
+                                if (!isSidebarVisible) 68.dp else 16.dp
+                            } else {
+                                rememberStableStatusBarsPadding().calculateTopPadding() + 68.dp
+                            },
+                            headerContent = if (isDesktopPlatform) null else {
+                                {
+                                    CollapsedWeekStrip(
+                                        selectedDate = selectedDate,
+                                        onDateSelected = { viewModel.selectDate(it) },
+                                        pagerState = pagerState,
+                                        initialPage = initialPage,
+                                        initialDate = initialDate
+                                    )
+                                    Spacer(Modifier.height(14.dp))
+                                }
                             }
-                        }
-                    )
+                        )
+                    }
                 }
-            }
             }
 
             AnimatedVisibility(
@@ -479,7 +487,13 @@ fun DailyScreen(
                         GlobalEditorState.currentlyFocusedBlockId?.let { id ->
                             sharedEditorActions.onToggleSelection(id)
                         }
-                    }
+                    },
+                    onClearSlashQuery = { sharedEditorActions.onClearSlashQuery() },
+                    canUndo = canUndo,
+                    canRedo = canRedo,
+                    onUndo = { viewModel.undo() },
+                    onRedo = { viewModel.redo() },
+                    showHistory = true
                 )
             }
 

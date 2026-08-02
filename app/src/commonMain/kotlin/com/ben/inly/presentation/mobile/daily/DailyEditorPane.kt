@@ -73,6 +73,8 @@ fun DailyEditorPane(
     val selectionRequest by viewModel.selectionRequest.collectAsState()
     val globalTags by viewModel.globalTags.collectAsState()
     val databaseTemplates by viewModel.databaseTemplates.collectAsState()
+    val canUndo by viewModel.canUndo.collectAsState()
+    val canRedo by viewModel.canRedo.collectAsState()
     var showDatabasePicker by remember { mutableStateOf(false) }
     var showNotePickerDialog by remember { mutableStateOf(false) }
 
@@ -125,6 +127,7 @@ fun DailyEditorPane(
 
     val actions = remember(viewModel, onOpenFile) {
         object : EditorActions {
+            override fun onClearSlashQuery() = viewModel.clearActiveSlashQuery()
             override fun onClearFocusRequest() = viewModel.clearFocusRequest()
             override fun onUpdateText(id: String, text: String) = viewModel.updateBlockText(id, text)
             override fun onToggleCheckbox(id: String, checked: Boolean) = viewModel.toggleCheckbox(id, checked)
@@ -300,7 +303,12 @@ fun DailyEditorPane(
                     GlobalEditorState.currentlyFocusedBlockId?.let { id ->
                         actions.onToggleSelection(id)
                     }
-                }
+                },
+                canUndo = canUndo,
+                canRedo = canRedo,
+                onUndo = { viewModel.undo() },
+                onRedo = { viewModel.redo() },
+                showHistory = true
             )
         }
 

@@ -166,6 +166,9 @@ fun NoteScreen(
 
     val blockAlignment by viewModel.blockAlignment.collectAsState()
 
+    val canUndo by viewModel.canUndo.collectAsState()
+    val canRedo by viewModel.canRedo.collectAsState()
+
     var mobileMenuState by remember { mutableStateOf(MobileMenuState.MAIN) }
     var slashQuery by remember { mutableStateOf("") }
 
@@ -344,6 +347,7 @@ fun NoteScreen(
 
     val editorActions = remember(viewModel, onOpenFile) {
         object : EditorActions {
+            override fun onClearSlashQuery() = viewModel.clearActiveSlashQuery()
             override fun onClearFocusRequest() = viewModel.clearFocusRequest()
             override fun onUpdateText(id: String, text: String) = viewModel.updateBlockText(id, text)
             override fun onToggleCheckbox(id: String, checked: Boolean) = viewModel.toggleCheckbox(id, checked)
@@ -528,6 +532,7 @@ fun NoteScreen(
                         .padding(bottom = 8.dp, start = if (isDesktopPlatform) 16.dp else 6.dp, end = if (isDesktopPlatform) 16.dp else 6.dp)
                 ) {
                     EditorToolbar(
+                        onClearSlashQuery = { editorActions.onClearSlashQuery() },
                         mobileMenuState = mobileMenuState,
                         onMenuStateChange = { mobileMenuState = it },
                         query = slashQuery,
@@ -541,7 +546,12 @@ fun NoteScreen(
                             GlobalEditorState.currentlyFocusedBlockId?.let { id ->
                                 editorActions.onToggleSelection(id)
                             }
-                        }
+                        },
+                        canUndo = canUndo,
+                        canRedo = canRedo,
+                        onUndo = { viewModel.undo() },
+                        onRedo = { viewModel.redo() },
+                        showHistory = true
                     )
                 }
 

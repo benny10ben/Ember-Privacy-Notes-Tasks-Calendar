@@ -60,7 +60,6 @@ import com.ben.inly.domain.model.VoiceBlock
 import com.ben.inly.domain.util.isDesktopPlatform
 import com.ben.inly.presentation.shared.components.KmpBackHandler
 import com.ben.inly.presentation.shared.editor.blockViews.LinkedNoteOptionsMenu
-import com.ben.inly.ui.theme.LocalAppIsDark
 import dev.chrisbanes.haze.HazeState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -68,8 +67,6 @@ import androidx.compose.foundation.gestures.animateScrollBy
 import kotlin.time.Duration.Companion.milliseconds
 import androidx.compose.ui.platform.LocalDensity
 import kotlinx.coroutines.flow.MutableSharedFlow
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.zIndex
 import com.ben.inly.data.local.room.NoteMetadataEntity
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.hazeEffect
@@ -137,10 +134,13 @@ object GlobalEditorState {
 object EditorEventBus {
     val insertSlashEvent = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val cleanupSlashEvent = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val insertMentionEvent = MutableSharedFlow<String>(extraBufferCapacity = 1)
 }
 
 @Stable
 interface EditorActions {
+
+    fun onClearSlashQuery()
     fun onClearFocusRequest()
     fun onUpdateText(id: String, text: String)
     fun onToggleCheckbox(id: String, checked: Boolean)
@@ -249,17 +249,24 @@ fun EditorScreen(
     var localFocusRequest by remember { mutableStateOf<FocusRequest?>(null) }
     val activeFocusRequest = focusRequest ?: localFocusRequest
 
-    if (!isDesktopPlatform) {
+    var focusHandoffInFlight by remember { mutableStateOf(false) }
+    LaunchedEffect(activeFocusRequest?.nonce) {
+        if (activeFocusRequest == null) return@LaunchedEffect
+        focusHandoffInFlight = true
+        delay(500.milliseconds)
+        focusHandoffInFlight = false
+    }
+
+    if (!isDesktopPlatform && isCurrentActivePage) {
         val imeBottom = WindowInsets.ime.getBottom(LocalDensity.current)
         val isKeyboardOpen = imeBottom > 0
-        LaunchedEffect(isKeyboardOpen) {
-            if (!isKeyboardOpen) {
-                delay(150.milliseconds)
-                focusManager.clearFocus()
-                activeBlockId = null
-                GlobalEditorState.currentlyFocusedBlockId = null
-                localFocusRequest = null
-            }
+        LaunchedEffect(isKeyboardOpen, focusHandoffInFlight) {
+            if (isKeyboardOpen || focusHandoffInFlight) return@LaunchedEffect
+            delay(250.milliseconds)
+            focusManager.clearFocus()
+            activeBlockId = null
+            GlobalEditorState.currentlyFocusedBlockId = null
+            localFocusRequest = null
         }
     }
 
@@ -295,29 +302,10 @@ fun EditorScreen(
     val latestOnSlashQueryChange by rememberUpdatedState(onSlashQueryChange)
 
     val clearSlashAndExecute: (() -> Unit) -> Unit = { executionBlock ->
-        latestActiveBlockId?.let { id ->
-            val currentText = when (val block = findBlockRecursive(latestBlocks, id)) {
-                is TextBlock -> block.text
-                is HeadingBlock -> block.text
-                is CheckboxBlock -> block.text
-                is BulletedListBlock -> block.text
-                is NumberedListBlock -> block.text
-                is ToggleBlock -> block.text
-                is QuoteBlock -> block.text
-                else -> null
-            }
-            if (currentText != null) {
-                val lastSlashIndex = currentText.lastIndexOf('/')
-                if (lastSlashIndex != -1 && lastSlashIndex == currentText.length - 1 - latestSlashQuery.length) {
-                    actions.onUpdateText(id, currentText.substring(0, lastSlashIndex))
-                }
-            }
-        }
-
+        actions.onClearSlashQuery()
         if (isDesktopPlatform) showSlashMenu = false
         latestOnMobileMenuStateChange(MobileMenuState.MAIN)
         latestOnSlashQueryChange("")
-
         executionBlock()
     }
 
@@ -384,7 +372,8 @@ fun EditorScreen(
         }
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(isCurrentActivePage) {
+        if (!isCurrentActivePage) return@LaunchedEffect
         launch {
             EditorEventBus.insertSlashEvent.collect {
                 val targetId = GlobalEditorState.currentlyFocusedBlockId ?: latestActiveBlockId
@@ -435,6 +424,7 @@ fun EditorScreen(
 
     LaunchedEffect(activeFocusRequest?.nonce) {
         val request = activeFocusRequest ?: return@LaunchedEffect
+        withFrameNanos {}
         withFrameNanos {}
 
         val index = currentBlocks.indexOfFirst { it.id == request.id }
@@ -691,6 +681,12 @@ fun EditorToolbar(
     onSetAlignment: (TextAlignment) -> Unit,
     onInsertMediaBlock: (String) -> Unit,
     onSelectCurrentBlock: () -> Unit,
+    canUndo: Boolean = false,
+    canRedo: Boolean = false,
+    onUndo: () -> Unit = {},
+    onRedo: () -> Unit = {},
+    showHistory: Boolean = false,
+    onClearSlashQuery: () -> Unit = {},
     hazeState: HazeState
 ) {
     if (isDesktopPlatform) return
@@ -734,6 +730,24 @@ fun EditorToolbar(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(2.dp)
                             ) {
+                                if (showHistory) {
+                                    ToolbarButton(enabled = canUndo, onClick = onUndo) {
+                                        Icon(Icons.AutoMirrored.Filled.Undo, "Undo", tint = if (canUndo) tint else tint.copy(alpha = 0.3f), modifier = Modifier.size(iconSize))
+                                    }
+                                    ToolbarButton(enabled = canRedo, onClick = onRedo) {
+                                        Icon(Icons.AutoMirrored.Filled.Redo, "Redo", tint = if (canRedo) tint else tint.copy(alpha = 0.3f), modifier = Modifier.size(iconSize))
+                                    }
+                                    ToolbarDivider(tint)
+                                }
+
+                                ToolbarButton(onClick = {
+                                    GlobalEditorState.currentlyFocusedBlockId?.let {
+                                        EditorEventBus.insertMentionEvent.tryEmit(it)
+                                    }
+                                }) {
+                                    Icon(Icons.Default.AlternateEmail, "Link to note", tint = tint, modifier = Modifier.size(iconSize))
+                                }
+
                                 ToolbarButton(onClick = {
                                     keyboardController?.hide()
                                     onSelectCurrentBlock()
@@ -817,27 +831,27 @@ fun EditorToolbar(
                                 DesktopSlashMenuContent(
                                     query = query,
                                     onChangeBlockType = {
-                                        EditorEventBus.cleanupSlashEvent.tryEmit(Unit)
+                                        onClearSlashQuery()
                                         onChangeBlockType(it)
                                         onMenuStateChange(MobileMenuState.MAIN)
                                     },
                                     onToggleFormat = {
-                                        EditorEventBus.cleanupSlashEvent.tryEmit(Unit)
+                                        onClearSlashQuery()
                                         onToggleFormat(it)
                                         onMenuStateChange(MobileMenuState.MAIN)
                                     },
                                     onAdjustIndentation = {
-                                        EditorEventBus.cleanupSlashEvent.tryEmit(Unit)
+                                        onClearSlashQuery()
                                         onAdjustIndentation(it)
                                         onMenuStateChange(MobileMenuState.MAIN)
                                     },
                                     onSetAlignment = {
-                                        EditorEventBus.cleanupSlashEvent.tryEmit(Unit)
+                                        onClearSlashQuery()
                                         onSetAlignment(it)
                                         onMenuStateChange(MobileMenuState.MAIN)
                                     },
                                     onInsertMediaBlock = {
-                                        EditorEventBus.cleanupSlashEvent.tryEmit(Unit)
+                                        onClearSlashQuery()
                                         onInsertMediaBlock(it)
                                         onMenuStateChange(MobileMenuState.MAIN)
                                     }
