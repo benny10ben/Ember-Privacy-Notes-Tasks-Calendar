@@ -125,7 +125,7 @@ class NoteEditorViewModel(
 
         val reconciledSnapshot = snapshot.map { block ->
             val diskBlock = diskById[block.id]
-            if (diskBlock != null && diskBlock.isDeleted && !block.isDeleted) diskBlock else block
+            if (diskBlock != null && diskBlock.isDeleted && !block.isDeleted && diskBlock.updatedAt > block.updatedAt) diskBlock else block
         }
 
         if (isWithinLocalMutationCooldown()) return reconciledSnapshot
@@ -201,6 +201,7 @@ class NoteEditorViewModel(
     fun loadNote(noteId: String) {
         if (currentlyLoadedNoteId == noteId) return
         currentlyLoadedNoteId = noteId
+        clearUndoHistory()
 
         com.ben.inly.domain.util.AiEventBus.activeNoteId = noteId
 
