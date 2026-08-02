@@ -277,507 +277,505 @@ fun InlyApp(
                         .background(MaterialTheme.colorScheme.background)
                         .nestedScroll(bottomBarNestedScrollConnection)
                 ) {
-                NavHost(
-                    navController = navController,
-                    startDestination = startRoute, // Updated to use the parameter
-                    modifier = Modifier
-                        .padding(top = innerPadding.calculateTopPadding())
-                        .consumeWindowInsets(innerPadding)
-                        .hazeSource(state = hazeState),
-                    enterTransition = { EnterTransition.None },
-                    exitTransition = { ExitTransition.None }
-                ) {
+                    NavHost(
+                        navController = navController,
+                        startDestination = startRoute, // Updated to use the parameter
+                        modifier = Modifier
+                            .padding(top = innerPadding.calculateTopPadding())
+                            .consumeWindowInsets(innerPadding)
+                            .hazeSource(state = hazeState),
+                        enterTransition = { EnterTransition.None },
+                        exitTransition = { ExitTransition.None }
+                    ) {
 
-                    // Unconditionally added the Splash route to prevent "destination not found" crashes
-                    composable(Screen.Splash.route) {
-                        LoadingScreen(
-                            onLoadingComplete = {
-                                navController.navigate(Screen.Daily.createRoute()) {
-                                    popUpTo(Screen.Splash.route) { inclusive = true }
+                        // Unconditionally added the Splash route to prevent "destination not found" crashes
+                        composable(Screen.Splash.route) {
+                            LoadingScreen(
+                                onLoadingComplete = {
+                                    navController.navigate(Screen.Daily.createRoute()) {
+                                        popUpTo(Screen.Splash.route) { inclusive = true }
+                                    }
                                 }
-                            }
-                        )
-                    }
-
-                    composable(
-                        route = Screen.Daily.route,
-                        arguments = listOf(navArgument("date") { type = NavType.StringType; nullable = true })
-                    ) { backStackEntry ->
-                        DailyScreen(
-                            bottomContentPadding = if (isBottomBarVisible) bottomBarHeightDp else 0.dp,
-                            onSelectionModeChange = { isActive -> isSelectionActive = isActive },
-                            onPickImage = onPickImage,
-                            onTakePhoto = onTakePhoto,
-                            onPickDocument = onPickDocument,
-                            onOpenFile = onOpenFile,
-                            onNavigateToEditor = { noteId ->
-                                navController.navigate(Screen.Note.createRoute(noteId))
-                            },
-                            onNavigateToCalendar = { navController.navigate(Screen.Calendar.route) },
-                            onNavigateToSettings = { navController.navigate(Screen.Settings.route) },
-                            onNavigateToTrash = { navController.navigate("trash_route") },
-                            isSidebarVisible = isSidebarVisible,
-                            onToggleSidebar = { isSidebarVisible = !isSidebarVisible },
-                            dateArg = backStackEntry.savedStateHandle.get<String>("date")
-                        )
-                    }
-
-                    composable(Screen.Home.route) {
-                        HomeScreen(
-                            bottomContentPadding = if (isBottomBarVisible) bottomBarHeightDp else 0.dp,
-                            onNavigateToEditor = { noteId ->
-                                navController.navigate(
-                                    Screen.Note.createRoute(
-                                        noteId
-                                    )
-                                )
-                            },
-                            onSelectionModeChange = { isActive -> isSelectionActive = isActive },
-                            onNavigateToCalendar = { navController.navigate(Screen.Calendar.route) },
-                            onNavigateToReminders = { navController.navigate(Screen.Reminders.route) },
-                            onNavigateToBookmarks = { navController.navigate(Screen.Bookmarks.route) },
-                            onNavigateToImages = { navController.navigate(Screen.Images.route) },
-                            onNavigateToDocuments = { navController.navigate(Screen.Documents.route) },
-                            onNavigateToTrash = { navController.navigate("trash_route") },
-                            onToggleSidebar = { isSidebarVisible = !isSidebarVisible },
-                            onNavigateToSettings = { navController.navigate(Screen.Settings.route) },
-                        )
-                    }
-
-                    composable(
-                        route = "trash_route",
-                        enterTransition = {
-                            slideIntoContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Left,
-                                tween(300)
-                            )
-                        },
-                        exitTransition = {
-                            slideOutOfContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Left,
-                                tween(300)
-                            )
-                        },
-                        popEnterTransition = {
-                            slideIntoContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Right,
-                                tween(300)
-                            )
-                        },
-                        popExitTransition = {
-                            slideOutOfContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Right,
-                                tween(300)
                             )
                         }
-                    ) {
-                        TrashScreen(onNavigateBack = { navController.popBackStack() })
-                    }
 
-                    composable(
-                        route = Screen.Note.route,
-                        arguments = listOf(navArgument("noteId") { type = NavType.StringType }),
-                        enterTransition = {
-                            slideIntoContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Left,
-                                tween(300)
+                        composable(
+                            route = Screen.Daily.route,
+                            arguments = listOf(navArgument("date") { type = NavType.StringType; nullable = true })
+                        ) { backStackEntry ->
+                            DailyScreen(
+                                bottomContentPadding = if (isBottomBarVisible) bottomBarHeightDp else 0.dp,
+                                onSelectionModeChange = { isActive -> isSelectionActive = isActive },
+                                onPickImage = onPickImage,
+                                onTakePhoto = onTakePhoto,
+                                onPickDocument = onPickDocument,
+                                onOpenFile = onOpenFile,
+                                onNavigateToEditor = { noteId ->
+                                    navController.navigate(Screen.Note.createRoute(noteId))
+                                },
+                                onNavigateToCalendar = { navController.navigate(Screen.Calendar.route) },
+                                onNavigateToSettings = { navController.navigate(Screen.Settings.route) },
+                                onNavigateToTrash = { navController.navigate("trash_route") },
+                                dateArg = backStackEntry.savedStateHandle.get<String>("date")
                             )
-                        },
-                        exitTransition = {
-                            if (targetState.destination.route == Screen.Note.route) {
-                                ExitTransition.None
-                            } else {
+                        }
+
+                        composable(Screen.Home.route) {
+                            HomeScreen(
+                                bottomContentPadding = if (isBottomBarVisible) bottomBarHeightDp else 0.dp,
+                                onNavigateToEditor = { noteId ->
+                                    navController.navigate(
+                                        Screen.Note.createRoute(
+                                            noteId
+                                        )
+                                    )
+                                },
+                                onSelectionModeChange = { isActive -> isSelectionActive = isActive },
+                                onNavigateToCalendar = { navController.navigate(Screen.Calendar.route) },
+                                onNavigateToReminders = { navController.navigate(Screen.Reminders.route) },
+                                onNavigateToBookmarks = { navController.navigate(Screen.Bookmarks.route) },
+                                onNavigateToImages = { navController.navigate(Screen.Images.route) },
+                                onNavigateToDocuments = { navController.navigate(Screen.Documents.route) },
+                                onNavigateToTrash = { navController.navigate("trash_route") },
+                                onToggleSidebar = { isSidebarVisible = !isSidebarVisible },
+                                onNavigateToSettings = { navController.navigate(Screen.Settings.route) },
+                            )
+                        }
+
+                        composable(
+                            route = "trash_route",
+                            enterTransition = {
+                                slideIntoContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.Left,
+                                    tween(300)
+                                )
+                            },
+                            exitTransition = {
                                 slideOutOfContainer(
                                     AnimatedContentTransitionScope.SlideDirection.Left,
                                     tween(300)
                                 )
-                            }
-                        },
-                        popEnterTransition = {
-                            if (initialState.destination.route == Screen.Note.route) {
-                                EnterTransition.None
-                            } else {
+                            },
+                            popEnterTransition = {
                                 slideIntoContainer(
                                     AnimatedContentTransitionScope.SlideDirection.Right,
                                     tween(300)
                                 )
-                            }
-                        },
-                        popExitTransition = {
-                            slideOutOfContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Right,
-                                tween(300)
-                            )
-                        }
-                    ) { backStackEntry ->
-                        _root_ide_package_.com.ben.inly.presentation.mobile.home.note.NoteScreen(
-                            noteId = backStackEntry.savedStateHandle.get<String>("noteId") ?: "",
-                            onNavigateBack = { navController.popBackStack() },
-                            onNavigateToEditor = { subNoteId ->
-                                navController.navigate(Screen.Note.createRoute(subNoteId))
                             },
-                            onSelectionModeChange = { isActive -> isSelectionActive = isActive },
-                            onPickImage = onPickImage,
-                            onTakePhoto = onTakePhoto,
-                            onPickDocument = onPickDocument,
-                            onOpenFile = onOpenFile,
-                            onExportMarkdown = onExportMarkdown,
-                            onExportPdf = onExportPdf
-                        )
-                    }
-
-                    composable(
-                        route = Screen.Reminders.route,
-                        enterTransition = {
-                            slideIntoContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Left,
-                                tween(300)
-                            )
-                        },
-                        exitTransition = {
-                            slideOutOfContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Left,
-                                tween(300)
-                            )
-                        },
-                        popEnterTransition = {
-                            slideIntoContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Right,
-                                tween(300)
-                            )
-                        },
-                        popExitTransition = {
-                            slideOutOfContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Right,
-                                tween(300)
-                            )
-                        }
-                    ) {
-                        _root_ide_package_.com.ben.inly.presentation.mobile.home.overview.reminders.RemindersScreen(
-                            onNavigateBack = { navController.popBackStack() },
-                            onNavigateToEditor = { noteId ->
-                                navController.navigate(
-                                    Screen.Note.createRoute(
-                                        noteId
-                                    )
+                            popExitTransition = {
+                                slideOutOfContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.Right,
+                                    tween(300)
                                 )
                             }
-                        )
-                    }
-
-                    composable(
-                        route = Screen.Calendar.route,
-                        enterTransition = {
-                            slideIntoContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Left,
-                                tween(300)
-                            )
-                        },
-                        exitTransition = {
-                            slideOutOfContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Left,
-                                tween(300)
-                            )
-                        },
-                        popEnterTransition = {
-                            slideIntoContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Right,
-                                tween(300)
-                            )
-                        },
-                        popExitTransition = {
-                            slideOutOfContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Right,
-                                tween(300)
-                            )
+                        ) {
+                            TrashScreen(onNavigateBack = { navController.popBackStack() })
                         }
-                    ) {
-                        com.ben.inly.presentation.calendar.CalendarScreen(
-                            onNavigateBack = { navController.popBackStack() },
-                            sharedTransitionScope = sharedTransitionScope,
-                            bottomBarAnimatedVisibilityScope = this,
-                        )
-                    }
 
-                    composable(
-                        route = Screen.Bookmarks.route,
-                        enterTransition = {
-                            slideIntoContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Left,
-                                tween(300)
-                            )
-                        },
-                        exitTransition = {
-                            slideOutOfContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Left,
-                                tween(300)
-                            )
-                        },
-                        popEnterTransition = {
-                            slideIntoContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Right,
-                                tween(300)
-                            )
-                        },
-                        popExitTransition = {
-                            slideOutOfContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Right,
-                                tween(300)
-                            )
-                        }
-                    ) {
-                        _root_ide_package_.com.ben.inly.presentation.mobile.home.overview.bookmarks.BookmarksScreen(
-                            onNavigateBack = { navController.popBackStack() })
-                    }
-
-                    composable(
-                        route = Screen.Search.route,
-                        enterTransition = {
-                            slideIntoContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Left,
-                                tween(300)
-                            )
-                        },
-                        exitTransition = {
-                            slideOutOfContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Left,
-                                tween(300)
-                            )
-                        },
-                        popEnterTransition = {
-                            slideIntoContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Right,
-                                tween(300)
-                            )
-                        },
-                        popExitTransition = {
-                            slideOutOfContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Right,
-                                tween(300)
-                            )
-                        }
-                    ) {
-                        com.ben.inly.presentation.search.SearchScreen(
-                            onBack = { navController.popBackStack() },
-                            onNoteClick = { noteId ->
-                                navController.navigate(Screen.Note.createRoute(noteId)) {
-                                    popUpTo(Screen.Search.route) { inclusive = true }
-                                }
+                        composable(
+                            route = Screen.Note.route,
+                            arguments = listOf(navArgument("noteId") { type = NavType.StringType }),
+                            enterTransition = {
+                                slideIntoContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.Left,
+                                    tween(300)
+                                )
                             },
-                            onDailyNoteClick = { dateString ->
-                                navController.navigate(Screen.Daily.createRoute(dateString)) {
-                                    popUpTo(navController.graph.id) { inclusive = true }
-                                    launchSingleTop = true
-                                }
-                            },
-                            sharedTransitionScope = sharedTransitionScope,
-                            searchIconAnimatedVisibilityScope = this,
-                        )
-                    }
-
-                    composable(
-                        route = Screen.Images.route,
-                        enterTransition = {
-                            slideIntoContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Left,
-                                tween(300)
-                            )
-                        },
-                        exitTransition = {
-                            slideOutOfContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Left,
-                                tween(300)
-                            )
-                        },
-                        popEnterTransition = {
-                            slideIntoContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Right,
-                                tween(300)
-                            )
-                        },
-                        popExitTransition = {
-                            slideOutOfContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Right,
-                                tween(300)
-                            )
-                        }
-                    ) {
-                        val imagesViewModel: com.ben.inly.presentation.mobile.home.overview.images.ImagesViewModel =
-                            koinViewModel()
-                        _root_ide_package_.com.ben.inly.presentation.mobile.home.overview.images.ImagesScreen(
-                            onNavigateBack = { navController.popBackStack() },
-                            onTriggerImagePicker = {
-                                onPickImage { path -> imagesViewModel.createNewImageWithFile(path) }
-                            },
-                            viewModel = imagesViewModel
-                        )
-                    }
-
-                    composable(
-                        route = Screen.Documents.route,
-                        enterTransition = {
-                            slideIntoContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Left,
-                                tween(300)
-                            )
-                        },
-                        exitTransition = {
-                            slideOutOfContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Left,
-                                tween(300)
-                            )
-                        },
-                        popEnterTransition = {
-                            slideIntoContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Right,
-                                tween(300)
-                            )
-                        },
-                        popExitTransition = {
-                            slideOutOfContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Right,
-                                tween(300)
-                            )
-                        }
-                    ) {
-                        val documentsViewModel: com.ben.inly.presentation.mobile.home.overview.documents.DocumentsViewModel =
-                            koinViewModel()
-                        _root_ide_package_.com.ben.inly.presentation.mobile.home.overview.documents.DocumentsScreen(
-                            onNavigateBack = { navController.popBackStack() },
-                            onTriggerDocumentPicker = {
-                                onPickDocument { path ->
-                                    documentsViewModel.createNewDocumentWithFile(
-                                        path
+                            exitTransition = {
+                                if (targetState.destination.route == Screen.Note.route) {
+                                    ExitTransition.None
+                                } else {
+                                    slideOutOfContainer(
+                                        AnimatedContentTransitionScope.SlideDirection.Left,
+                                        tween(300)
                                     )
                                 }
                             },
-                            onOpenFile = onOpenFile,
-                            viewModel = documentsViewModel
-                        )
-                    }
-
-                    composable(
-                        route = Screen.Settings.route,
-                        enterTransition = {
-                            slideIntoContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Left,
-                                tween(300)
+                            popEnterTransition = {
+                                if (initialState.destination.route == Screen.Note.route) {
+                                    EnterTransition.None
+                                } else {
+                                    slideIntoContainer(
+                                        AnimatedContentTransitionScope.SlideDirection.Right,
+                                        tween(300)
+                                    )
+                                }
+                            },
+                            popExitTransition = {
+                                slideOutOfContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.Right,
+                                    tween(300)
+                                )
+                            }
+                        ) { backStackEntry ->
+                            _root_ide_package_.com.ben.inly.presentation.mobile.home.note.NoteScreen(
+                                noteId = backStackEntry.savedStateHandle.get<String>("noteId") ?: "",
+                                onNavigateBack = { navController.popBackStack() },
+                                onNavigateToEditor = { subNoteId ->
+                                    navController.navigate(Screen.Note.createRoute(subNoteId))
+                                },
+                                onSelectionModeChange = { isActive -> isSelectionActive = isActive },
+                                onPickImage = onPickImage,
+                                onTakePhoto = onTakePhoto,
+                                onPickDocument = onPickDocument,
+                                onOpenFile = onOpenFile,
+                                onExportMarkdown = onExportMarkdown,
+                                onExportPdf = onExportPdf
                             )
-                        },
-                        exitTransition = {
-                            if (targetState.destination.route == Screen.SelfHostSetup.route) {
-                                ExitTransition.None
-                            } else {
+                        }
+
+                        composable(
+                            route = Screen.Reminders.route,
+                            enterTransition = {
+                                slideIntoContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.Left,
+                                    tween(300)
+                                )
+                            },
+                            exitTransition = {
                                 slideOutOfContainer(
                                     AnimatedContentTransitionScope.SlideDirection.Left,
                                     tween(300)
                                 )
-                            }
-                        },
-                        popEnterTransition = {
-                            if (initialState.destination.route == Screen.SelfHostSetup.route) {
-                                EnterTransition.None
-                            } else {
+                            },
+                            popEnterTransition = {
                                 slideIntoContainer(
                                     AnimatedContentTransitionScope.SlideDirection.Right,
                                     tween(300)
                                 )
+                            },
+                            popExitTransition = {
+                                slideOutOfContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.Right,
+                                    tween(300)
+                                )
                             }
-                        },
-                        popExitTransition = {
-                            slideOutOfContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Right,
-                                tween(300)
+                        ) {
+                            _root_ide_package_.com.ben.inly.presentation.mobile.home.overview.reminders.RemindersScreen(
+                                onNavigateBack = { navController.popBackStack() },
+                                onNavigateToEditor = { noteId ->
+                                    navController.navigate(
+                                        Screen.Note.createRoute(
+                                            noteId
+                                        )
+                                    )
+                                }
                             )
                         }
-                    ) {
-                        com.ben.inly.presentation.settings.SettingsScreen(
-                            onNavigateBack = { navController.popBackStack() },
-                            onExportReady = onExportBackup,
-                            onImportClick = onImportBackupClick,
-                            onRequestBackupFolder = onRequestBackupFolder,
-                            onNavigateToSelfHostSetup = { navController.navigate(Screen.SelfHostSetup.route) }
-                        )
-                    }
 
-                    composable(
-                        route = Screen.SelfHostSetup.route,
-                        enterTransition = {
-                            slideIntoContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Left,
-                                tween(300)
-                            )
-                        },
-                        exitTransition = {
-                            slideOutOfContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Left,
-                                tween(300)
-                            )
-                        },
-                        popEnterTransition = {
-                            slideIntoContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Right,
-                                tween(300)
-                            )
-                        },
-                        popExitTransition = {
-                            slideOutOfContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Right,
-                                tween(300)
+                        composable(
+                            route = Screen.Calendar.route,
+                            enterTransition = {
+                                slideIntoContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.Left,
+                                    tween(300)
+                                )
+                            },
+                            exitTransition = {
+                                slideOutOfContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.Left,
+                                    tween(300)
+                                )
+                            },
+                            popEnterTransition = {
+                                slideIntoContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.Right,
+                                    tween(300)
+                                )
+                            },
+                            popExitTransition = {
+                                slideOutOfContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.Right,
+                                    tween(300)
+                                )
+                            }
+                        ) {
+                            com.ben.inly.presentation.calendar.CalendarScreen(
+                                onNavigateBack = { navController.popBackStack() },
+                                sharedTransitionScope = sharedTransitionScope,
+                                bottomBarAnimatedVisibilityScope = this,
                             )
                         }
-                    ) {
-                        com.ben.inly.presentation.settings.selfhost.SelfHostSetupScreen(
-                            onNavigateBack = { navController.popBackStack() }
-                        )
-                    }
 
-                    composable(
-                        route = Screen.RagChat.route,
-                        enterTransition = {
-                            slideIntoContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Left,
-                                tween(300)
-                            )
-                        },
-                        exitTransition = {
-                            slideOutOfContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Left,
-                                tween(300)
-                            )
-                        },
-                        popEnterTransition = {
-                            slideIntoContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Right,
-                                tween(300)
-                            )
-                        },
-                        popExitTransition = {
-                            slideOutOfContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Right,
-                                tween(300)
+                        composable(
+                            route = Screen.Bookmarks.route,
+                            enterTransition = {
+                                slideIntoContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.Left,
+                                    tween(300)
+                                )
+                            },
+                            exitTransition = {
+                                slideOutOfContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.Left,
+                                    tween(300)
+                                )
+                            },
+                            popEnterTransition = {
+                                slideIntoContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.Right,
+                                    tween(300)
+                                )
+                            },
+                            popExitTransition = {
+                                slideOutOfContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.Right,
+                                    tween(300)
+                                )
+                            }
+                        ) {
+                            _root_ide_package_.com.ben.inly.presentation.mobile.home.overview.bookmarks.BookmarksScreen(
+                                onNavigateBack = { navController.popBackStack() })
+                        }
+
+                        composable(
+                            route = Screen.Search.route,
+                            enterTransition = {
+                                slideIntoContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.Left,
+                                    tween(300)
+                                )
+                            },
+                            exitTransition = {
+                                slideOutOfContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.Left,
+                                    tween(300)
+                                )
+                            },
+                            popEnterTransition = {
+                                slideIntoContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.Right,
+                                    tween(300)
+                                )
+                            },
+                            popExitTransition = {
+                                slideOutOfContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.Right,
+                                    tween(300)
+                                )
+                            }
+                        ) {
+                            com.ben.inly.presentation.search.SearchScreen(
+                                onBack = { navController.popBackStack() },
+                                onNoteClick = { noteId ->
+                                    navController.navigate(Screen.Note.createRoute(noteId)) {
+                                        popUpTo(Screen.Search.route) { inclusive = true }
+                                    }
+                                },
+                                onDailyNoteClick = { dateString ->
+                                    navController.navigate(Screen.Daily.createRoute(dateString)) {
+                                        popUpTo(navController.graph.id) { inclusive = true }
+                                        launchSingleTop = true
+                                    }
+                                },
+                                sharedTransitionScope = sharedTransitionScope,
+                                searchIconAnimatedVisibilityScope = this,
                             )
                         }
-                    ) {
-                        DisposableEffect(Unit) {
-                            onDispose {
-                                pendingRagChatClearJob?.cancel()
-                                pendingRagChatClearJob = ragChatCoroutineScope.launch {
-                                    delay(2000.milliseconds)
-                                    ragViewModel.clearChat()
+
+                        composable(
+                            route = Screen.Images.route,
+                            enterTransition = {
+                                slideIntoContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.Left,
+                                    tween(300)
+                                )
+                            },
+                            exitTransition = {
+                                slideOutOfContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.Left,
+                                    tween(300)
+                                )
+                            },
+                            popEnterTransition = {
+                                slideIntoContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.Right,
+                                    tween(300)
+                                )
+                            },
+                            popExitTransition = {
+                                slideOutOfContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.Right,
+                                    tween(300)
+                                )
+                            }
+                        ) {
+                            val imagesViewModel: com.ben.inly.presentation.mobile.home.overview.images.ImagesViewModel =
+                                koinViewModel()
+                            _root_ide_package_.com.ben.inly.presentation.mobile.home.overview.images.ImagesScreen(
+                                onNavigateBack = { navController.popBackStack() },
+                                onTriggerImagePicker = {
+                                    onPickImage { path -> imagesViewModel.createNewImageWithFile(path) }
+                                },
+                                viewModel = imagesViewModel
+                            )
+                        }
+
+                        composable(
+                            route = Screen.Documents.route,
+                            enterTransition = {
+                                slideIntoContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.Left,
+                                    tween(300)
+                                )
+                            },
+                            exitTransition = {
+                                slideOutOfContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.Left,
+                                    tween(300)
+                                )
+                            },
+                            popEnterTransition = {
+                                slideIntoContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.Right,
+                                    tween(300)
+                                )
+                            },
+                            popExitTransition = {
+                                slideOutOfContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.Right,
+                                    tween(300)
+                                )
+                            }
+                        ) {
+                            val documentsViewModel: com.ben.inly.presentation.mobile.home.overview.documents.DocumentsViewModel =
+                                koinViewModel()
+                            _root_ide_package_.com.ben.inly.presentation.mobile.home.overview.documents.DocumentsScreen(
+                                onNavigateBack = { navController.popBackStack() },
+                                onTriggerDocumentPicker = {
+                                    onPickDocument { path ->
+                                        documentsViewModel.createNewDocumentWithFile(
+                                            path
+                                        )
+                                    }
+                                },
+                                onOpenFile = onOpenFile,
+                                viewModel = documentsViewModel
+                            )
+                        }
+
+                        composable(
+                            route = Screen.Settings.route,
+                            enterTransition = {
+                                slideIntoContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.Left,
+                                    tween(300)
+                                )
+                            },
+                            exitTransition = {
+                                if (targetState.destination.route == Screen.SelfHostSetup.route) {
+                                    ExitTransition.None
+                                } else {
+                                    slideOutOfContainer(
+                                        AnimatedContentTransitionScope.SlideDirection.Left,
+                                        tween(300)
+                                    )
+                                }
+                            },
+                            popEnterTransition = {
+                                if (initialState.destination.route == Screen.SelfHostSetup.route) {
+                                    EnterTransition.None
+                                } else {
+                                    slideIntoContainer(
+                                        AnimatedContentTransitionScope.SlideDirection.Right,
+                                        tween(300)
+                                    )
+                                }
+                            },
+                            popExitTransition = {
+                                slideOutOfContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.Right,
+                                    tween(300)
+                                )
+                            }
+                        ) {
+                            com.ben.inly.presentation.settings.SettingsScreen(
+                                onNavigateBack = { navController.popBackStack() },
+                                onExportReady = onExportBackup,
+                                onImportClick = onImportBackupClick,
+                                onRequestBackupFolder = onRequestBackupFolder,
+                                onNavigateToSelfHostSetup = { navController.navigate(Screen.SelfHostSetup.route) }
+                            )
+                        }
+
+                        composable(
+                            route = Screen.SelfHostSetup.route,
+                            enterTransition = {
+                                slideIntoContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.Left,
+                                    tween(300)
+                                )
+                            },
+                            exitTransition = {
+                                slideOutOfContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.Left,
+                                    tween(300)
+                                )
+                            },
+                            popEnterTransition = {
+                                slideIntoContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.Right,
+                                    tween(300)
+                                )
+                            },
+                            popExitTransition = {
+                                slideOutOfContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.Right,
+                                    tween(300)
+                                )
+                            }
+                        ) {
+                            com.ben.inly.presentation.settings.selfhost.SelfHostSetupScreen(
+                                onNavigateBack = { navController.popBackStack() }
+                            )
+                        }
+
+                        composable(
+                            route = Screen.RagChat.route,
+                            enterTransition = {
+                                slideIntoContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.Left,
+                                    tween(300)
+                                )
+                            },
+                            exitTransition = {
+                                slideOutOfContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.Left,
+                                    tween(300)
+                                )
+                            },
+                            popEnterTransition = {
+                                slideIntoContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.Right,
+                                    tween(300)
+                                )
+                            },
+                            popExitTransition = {
+                                slideOutOfContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.Right,
+                                    tween(300)
+                                )
+                            }
+                        ) {
+                            DisposableEffect(Unit) {
+                                onDispose {
+                                    pendingRagChatClearJob?.cancel()
+                                    pendingRagChatClearJob = ragChatCoroutineScope.launch {
+                                        delay(2000.milliseconds)
+                                        ragViewModel.clearChat()
+                                    }
                                 }
                             }
-                        }
 
-                        com.ben.inly.presentation.rag.RagChatScreen(
-                            onDismiss = { navController.popBackStack() },
-                            viewModel = ragViewModel,
-                            sharedTransitionScope = sharedTransitionScope,
-                            animatedContentScope = this,
-                            onPickDocument = onPickDocument
-                        )
+                            com.ben.inly.presentation.rag.RagChatScreen(
+                                onDismiss = { navController.popBackStack() },
+                                viewModel = ragViewModel,
+                                sharedTransitionScope = sharedTransitionScope,
+                                animatedContentScope = this,
+                                onPickDocument = onPickDocument
+                            )
+                        }
                     }
-                }
                     // top progressive fade
                     Box(
                         modifier = Modifier
@@ -795,93 +793,93 @@ fun InlyApp(
                             )
                     )
 
-                if (!isDesktopPlatform) {
-                    AnimatedVisibility(
-                        visible = isBottomBarVisible,
-                        enter = fadeIn(tween(300)),
-                        exit = fadeOut(tween(300)),
-                        modifier = Modifier.align(Alignment.BottomCenter)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(72.dp)
-                                .align(Alignment.BottomCenter)
-                                .background(
-                                    brush = Brush.verticalGradient(
-                                        colors = listOf(
-                                            Color.Transparent,
-                                            Color.Transparent,
-                                            Color.Transparent
+                    if (!isDesktopPlatform) {
+                        AnimatedVisibility(
+                            visible = isBottomBarVisible,
+                            enter = fadeIn(tween(300)),
+                            exit = fadeOut(tween(300)),
+                            modifier = Modifier.align(Alignment.BottomCenter)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(72.dp)
+                                    .align(Alignment.BottomCenter)
+                                    .background(
+                                        brush = Brush.verticalGradient(
+                                            colors = listOf(
+                                                Color.Transparent,
+                                                Color.Transparent,
+                                                Color.Transparent
+                                            )
                                         )
                                     )
-                                )
-                        )
-                    }
+                            )
+                        }
 
-                    AnimatedVisibility(
-                        visible = isBottomBarVisible,
-                        enter = if (suppressBottomBarEnterAnimation) {
-                            EnterTransition.None
-                        } else {
-                            slideInVertically(
-                                initialOffsetY = { it },
+                        AnimatedVisibility(
+                            visible = isBottomBarVisible,
+                            enter = if (suppressBottomBarEnterAnimation) {
+                                EnterTransition.None
+                            } else {
+                                slideInVertically(
+                                    initialOffsetY = { it },
+                                    animationSpec = tween(
+                                        durationMillis = 250,
+                                        delayMillis = 100,
+                                        easing = FastOutSlowInEasing
+                                    )
+                                ) + fadeIn(tween(durationMillis = 250, delayMillis = 100))
+                            },
+                            exit = slideOutVertically(
+                                targetOffsetY = { it },
                                 animationSpec = tween(
-                                    durationMillis = 250,
-                                    delayMillis = 100,
+                                    durationMillis = 200,
                                     easing = FastOutSlowInEasing
                                 )
-                            ) + fadeIn(tween(durationMillis = 250, delayMillis = 100))
-                        },
-                        exit = slideOutVertically(
-                            targetOffsetY = { it },
-                            animationSpec = tween(
-                                durationMillis = 200,
-                                easing = FastOutSlowInEasing
-                            )
-                        ) + fadeOut(tween(durationMillis = 200)),
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .onGloballyPositioned { coords ->
-                                bottomBarHeightDp = with(density) { coords.size.height.toDp() }
-                            }
-                    ) {
-                        InlyBottomBar(
-                            navController = navController,
-                            hazeState = hazeState,
-                            sharedTransitionScope = sharedTransitionScope,
-                            bottomBarAnimatedVisibilityScope = this,
-                            currentRoute = currentRoute,
-                            activeTab = activeTab,
-                            onAiIconTap = openAiChat,
-                            onSearchClick = { navController.navigate(Screen.Search.route) },
-                            onMicClick = {
-                                if (isVoiceTaskListening) {
-                                    HomeViewModel.stopVoiceTaskListening()
-                                } else {
-                                    HomeViewModel.startVoiceTaskListening(
-                                        onPermissionNeeded = { requestMicPermission() }
-                                    )
+                            ) + fadeOut(tween(durationMillis = 200)),
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .onGloballyPositioned { coords ->
+                                    bottomBarHeightDp = with(density) { coords.size.height.toDp() }
                                 }
-                            },
-                            isListening = isVoiceTaskListening,
-                            partialText = partialText,
-                            isCompact = isBottomBarCompact
-                        )
+                        ) {
+                            InlyBottomBar(
+                                navController = navController,
+                                hazeState = hazeState,
+                                sharedTransitionScope = sharedTransitionScope,
+                                bottomBarAnimatedVisibilityScope = this,
+                                currentRoute = currentRoute,
+                                activeTab = activeTab,
+                                onAiIconTap = openAiChat,
+                                onSearchClick = { navController.navigate(Screen.Search.route) },
+                                onMicClick = {
+                                    if (isVoiceTaskListening) {
+                                        HomeViewModel.stopVoiceTaskListening()
+                                    } else {
+                                        HomeViewModel.startVoiceTaskListening(
+                                            onPermissionNeeded = { requestMicPermission() }
+                                        )
+                                    }
+                                },
+                                isListening = isVoiceTaskListening,
+                                partialText = partialText,
+                                isCompact = isBottomBarCompact
+                            )
+                        }
                     }
-                }
 
-                ShareReceiverSheet(
-                    share = currentShare,
-                    linkableNotes = linkableNotes,
-                    onSaveToInbox = { shareViewModel.saveToInbox() },
-                    onNoteSelected = { noteId -> shareViewModel.saveToNote(noteId) },
-                    onCreateNote = { title -> shareViewModel.createNoteAndSave(title) },
-                    onCreateBlankNote = { shareViewModel.createNoteAndSave("") },
-                    onDismiss = { shareViewModel.dismiss() }
-                )
+                    ShareReceiverSheet(
+                        share = currentShare,
+                        linkableNotes = linkableNotes,
+                        onSaveToInbox = { shareViewModel.saveToInbox() },
+                        onNoteSelected = { noteId -> shareViewModel.saveToNote(noteId) },
+                        onCreateNote = { title -> shareViewModel.createNoteAndSave(title) },
+                        onCreateBlankNote = { shareViewModel.createNoteAndSave("") },
+                        onDismiss = { shareViewModel.dismiss() }
+                    )
 
-                fullScreenContent?.invoke()
+                    fullScreenContent?.invoke()
                 }
             }
         }

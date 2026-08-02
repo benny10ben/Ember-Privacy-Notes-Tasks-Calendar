@@ -37,6 +37,8 @@ import com.ben.inly.presentation.shared.editor.MobileMenuState
 import com.ben.inly.presentation.shared.editor.blockViews.databaseBlockView.DatabaseTemplatePickerSheet
 import com.ben.inly.presentation.shared.components.NotePickerDialog
 import com.ben.inly.presentation.mobile.home.note.SubNotePanel
+import com.ben.inly.presentation.calendar.EventEditorSheetHost
+import com.ben.inly.presentation.calendar.RecurrenceScopeChooser
 import com.ben.inly.presentation.shared.editor.BlockStyleBar
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
@@ -45,8 +47,9 @@ import dev.chrisbanes.haze.hazeSource
  * Single-day daily editor pane. The caller selects the day via viewModel.selectDate(date);
  * this renders viewModel.visibleBlocks for whatever day is currently loaded. No pager.
  *
- * Used by the desktop merged screen (right panel) and by DailyScreen's desktop branch.
- * Owns its own editor menu/keyboard state and its sub-note panel.
+ * Used by the desktop merged screen (right panel). Owns its own editor menu/keyboard state,
+ * its sub-note panel, and - like DailyScreen - the event editor sheet + recurrence scope
+ * chooser, since both are driven by state that lives in this composable's EditorActions.
  */
 @Composable
 fun DailyEditorPane(
@@ -75,6 +78,7 @@ fun DailyEditorPane(
     val databaseTemplates by viewModel.databaseTemplates.collectAsState()
     val canUndo by viewModel.canUndo.collectAsState()
     val canRedo by viewModel.canRedo.collectAsState()
+    val pendingRecurringDeletion by viewModel.pendingRecurringDeletion.collectAsState()
     var showDatabasePicker by remember { mutableStateOf(false) }
     var showNotePickerDialog by remember { mutableStateOf(false) }
 
@@ -118,6 +122,13 @@ fun DailyEditorPane(
     val showToolbar = !isSelectionMode && (isKeyboardOpen || isDesktopPlatform)
 
     var subNotePanelId by remember { mutableStateOf<String?>(null) }
+
+    // Mirrors DailyScreen: the checkbox row's three-dot menu routes through
+    // EditorActions.onOpenEventOptions, which just parks the target blockId here for
+    // EventEditorSheetHost (below) to resolve into a CalendarEvent and open the sheet.
+    var eventOptionsTargetBlockId by remember { mutableStateOf<String?>(null) }
+    var eventOptionsOccurrenceDate by remember { mutableStateOf<String?>(null) }
+
     val settingsManager: com.ben.inly.data.local.prefs.SettingsManager = org.koin.compose.koinInject()
     val subNoteOpenModeName by settingsManager.subNoteOpenModeFlow.collectAsState(
         initial = com.ben.inly.data.local.prefs.SyncConstants.DEFAULT_SUBNOTE_OPEN_MODE
@@ -142,6 +153,10 @@ fun DailyEditorPane(
             override fun onBackspaceOnEmpty(id: String) = viewModel.handleBackspaceOnEmpty(id)
             override fun onToggleSelection(id: String) = viewModel.toggleSelection(id)
             override fun onUpdateReminder(id: String, timestamp: Long?) = viewModel.updateReminder(id, timestamp)
+            override fun onOpenEventOptions(blockId: String, occurrenceDate: String?) {
+                eventOptionsTargetBlockId = blockId
+                eventOptionsOccurrenceDate = occurrenceDate
+            }
             override fun onUrlSubmit(id: String, url: String) = viewModel.handleUrlSubmit(id, url)
             override fun onImagePicked(id: String, uri: String) = viewModel.handleImagePicked(id, uri)
             override fun onDocumentPicked(id: String, uri: String) = viewModel.handleDocumentPicked(id, uri)
@@ -401,5 +416,21 @@ fun DailyEditorPane(
                 }
             }
         )
+
+        EventEditorSheetHost(
+            targetBlockId = eventOptionsTargetBlockId,
+            targetOccurrenceDate = eventOptionsOccurrenceDate,
+            onDismissTarget = {
+                eventOptionsTargetBlockId = null
+                eventOptionsOccurrenceDate = null
+            }
+        )
+
+        if (pendingRecurringDeletion != null) {
+            RecurrenceScopeChooser(
+                onDismiss = { viewModel.dismissRecurringDeletion() },
+                onScopeSelected = { scope -> viewModel.confirmRecurringDeletion(scope) }
+            )
+        }
     }
 }
