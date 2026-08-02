@@ -82,6 +82,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import com.ben.inly.domain.model.RecurrenceEditScope
 import com.ben.inly.domain.util.isDesktopPlatform
 import com.ben.inly.presentation.customInlyShadow
 import com.ben.inly.presentation.shared.components.InlyBottomSheet
@@ -136,6 +137,9 @@ fun CalendarScreen(
     val events by remember(selectedDate) { viewModel.eventsForDate(selectedDate.toString()) }
         .collectAsState(initial = emptyList())
     var eventEditorState by remember { mutableStateOf<EventEditorState?>(null) }
+    // Holds the continuation to run once the user picks a scope in RecurrenceScopeChooser -
+    // set by whichever of Edit/Delete triggered it, null the rest of the time.
+    var pendingScopeAction by remember { mutableStateOf<((RecurrenceEditScope) -> Unit)?>(null) }
     var slideDirection by remember { mutableStateOf(AnimatedContentTransitionScope.SlideDirection.Left) }
 
     val scrollState = remember(viewMode) { ScrollState(0) }
@@ -207,7 +211,8 @@ fun CalendarScreen(
                         categoryId = event.categoryId,
                         durationMinutes = event.durationMinutes,
                         url = event.url.orEmpty(),
-                        description = event.description.orEmpty()
+                        description = event.description.orEmpty(),
+                        recurrenceRule = event.recurrenceRule
                     )
                 }
 
@@ -412,7 +417,15 @@ fun CalendarScreen(
         onCategoryChange = { categoryId -> eventEditorState = eventEditorState?.copy(categoryId = categoryId) },
         onUrlChange = { url -> eventEditorState = eventEditorState?.copy(url = url) },
         onDescriptionChange = { description -> eventEditorState = eventEditorState?.copy(description = description) },
-        onEditClick = { eventEditorState = eventEditorState?.copy(isEditing = true) },
+        onRecurrenceChange = { rule -> eventEditorState = eventEditorState?.copy(recurrenceRule = rule) },
+        onEditClick = {
+            val recurring = eventEditorState?.original?.recurrenceRule != null
+            if (recurring) {
+                pendingScopeAction = { scope -> eventEditorState = eventEditorState?.copy(isEditing = true, editScope = scope) }
+            } else {
+                eventEditorState = eventEditorState?.copy(isEditing = true)
+            }
+        },
         onSave = {
             eventEditorState?.let { state ->
                 viewModel.saveEvent(
@@ -423,19 +436,38 @@ fun CalendarScreen(
                     categoryId = state.categoryId,
                     durationMinutes = state.durationMinutes,
                     url = state.url,
-                    description = state.description
+                    description = state.description,
+                    recurrenceRule = state.recurrenceRule,
+                    editScope = state.editScope
                 )
             }
             eventEditorState = null
         },
         onDelete = eventEditorState?.original?.let { original ->
             {
-                viewModel.deleteEvent(original)
-                eventEditorState = null
+                if (original.recurrenceRule != null) {
+                    pendingScopeAction = { scope ->
+                        viewModel.deleteEvent(original, scope)
+                        eventEditorState = null
+                    }
+                } else {
+                    viewModel.deleteEvent(original)
+                    eventEditorState = null
+                }
             }
         },
         onDismiss = { eventEditorState = null }
     )
+
+    pendingScopeAction?.let { runWithScope ->
+        RecurrenceScopeChooser(
+            onDismiss = { pendingScopeAction = null },
+            onScopeSelected = { scope ->
+                pendingScopeAction = null
+                runWithScope(scope)
+            }
+        )
+    }
 }
 
 @Composable

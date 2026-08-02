@@ -7,6 +7,8 @@ import com.ben.inly.data.local.room.CategoryEntity
 import com.ben.inly.data.local.room.TaskSource
 import com.ben.inly.domain.model.CheckboxBlock
 import com.ben.inly.domain.model.NoteContent
+import com.ben.inly.domain.model.RecurrenceEditScope
+import com.ben.inly.domain.model.RecurrenceRule
 import com.ben.inly.domain.model.markDeleted
 import com.ben.inly.domain.model.NoteBlock
 import com.ben.inly.domain.repository.NoteRepository
@@ -73,6 +75,16 @@ class CalendarViewModel(
     fun eventsForMonth(yearMonth: String): Flow<List<CalendarEvent>> =
         repository.getCalendarTasksForMonth(yearMonth).map { tasks -> tasks.mapNotNull { it.toCalendarEvent() } }
 
+    // Used by the checkbox row's three-dot menu (Daily/Note screens) to look up the CalendarEvent
+    // for a tapped blockId. When occurrenceDate is known (the checkbox is a virtual recurring
+    // occurrence materialized on some day other than the series' anchor), it's resolved through the
+    // same expansion getCalendarTasksForDate uses so per-occurrence overrides/completion apply -
+    // otherwise it falls back to the base (anchor) row.
+    fun eventForBlock(blockId: String, occurrenceDate: String? = null): Flow<CalendarEvent?> {
+        val source = occurrenceDate?.let { repository.getCalendarTasksForDate(it) } ?: repository.getAllTasksFlow()
+        return source.map { tasks -> tasks.firstOrNull { it.blockId == blockId }?.toCalendarEvent() }
+    }
+
     // Events ARE checkboxes: creating/rescheduling one means writing a CheckboxBlock into that
     // day's note content (which re-derives the CalendarTaskEntity row as a side effect, see
     // NoteRepositoryImpl.syncCalendarTasks) - there is no separate "event" storage to keep in sync.
@@ -84,14 +96,37 @@ class CalendarViewModel(
         categoryId: String?,
         durationMinutes: Int,
         url: String?,
-        description: String?
+        description: String?,
+        recurrenceRule: RecurrenceRule? = null,
+        editScope: RecurrenceEditScope = RecurrenceEditScope.ALL_EVENTS
     ) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val blockId = original?.blockId ?: UUID.randomUUID().toString()
-                val now = System.currentTimeMillis()
                 val normalizedUrl = url?.trim()?.takeIf { it.isNotEmpty() }?.let(::normalizeEventUrl)
                 val normalizedDescription = description?.trim()?.takeIf { it.isNotEmpty() }
+
+                // A scoped edit ("this event" / "all future events" / "all past events") on an
+                // already-recurring event needs series-splitting logic that lives in the
+                // repository - the date is fixed to the acted-on occurrence in every scope but
+                // ALL_EVENTS, since single-occurrence edits can't move a date (see plan).
+                if (original != null && original.recurrenceRule != null && editScope != RecurrenceEditScope.ALL_EVENTS) {
+                    repository.applyRecurrenceScopedEdit(
+                        blockId = original.blockId,
+                        occurrenceDate = original.dateString,
+                        scope = editScope,
+                        text = name,
+                        timestamp = timestamp,
+                        categoryId = categoryId,
+                        durationMinutes = durationMinutes,
+                        url = normalizedUrl,
+                        description = normalizedDescription
+                    )
+                    SyncEventBus.emitSyncCompleted(original.dateString)
+                    return@launch
+                }
+
+                val blockId = original?.blockId ?: UUID.randomUUID().toString()
+                val now = System.currentTimeMillis()
 
                 if (original != null && original.sourceType == TaskSource.NOTE) {
                     var notificationTitle = "Task Reminder"
@@ -107,6 +142,7 @@ class CalendarViewModel(
                             durationMinutes = durationMinutes,
                             url = normalizedUrl,
                             description = normalizedDescription,
+                            recurrenceRule = recurrenceRule,
                             updatedAt = now
                         )
                         val updatedBlocks = content.blocks.map { if (it.id == blockId) updatedBlock else it }
@@ -132,6 +168,7 @@ class CalendarViewModel(
                     durationMinutes = durationMinutes,
                     url = normalizedUrl,
                     description = normalizedDescription,
+                    recurrenceRule = recurrenceRule,
                     updatedAt = now
                 )
 
@@ -170,9 +207,19 @@ class CalendarViewModel(
         }
     }
 
-    fun deleteEvent(event: CalendarEvent) {
+    fun deleteEvent(event: CalendarEvent, editScope: RecurrenceEditScope = RecurrenceEditScope.ALL_EVENTS) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
+                if (event.recurrenceRule != null) {
+                    // Routed through the repository even for ALL_EVENTS so the base block's
+                    // markDeleted() and its now-orphaned per-occurrence exceptions are cleaned up
+                    // together - see NoteRepositoryImpl.deleteEntireSeries.
+                    repository.applyRecurrenceScopedDelete(event.blockId, event.dateString, editScope)
+                    SyncEventBus.emitSyncCompleted(event.dateString)
+                    reminderScheduler.cancel(event.blockId)
+                    return@launch
+                }
+
                 if (event.sourceType == TaskSource.NOTE) {
                     SyncCoordinator.mutex.withLock {
                         val meta = repository.getNoteById(event.noteId) ?: return@launch

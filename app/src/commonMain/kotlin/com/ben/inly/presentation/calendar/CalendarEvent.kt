@@ -2,6 +2,8 @@ package com.ben.inly.presentation.calendar
 
 import com.ben.inly.data.local.room.CalendarTaskEntity
 import com.ben.inly.data.local.room.TaskSource
+import com.ben.inly.data.local.room.toRecurrenceRule
+import com.ben.inly.domain.model.RecurrenceRule
 
 data class CalendarEvent(
     val blockId: String,
@@ -14,7 +16,8 @@ data class CalendarEvent(
     val durationMinutes: Int,
     val sourceType: TaskSource,
     val url: String?,
-    val description: String?
+    val description: String?,
+    val recurrenceRule: RecurrenceRule?
 )
 
 fun CalendarTaskEntity.toCalendarEvent(): CalendarEvent? {
@@ -31,6 +34,7 @@ fun CalendarTaskEntity.toCalendarEvent(): CalendarEvent? {
         durationMinutes = durationMinutes,
         sourceType = sourceType,
         url = url,
-        description = description
+        description = description,
+        recurrenceRule = toRecurrenceRule()
     )
 }

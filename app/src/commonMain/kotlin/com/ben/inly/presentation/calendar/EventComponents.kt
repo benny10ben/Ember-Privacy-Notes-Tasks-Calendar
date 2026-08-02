@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
+
 package com.ben.inly.presentation.calendar
 
 import androidx.compose.foundation.background
@@ -18,6 +20,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -33,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
@@ -42,7 +48,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.ben.inly.domain.model.RecurrenceEditScope
+import com.ben.inly.domain.model.RecurrenceFrequency
+import com.ben.inly.domain.model.RecurrenceRule
 import com.ben.inly.domain.util.isDesktopPlatform
+import kotlinx.datetime.DayOfWeek
+import kotlinx.datetime.isoDayNumber
 import com.ben.inly.presentation.shared.components.InlyBottomSheet
 import com.ben.inly.presentation.shared.components.InlyBottomSheetAction
 import com.ben.inly.presentation.shared.components.InlyButtonPrimary
@@ -123,6 +134,10 @@ data class EventEditorState(
     val durationMinutes: Int = 30,
     val url: String = "",
     val description: String = "",
+    val recurrenceRule: RecurrenceRule? = null,
+    // Only meaningful when original?.recurrenceRule != null - which portion of the series an
+    // edit/delete applies to. Chosen via RecurrenceScopeChooser before editing/deleting begins.
+    val editScope: RecurrenceEditScope = RecurrenceEditScope.ALL_EVENTS,
     // New events (original == null) have nothing to view, so they start in edit mode.
     // Tapping an existing event starts in read-only view mode until "Edit" is tapped.
     val isEditing: Boolean = original == null
@@ -151,6 +166,24 @@ fun formatTimeOfDay(hour: Int, minute: Int): String {
     return "$displayHour:${minute.toString().padStart(2, '0')} $period"
 }
 
+fun formatRecurrenceSummary(rule: RecurrenceRule): String {
+    val base = when (rule.frequency) {
+        RecurrenceFrequency.DAILY -> if (rule.interval == 1) "Daily" else "Every ${rule.interval} days"
+        RecurrenceFrequency.WEEKLY -> {
+            val dayLabel = rule.daysOfWeek.takeIf { it.isNotEmpty() }
+                ?.sortedBy { it.isoDayNumber }
+                ?.joinToString(", ") { it.name.take(3).lowercase().replaceFirstChar(Char::uppercase) }
+                ?.let { " on $it" }
+                ?: ""
+            (if (rule.interval == 1) "Weekly" else "Every ${rule.interval} weeks") + dayLabel
+        }
+        RecurrenceFrequency.MONTHLY -> if (rule.interval == 1) "Monthly" else "Every ${rule.interval} months"
+        RecurrenceFrequency.YEARLY -> if (rule.interval == 1) "Yearly" else "Every ${rule.interval} years"
+    }
+    val until = rule.untilDateString?.let { " until ${formatFullDate(LocalDate.parse(it))}" } ?: ""
+    return base + until
+}
+
 fun formatDuration(minutes: Int): String {
     val hours = minutes / 60
     val mins = minutes % 60
@@ -161,7 +194,6 @@ fun formatDuration(minutes: Int): String {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EventEditorSheet(
     state: EventEditorState?,
@@ -173,6 +205,7 @@ fun EventEditorSheet(
     onCategoryChange: (String?) -> Unit,
     onUrlChange: (String) -> Unit,
     onDescriptionChange: (String) -> Unit,
+    onRecurrenceChange: (RecurrenceRule?) -> Unit,
     onEditClick: () -> Unit,
     onSave: () -> Unit,
     onDelete: (() -> Unit)?,
@@ -213,6 +246,7 @@ fun EventEditorSheet(
                     onCategoryChange = onCategoryChange,
                     onUrlChange = onUrlChange,
                     onDescriptionChange = onDescriptionChange,
+                    onRecurrenceChange = onRecurrenceChange,
                     onEditClick = onEditClick,
                     onCancel = { closeAnd(onDismiss) },
                     onSave = { closeAnd(onSave) },
@@ -235,6 +269,7 @@ private fun EventEditorFields(
     onCategoryChange: (String?) -> Unit,
     onUrlChange: (String) -> Unit,
     onDescriptionChange: (String) -> Unit,
+    onRecurrenceChange: (RecurrenceRule?) -> Unit,
     onEditClick: () -> Unit,
     onCancel: () -> Unit,
     onSave: () -> Unit,
@@ -279,11 +314,15 @@ private fun EventEditorFields(
             modifier = Modifier.fillMaxWidth()
         )
 
+        // A single-occurrence edit can't move a date without needing reverse-date exception
+        // lookups (see plan) - the date row is dimmed and inert in that scope instead of hidden,
+        // so the user still sees which date they're editing.
+        val canEditDate = state.editScope == RecurrenceEditScope.ALL_EVENTS
         EventFieldRow(
             icon = painterResource(Res.drawable.calendar),
             label = formatFullDate(state.date),
-            onClick = { showDatePicker = true },
-            modifier = Modifier.fillMaxWidth()
+            onClick = { if (canEditDate) showDatePicker = true },
+            modifier = Modifier.fillMaxWidth().let { if (canEditDate) it else it.alpha(0.5f) }
         )
         if (showDatePicker) {
             MinimalDatePickerDialog(
@@ -292,6 +331,26 @@ private fun EventEditorFields(
                 onConfirm = { millis ->
                     val instant = Instant.fromEpochMilliseconds(millis)
                     onDateChange(instant.toLocalDateTime(TimeZone.UTC).date)
+                }
+            )
+        }
+
+        var showRepeatDialog by remember { mutableStateOf(false) }
+        val canEditRecurrence = state.editScope == RecurrenceEditScope.ALL_EVENTS
+        EventFieldRow(
+            icon = painterResource(Res.drawable.clock_circle),
+            label = state.recurrenceRule?.let(::formatRecurrenceSummary) ?: "Does not repeat",
+            onClick = { if (canEditRecurrence) showRepeatDialog = true },
+            modifier = Modifier.fillMaxWidth().let { if (canEditRecurrence) it else it.alpha(0.5f) }
+        )
+        if (showRepeatDialog) {
+            RepeatOptionsDialog(
+                initialRule = state.recurrenceRule,
+                anchorDate = state.date,
+                onDismiss = { showRepeatDialog = false },
+                onConfirm = { rule ->
+                    onRecurrenceChange(rule)
+                    showRepeatDialog = false
                 }
             )
         }
@@ -510,6 +569,9 @@ private fun EventViewFields(
 
         // Plain icon + label rows - no Surface/box background, matching the reference layout.
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            state.recurrenceRule?.let { rule ->
+                InfoRow(icon = painterResource(Res.drawable.clock_circle), label = "Repeats ${formatRecurrenceSummary(rule).replaceFirstChar(Char::lowercase)}")
+            }
             if (category != null) {
                 InfoRow(icon = painterResource(Res.drawable.widget2), label = category.name)
             }
@@ -626,6 +688,229 @@ private fun CategoryChip(
             color = textColor,
             modifier = Modifier.padding(horizontal = FieldPadding, vertical = 8.dp)
         )
+    }
+}
+
+private val WeekdayOrder = listOf(
+    DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY,
+    DayOfWeek.FRIDAY, DayOfWeek.SATURDAY, DayOfWeek.SUNDAY
+)
+
+@Composable
+private fun SheetOptionRow(label: String, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(InteractiveShape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 4.dp, vertical = 14.dp)
+    ) {
+        Text(text = label, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+    }
+}
+
+@Composable
+fun RepeatOptionsDialog(
+    initialRule: RecurrenceRule?,
+    anchorDate: LocalDate,
+    onDismiss: () -> Unit,
+    onConfirm: (RecurrenceRule?) -> Unit
+) {
+    var showCustom by remember { mutableStateOf(false) }
+
+    if (showCustom) {
+        CustomRepeatDialog(
+            initialRule = initialRule,
+            anchorDate = anchorDate,
+            onDismiss = onDismiss,
+            onConfirm = onConfirm
+        )
+        return
+    }
+
+    InlyBottomSheet(expanded = true, onDismiss = onDismiss, title = "Repeat") { closeAnd ->
+        CompositionLocalProvider(
+            LocalIndication provides NoRippleIndicationNodeFactory,
+            LocalRippleConfiguration provides null
+        ) {
+            Column(modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp)) {
+                SheetOptionRow("Never") { closeAnd { onConfirm(null) } }
+                SheetOptionRow("Daily") { closeAnd { onConfirm(RecurrenceRule(frequency = RecurrenceFrequency.DAILY)) } }
+                SheetOptionRow("Weekly") {
+                    closeAnd { onConfirm(RecurrenceRule(frequency = RecurrenceFrequency.WEEKLY, daysOfWeek = setOf(anchorDate.dayOfWeek))) }
+                }
+                SheetOptionRow("Monthly") { closeAnd { onConfirm(RecurrenceRule(frequency = RecurrenceFrequency.MONTHLY)) } }
+                SheetOptionRow("Yearly") { closeAnd { onConfirm(RecurrenceRule(frequency = RecurrenceFrequency.YEARLY)) } }
+                SheetOptionRow("Custom…") { showCustom = true }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CustomRepeatDialog(
+    initialRule: RecurrenceRule?,
+    anchorDate: LocalDate,
+    onDismiss: () -> Unit,
+    onConfirm: (RecurrenceRule?) -> Unit
+) {
+    var frequency by remember { mutableStateOf(initialRule?.frequency ?: RecurrenceFrequency.WEEKLY) }
+    var interval by remember { mutableStateOf(initialRule?.interval ?: 1) }
+    var daysOfWeek by remember {
+        mutableStateOf(initialRule?.daysOfWeek?.takeIf { it.isNotEmpty() } ?: setOf(anchorDate.dayOfWeek))
+    }
+    var hasEndDate by remember { mutableStateOf(initialRule?.untilDateString != null) }
+    var untilDateString by remember { mutableStateOf(initialRule?.untilDateString) }
+    var showEndDatePicker by remember { mutableStateOf(false) }
+
+    InlyBottomSheet(expanded = true, onDismiss = onDismiss, title = "Custom Repeat") { closeAnd ->
+        CompositionLocalProvider(
+            LocalIndication provides NoRippleIndicationNodeFactory,
+            LocalRippleConfiguration provides null
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text("Repeat every", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(
+                        Icons.Default.Remove, "Decrease", tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(20.dp).clip(CircleShape).clickable { interval = (interval - 1).coerceAtLeast(1) }
+                    )
+                    Text(interval.toString(), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.width(28.dp), textAlign = TextAlign.Center)
+                    Icon(
+                        Icons.Default.Add, "Increase", tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(20.dp).clip(CircleShape).clickable { interval += 1 }
+                    )
+
+                    Row(
+                        modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        RecurrenceFrequency.entries.forEach { option ->
+                            CategoryChip(
+                                label = when (option) {
+                                    RecurrenceFrequency.DAILY -> "Days"
+                                    RecurrenceFrequency.WEEKLY -> "Weeks"
+                                    RecurrenceFrequency.MONTHLY -> "Months"
+                                    RecurrenceFrequency.YEARLY -> "Years"
+                                },
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                hasCategory = false,
+                                isSelected = frequency == option,
+                                onClick = { frequency = option }
+                            )
+                        }
+                    }
+                }
+
+                if (frequency == RecurrenceFrequency.WEEKLY) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        WeekdayOrder.forEach { day ->
+                            val isSelected = day in daysOfWeek
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                                    .background(if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
+                                    .clickable {
+                                        daysOfWeek = if (isSelected) {
+                                            (daysOfWeek - day).ifEmpty { setOf(day) }
+                                        } else {
+                                            daysOfWeek + day
+                                        }
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = day.name.take(1),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth().clickable { hasEndDate = !hasEndDate },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Ends", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+                    Text(
+                        text = if (hasEndDate) (untilDateString?.let { formatFullDate(LocalDate.parse(it)) } ?: "Choose date") else "Never",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+                if (hasEndDate) {
+                    EventFieldRow(
+                        icon = painterResource(Res.drawable.calendar),
+                        label = untilDateString?.let { formatFullDate(LocalDate.parse(it)) } ?: "Choose end date",
+                        onClick = { showEndDatePicker = true },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                if (showEndDatePicker) {
+                    val initialMillis = untilDateString?.let { LocalDate.parse(it) }
+                        ?.let { LocalDateTime(it.year, it.monthNumber, it.dayOfMonth, 0, 0).toInstant(TimeZone.UTC).toEpochMilliseconds() }
+                        ?: System.currentTimeMillis()
+                    MinimalDatePickerDialog(
+                        initialTimestamp = initialMillis,
+                        onDismiss = { showEndDatePicker = false },
+                        onConfirm = { millis ->
+                            untilDateString = Instant.fromEpochMilliseconds(millis).toLocalDateTime(TimeZone.UTC).date.toString()
+                            showEndDatePicker = false
+                        }
+                    )
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    InlyButtonSecondary(text = "Cancel", onClick = { closeAnd(onDismiss) }, modifier = Modifier.weight(1f))
+                    InlyButtonPrimary(
+                        text = "Done",
+                        onClick = {
+                            closeAnd {
+                                onConfirm(
+                                    RecurrenceRule(
+                                        frequency = frequency,
+                                        interval = interval,
+                                        daysOfWeek = if (frequency == RecurrenceFrequency.WEEKLY) daysOfWeek else emptySet(),
+                                        untilDateString = if (hasEndDate) untilDateString else null
+                                    )
+                                )
+                            }
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun RecurrenceScopeChooser(
+    onDismiss: () -> Unit,
+    onScopeSelected: (RecurrenceEditScope) -> Unit
+) {
+    InlyBottomSheet(expanded = true, onDismiss = onDismiss, title = "Which events?") { closeAnd ->
+        CompositionLocalProvider(
+            LocalIndication provides NoRippleIndicationNodeFactory,
+            LocalRippleConfiguration provides null
+        ) {
+            Column(modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp)) {
+                SheetOptionRow("This event") { closeAnd { onScopeSelected(RecurrenceEditScope.THIS_EVENT) } }
+                SheetOptionRow("All future events") { closeAnd { onScopeSelected(RecurrenceEditScope.ALL_FUTURE_EVENTS) } }
+                SheetOptionRow("All past events") { closeAnd { onScopeSelected(RecurrenceEditScope.ALL_PAST_EVENTS) } }
+                SheetOptionRow("All events") { closeAnd { onScopeSelected(RecurrenceEditScope.ALL_EVENTS) } }
+            }
+        }
     }
 }
 
