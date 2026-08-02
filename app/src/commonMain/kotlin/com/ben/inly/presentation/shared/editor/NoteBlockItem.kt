@@ -123,6 +123,8 @@ import inly.app.generated.resources.calendar_add
 import inly.app.generated.resources.clock_circle
 import org.jetbrains.compose.resources.painterResource
 import kotlin.time.Duration.Companion.milliseconds
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.flow.first
 
 @Composable
 fun Modifier.mouseScrollable(scrollState: ScrollState): Modifier {
@@ -240,15 +242,25 @@ fun NoteBlockItem(
         }
     }
 
+    val isTextBased = block !is BookmarkBlock && block !is ImageBlock && block !is DocumentBlock && block !is DatabaseBlock && block !is VoiceBlock && block !is SketchBlock && block !is SolidDividerBlock && block !is ThreeDotDividerBlock && block !is LinkedNoteBlock
     LaunchedEffect(focusRequest?.nonce) {
-        if (focusRequest != null && focusRequest.id == block.id) {
-            delay(50.milliseconds)
-            try {
-                focusRequester.requestFocus()
-                keyboardController?.show()
-            } catch (_: Exception) { }
+        if (focusRequest == null || focusRequest.id != block.id) return@LaunchedEffect
+
+        if (!isTextBased) {
+            // No text field in this branch, so no FocusRequester is attached. Consume the
+            // request and leave the existing input session alone rather than failing into
+            // a state where nothing is focused.
             actions.onClearFocusRequest()
+            return@LaunchedEffect
         }
+
+        val grabbed = runCatching { focusRequester.requestFocus() }.isSuccess
+        if (!grabbed) {
+            withFrameNanos {}
+            runCatching { focusRequester.requestFocus() }
+        }
+        if (!isKeyboardOpen) keyboardController?.show()
+        actions.onClearFocusRequest()
     }
 
     // STYLING
@@ -310,7 +322,6 @@ fun NoteBlockItem(
         backgroundColor = MaterialTheme.colorScheme.surface
     )
 
-    val isTextBased = block !is BookmarkBlock && block !is ImageBlock && block !is DocumentBlock && block !is DatabaseBlock && block !is VoiceBlock && block !is SketchBlock && block !is SolidDividerBlock && block !is ThreeDotDividerBlock && block !is LinkedNoteBlock
     val desktopExtraPadding = if (isDesktopPlatform) 16.dp else 0.dp
     val startPadding = when {
         isDatabase -> (block.indentationLevel * 28).dp + desktopExtraPadding
@@ -921,6 +932,30 @@ fun IsolatedEditorTextField(
     val density = LocalDensity.current
     val imeBottom = WindowInsets.ime.getBottom(density)
 
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val imeInsets = WindowInsets.ime
+    var pickerVisible by remember { mutableStateOf(false) }
+
+    // ModalBottomSheet lives in its own window, so mounting it steals window focus and the IME
+    // drops with no animation while the sheet is mid-slide. Hiding the keyboard ourselves first
+    // and waiting for the insets to settle turns one collision into two sequential animations.
+    LaunchedEffect(mentionQuery != null) {
+        if (mentionQuery == null) {
+            pickerVisible = false
+            return@LaunchedEffect
+        }
+        if (isDesktopPlatform) {
+            pickerVisible = true
+            return@LaunchedEffect
+        }
+        keyboardController?.hide()
+        // Timeout guards against devices that never report a zero ime inset.
+        withTimeoutOrNull(350.milliseconds) {
+            snapshotFlow { imeInsets.getBottom(density) }.first { it == 0 }
+        }
+        pickerVisible = true
+    }
+
     LaunchedEffect(isFieldFocused, imeBottom, tfv.selection.end) {
         if (!isFieldFocused || imeBottom <= 0) return@LaunchedEffect
         delay(50.milliseconds)
@@ -932,18 +967,45 @@ fun IsolatedEditorTextField(
     }
 
     LaunchedEffect(initialText) {
-        if (tfv.text != initialText && initialText != lastSentText) {
-            val wasAtEnd = tfv.selection.start == tfv.text.length
-            val safeStart = if (wasAtEnd) initialText.length else tfv.selection.start.coerceAtMost(initialText.length)
-            val safeEnd = if (wasAtEnd) initialText.length else tfv.selection.end.coerceAtMost(initialText.length)
-            tfv = tfv.copy(text = initialText, selection = TextRange(safeStart, safeEnd))
+        if (tfv.text == initialText) {
+            lastSentText = initialText
+            return@LaunchedEffect
+        }
+        val wasAtEnd = tfv.selection.start == tfv.text.length
+        val safeStart = if (wasAtEnd) initialText.length else tfv.selection.start.coerceAtMost(initialText.length)
+        val safeEnd = if (wasAtEnd) initialText.length else tfv.selection.end.coerceAtMost(initialText.length)
+        tfv = tfv.copy(text = initialText, selection = TextRange(safeStart, safeEnd), composition = null)
+        lastSentText = initialText
+    }
+
+    // Toolbar "@" press. Mirrors exactly what typing '@' does in onValueChange: insert the
+    // character at the cursor, record where the mention starts, open the picker with an empty query.
+    LaunchedEffect(blockId) {
+        EditorEventBus.insertMentionEvent.collect { targetId ->
+            if (targetId != blockId) return@collect
+
+            val cursor = tfv.selection.start.coerceIn(0, tfv.text.length)
+            // onValueChange only treats '@' as a mention at index 0 or after whitespace,
+            // so pad it here or the picker would open and immediately fail to re-match on the
+            // next keystroke.
+            val needsSpace = cursor > 0 && !tfv.text[cursor - 1].isWhitespace()
+            val insert = if (needsSpace) " @" else "@"
+
+            val newText = tfv.text.substring(0, cursor) + insert + tfv.text.substring(cursor)
+            val newCursor = cursor + insert.length
+
+            tfv = tfv.copy(text = newText, selection = TextRange(newCursor), composition = null)
+            lastSentText = newText          // keeps LaunchedEffect(initialText) from clobbering us
+            mentionStartIndex = newCursor - 1
+            mentionQuery = ""
+            onUpdateText(blockId, newText)
         }
     }
 
 // Updates cursor placement when a FocusRequest targets this block with placeCursorAtEnd = true.
     LaunchedEffect(focusRequest?.nonce) {
         if (focusRequest?.id == blockId && focusRequest.placeCursorAtEnd) {
-            tfv = tfv.copy(selection = TextRange(tfv.text.length))
+            tfv = tfv.copy(selection = TextRange(tfv.text.length), composition = null)
         }
     }
 
@@ -951,11 +1013,14 @@ fun IsolatedEditorTextField(
         if (selectionRequest?.blockId == blockId) {
             val selection = selectionRequest.selection
             tfv = tfv.copy(
+                text = initialText,
                 selection = TextRange(
-                    selection.start.coerceIn(0, tfv.text.length),
-                    selection.end.coerceIn(0, tfv.text.length)
-                )
+                    selection.start.coerceIn(0, initialText.length),
+                    selection.end.coerceIn(0, initialText.length)
+                ),
+                composition = null
             )
+            lastSentText = initialText
         }
     }
 
@@ -1003,7 +1068,6 @@ fun IsolatedEditorTextField(
 
                     tfv = newValue.copy(text = textBefore, selection = TextRange(textBefore.length))
                     lastSentText = textBefore
-                    onUpdateText(blockId, textBefore)
                     onEnterPressed(blockId, textBefore, textAfter)
                 } else {
                     tfv = newValue
@@ -1084,7 +1148,7 @@ fun IsolatedEditorTextField(
         }
 
         NotePickerDialog(
-            expanded = mentionQuery != null,
+            expanded = pickerVisible,
             onDismiss = { mentionQuery = null; mentionStartIndex = -1 },
             allLinkableNotes = allLinkableNotes,
             onNoteSelected = { noteId ->
