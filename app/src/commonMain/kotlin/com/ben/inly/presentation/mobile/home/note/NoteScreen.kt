@@ -50,6 +50,8 @@ import com.ben.inly.presentation.shared.editor.EditorScreen
 import com.ben.inly.presentation.shared.editor.EditorActions
 import com.ben.inly.presentation.shared.editor.SelectionModeObserver
 import com.ben.inly.presentation.shared.editor.blockViews.databaseBlockView.DatabaseTemplatePickerSheet
+import com.ben.inly.presentation.calendar.EventEditorSheetHost
+import com.ben.inly.presentation.calendar.RecurrenceScopeChooser
 import com.ben.inly.domain.model.CellData
 import com.ben.inly.domain.model.ColumnType
 import com.ben.inly.domain.model.FilterConfig
@@ -168,6 +170,7 @@ fun NoteScreen(
 
     val canUndo by viewModel.canUndo.collectAsState()
     val canRedo by viewModel.canRedo.collectAsState()
+    val pendingRecurringDeletion by viewModel.pendingRecurringDeletion.collectAsState()
 
     var mobileMenuState by remember { mutableStateOf(MobileMenuState.MAIN) }
     var slashQuery by remember { mutableStateOf("") }
@@ -210,6 +213,8 @@ fun NoteScreen(
     val databaseTemplates by viewModel.databaseTemplates.collectAsState()
     var showDatabasePicker by remember { mutableStateOf(false) }
     var showNotePickerDialog by remember { mutableStateOf(false) }
+    var eventOptionsTargetBlockId by remember { mutableStateOf<String?>(null) }
+    var eventOptionsOccurrenceDate by remember { mutableStateOf<String?>(null) }
 
     val density = LocalDensity.current
     val imeBottom = WindowInsets.ime.getBottom(density)
@@ -362,6 +367,10 @@ fun NoteScreen(
             override fun onBackspaceOnEmpty(id: String) = viewModel.handleBackspaceOnEmpty(id)
             override fun onToggleSelection(id: String) = viewModel.toggleSelection(id)
             override fun onUpdateReminder(id: String, timestamp: Long?) = viewModel.updateReminder(id, timestamp)
+            override fun onOpenEventOptions(blockId: String, occurrenceDate: String?) {
+                eventOptionsTargetBlockId = blockId
+                eventOptionsOccurrenceDate = occurrenceDate
+            }
             override fun onUrlSubmit(id: String, url: String) = viewModel.handleUrlSubmit(id, url)
             override fun onImagePicked(id: String, uri: String) = viewModel.handleImagePicked(id, uri)
             override fun onDocumentPicked(id: String, uri: String) = viewModel.handleDocumentPicked(id, uri)
@@ -715,6 +724,22 @@ fun NoteScreen(
                     onCreateBlank = { viewModel.insertNewMediaBlock("database") },
                     onSelectTemplate = { viewModel.insertNewMediaBlock("database", it) }
                 )
+
+                EventEditorSheetHost(
+                    targetBlockId = eventOptionsTargetBlockId,
+                    targetOccurrenceDate = eventOptionsOccurrenceDate,
+                    onDismissTarget = {
+                        eventOptionsTargetBlockId = null
+                        eventOptionsOccurrenceDate = null
+                    }
+                )
+
+                if (pendingRecurringDeletion != null) {
+                    RecurrenceScopeChooser(
+                        onDismiss = { viewModel.dismissRecurringDeletion() },
+                        onScopeSelected = { scope -> viewModel.confirmRecurringDeletion(scope) }
+                    )
+                }
 
                 NotePickerDialog(
                     expanded = showNotePickerDialog,

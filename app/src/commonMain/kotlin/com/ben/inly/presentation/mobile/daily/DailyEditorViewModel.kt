@@ -3,6 +3,7 @@ package com.ben.inly.presentation.mobile.daily
 import androidx.lifecycle.viewModelScope
 import com.ben.inly.data.local.room.CalendarTaskEntity
 import com.ben.inly.data.local.room.TaskSource
+import com.ben.inly.data.local.room.toRecurrenceRule
 import com.ben.inly.domain.model.*
 import com.ben.inly.domain.repository.NoteRepository
 import com.ben.inly.domain.util.AiEventBus
@@ -558,6 +559,89 @@ class DailyEditorViewModel(
             val meta = repository.getDailyNoteMetadata(dateToSave)
             if (meta != null) {
                 repository.indexDailyNote(dateToSave, NoteContent(blocks = dailyBlocks), meta)
+            }
+        }
+    }
+
+    // Ids currently materialized into extraVisibleBlocks below - backs isVirtualOccurrence so
+    // toggleCheckbox/updateBlockText/handleBackspaceOnEmpty/deleteSelectedBlocks in
+    // BaseEditorViewModel route these through the recurrence-aware paths instead of trying to
+    // mutate this day's own (unrelated) note content.
+    private val _virtualOccurrenceIds = MutableStateFlow<Set<String>>(emptySet())
+
+    override fun isVirtualOccurrence(blockId: String): Boolean = blockId in _virtualOccurrenceIds.value
+    override fun virtualOccurrenceDate(blockId: String): String? = currentDateString
+
+    private fun CalendarTaskEntity.toVirtualCheckboxBlock(): CheckboxBlock = CheckboxBlock(
+        id = blockId,
+        text = text,
+        isChecked = isChecked,
+        reminderTimestamp = reminderTimestamp,
+        categoryId = categoryId,
+        durationMinutes = durationMinutes,
+        url = url,
+        description = description,
+        recurrenceRule = toRecurrenceRule(),
+        updatedAt = System.currentTimeMillis()
+    )
+
+    // Surfaces recurring checkboxes whose literal storage is a different day (or a NOTE) as real,
+    // independently-completable checkboxes on every day their series expands into - reactive off
+    // the same repository.getCalendarTasksForDate Calendar uses, so a completion/edit made from
+    // Calendar (or another virtual occurrence) shows up here without any extra plumbing.
+    override val extraVisibleBlocks: StateFlow<List<NoteBlock>> = _currentDateString
+        .filterNotNull()
+        .flatMapLatest { date ->
+            repository.getCalendarTasksForDate(date).map { tasks ->
+                tasks.filter { it.noteId != date }.map { it.toVirtualCheckboxBlock() }
+            }
+        }
+        .onEach { blocks -> _virtualOccurrenceIds.value = blocks.mapTo(mutableSetOf()) { it.id } }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    // A non-recurring checkbox only ever has one occurrence, so its base block IS the sole
+    // source of truth - going through the exceptions table (upsertOccurrenceCompletion /
+    // applyRecurrenceScopedEdit) for it would write state that expandOccurrences never reads back
+    // for a non-recurring row, silently discarding the toggle/edit. Only truly recurring series use
+    // the per-occurrence exception mechanism.
+    override fun onVirtualOccurrenceToggled(blockId: String, isChecked: Boolean) {
+        val date = currentDateString ?: return
+        val current = extraVisibleBlocks.value.firstOrNull { it.id == blockId } as? CheckboxBlock ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                if (current.recurrenceRule != null) {
+                    repository.upsertOccurrenceCompletion(blockId, date, isChecked)
+                } else {
+                    repository.toggleTaskCompletion(blockId, isChecked)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    override fun onVirtualOccurrenceTextEdited(blockId: String, text: String) {
+        val date = currentDateString ?: return
+        val current = extraVisibleBlocks.value.firstOrNull { it.id == blockId } as? CheckboxBlock ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                if (current.recurrenceRule != null) {
+                    repository.applyRecurrenceScopedEdit(
+                        blockId = blockId,
+                        occurrenceDate = date,
+                        scope = RecurrenceEditScope.THIS_EVENT,
+                        text = text,
+                        timestamp = current.reminderTimestamp ?: System.currentTimeMillis(),
+                        categoryId = current.categoryId,
+                        durationMinutes = current.durationMinutes,
+                        url = current.url,
+                        description = current.description
+                    )
+                } else {
+                    repository.updateTaskText(blockId, text)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
     }

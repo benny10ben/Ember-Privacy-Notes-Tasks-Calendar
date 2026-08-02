@@ -155,6 +155,10 @@ interface EditorActions {
     fun onBackspaceOnEmpty(id: String)
     fun onToggleSelection(id: String)
     fun onUpdateReminder(id: String, timestamp: Long?)
+    // occurrenceDate is derived from the tapped block's own reminderTimestamp (not the screen's
+    // "currently selected day") so it stays correct even when the block is a virtual recurring
+    // occurrence rendered on a page other than whatever the screen currently considers active.
+    fun onOpenEventOptions(blockId: String, occurrenceDate: String?) {}
     fun onUrlSubmit(id: String, url: String)
     fun onImagePicked(id: String, uri: String)
     fun onDocumentPicked(id: String, uri: String)

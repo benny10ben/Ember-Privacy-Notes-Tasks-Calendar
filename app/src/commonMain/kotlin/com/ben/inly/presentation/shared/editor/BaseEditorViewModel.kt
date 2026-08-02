@@ -25,6 +25,9 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.datetime.Instant
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.json.Json
 import java.util.UUID
 import kotlin.time.Duration.Companion.milliseconds
@@ -41,6 +44,19 @@ data class SelectionRequest(
     val blockId: String,
     val selection: TextRange,
     val nonce: String = UUID.randomUUID().toString()
+)
+
+data class RecurringDeletionTarget(val blockId: String, val occurrenceDate: String)
+
+// Surfaced whenever a delete action (backspace-on-empty or the multi-select trash button) would
+// remove a checkbox that's part of a recurring series - the screen shows RecurrenceScopeChooser
+// and calls confirmRecurringDeletion(scope) once the user picks one of the four scopes.
+// plainBlockIds carries any non-recurring blocks caught in the same multi-select delete, so a
+// mixed selection resolves as a single confirmation instead of two.
+@Stable
+data class PendingRecurringDeletion(
+    val recurringTargets: List<RecurringDeletionTarget>,
+    val plainBlockIds: Set<String> = emptySet()
 )
 
 abstract class BaseEditorViewModel(
@@ -105,27 +121,42 @@ abstract class BaseEditorViewModel(
             .hashCode()
     }
 
-    val visibleBlocks: StateFlow<List<NoteBlock>> = _blocks.map { allBlocks ->
-        val visible = mutableListOf<NoteBlock>()
-        var skipUntilLevel: Int? = null
-        for (block in allBlocks) {
-            if (block.isDeleted) continue
+    // Blocks materialized for display only, never persisted - overridden by DailyEditorViewModel to
+    // surface other days'/notes' recurring checkboxes whose expansion lands on the currently loaded
+    // day (see extraVisibleBlocks doc there). Kept entirely out of _blocks so every existing save
+    // path (performSave, selectDate's reconcile-on-navigate-away, ...) stays untouched and can't
+    // accidentally persist a virtual occurrence into the wrong note.
+    protected open val extraVisibleBlocks: StateFlow<List<NoteBlock>> = MutableStateFlow(emptyList())
 
-            if (skipUntilLevel != null) {
-                if (block.indentationLevel > skipUntilLevel) continue
-                else skipUntilLevel = null
+    // Deferred via `by lazy` rather than an eager property initializer: this combines with
+    // extraVisibleBlocks, an `open val` a subclass constructor hasn't finished assigning yet at the
+    // point this class's own constructor runs - evaluating it eagerly here would observe the
+    // subclass's backing field before it's set. Lazy defers first evaluation to first access, which
+    // never happens until after the subclass is fully constructed.
+    val visibleBlocks: StateFlow<List<NoteBlock>> by lazy {
+        combine(_blocks, extraVisibleBlocks) { allBlocks, extra ->
+            val visible = mutableListOf<NoteBlock>()
+            var skipUntilLevel: Int? = null
+            for (block in allBlocks) {
+                if (block.isDeleted) continue
+
+                if (skipUntilLevel != null) {
+                    if (block.indentationLevel > skipUntilLevel) continue
+                    else skipUntilLevel = null
+                }
+                visible.add(block)
+                if (block is ToggleBlock && !block.isExpanded) skipUntilLevel = block.indentationLevel
             }
-            visible.add(block)
-            if (block is ToggleBlock && !block.isExpanded) skipUntilLevel = block.indentationLevel
-        }
 
-        // Last-resort guard against a stray top-level duplicate id (sync corruption, a stale copy
-        // left behind by a non-recursive removal, ...) reaching EditorScreen's LazyColumn, which
-        // crashes with "Key was already used" the moment two entries in this list share an id.
-        val deduped = LinkedHashMap<String, NoteBlock>()
-        visible.forEach { deduped[it.id] = it }
-        deduped.values.toList()
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+            // Last-resort guard against a stray top-level duplicate id (sync corruption, a stale copy
+            // left behind by a non-recursive removal, ...) reaching EditorScreen's LazyColumn, which
+            // crashes with "Key was already used" the moment two entries in this list share an id.
+            val deduped = LinkedHashMap<String, NoteBlock>()
+            visible.forEach { deduped[it.id] = it }
+            extra.forEach { deduped.putIfAbsent(it.id, it) }
+            deduped.values.toList()
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    }
 
     protected val _focusRequest = MutableStateFlow<FocusRequest?>(null)
     val focusRequest: StateFlow<FocusRequest?> = _focusRequest.asStateFlow()
@@ -135,6 +166,60 @@ abstract class BaseEditorViewModel(
 
     protected val _selectedBlockIds = MutableStateFlow<Set<String>>(emptySet())
     val selectedBlockIds: StateFlow<Set<String>> = _selectedBlockIds.asStateFlow()
+
+    protected val _pendingRecurringDeletion = MutableStateFlow<PendingRecurringDeletion?>(null)
+    val pendingRecurringDeletion: StateFlow<PendingRecurringDeletion?> = _pendingRecurringDeletion.asStateFlow()
+
+    // A "virtual occurrence" is a CheckboxBlock materialized into _blocks for a recurring series
+    // whose literal storage lives elsewhere (see DailyEditorViewModel) - only DailyEditorViewModel
+    // overrides these; NoteEditorViewModel never has any, so the defaults are all no-ops/false.
+    protected open fun isVirtualOccurrence(blockId: String): Boolean = false
+    protected open fun onVirtualOccurrenceToggled(blockId: String, isChecked: Boolean) {}
+    protected open fun onVirtualOccurrenceTextEdited(blockId: String, text: String) {}
+    protected open fun virtualOccurrenceDate(blockId: String): String? = null
+
+    private fun occurrenceDateFor(block: CheckboxBlock, blockId: String): String? {
+        if (isVirtualOccurrence(blockId)) return virtualOccurrenceDate(blockId)
+        return block.reminderTimestamp?.let {
+            Instant.fromEpochMilliseconds(it).toLocalDateTime(TimeZone.currentSystemDefault()).date.toString()
+        }
+    }
+
+    protected fun requestRecurringDeletion(recurringTargets: List<RecurringDeletionTarget>, plainBlockIds: Set<String> = emptySet()) {
+        _pendingRecurringDeletion.value = PendingRecurringDeletion(recurringTargets, plainBlockIds)
+    }
+
+    fun dismissRecurringDeletion() {
+        _pendingRecurringDeletion.value = null
+    }
+
+    // Removes the affected blocks from view immediately (optimistic - the repository call below is
+    // the actual source of truth) without going through modifyBlocks/scheduleAutosave, matching
+    // DailyEditorViewModel.removeBlockLocally's precedent for edits that persist themselves rather
+    // than through the normal whole-note save path.
+    fun confirmRecurringDeletion(scope: RecurrenceEditScope) {
+        val pending = _pendingRecurringDeletion.value ?: return
+        _pendingRecurringDeletion.value = null
+        autosaveJob?.cancel()
+
+        val idsToStrip = pending.recurringTargets.mapTo(mutableSetOf()) { it.blockId } + pending.plainBlockIds
+        _blocks.update { list -> list.filterNot { it.id in idsToStrip } }
+        clearSelection()
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                pending.recurringTargets.forEach { target ->
+                    repository.applyRecurrenceScopedDelete(target.blockId, target.occurrenceDate, scope)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
+        if (pending.plainBlockIds.isNotEmpty()) {
+            performPlainDeletion(pending.plainBlockIds)
+        }
+    }
 
     protected var currentlyFocusedBlockId: String? = null
     protected var autosaveJob: Job? = null
@@ -661,6 +746,10 @@ abstract class BaseEditorViewModel(
     }
 
     fun toggleCheckbox(blockId: String, isChecked: Boolean) {
+        if (isVirtualOccurrence(blockId)) {
+            onVirtualOccurrenceToggled(blockId, isChecked)
+            return
+        }
         val now = System.currentTimeMillis()
         modifyBlocks { list ->
             mapBlockById(list, blockId) {
@@ -1102,6 +1191,17 @@ abstract class BaseEditorViewModel(
         val cur = currentBlocks[idx]
         val now = System.currentTimeMillis()
 
+        // Backspacing an empty recurring checkbox away from a CheckboxBlock is effectively
+        // deleting that occurrence/series - it needs the same four-way scope decision as an
+        // explicit delete instead of silently downgrading it to a plain TextBlock below.
+        if (cur is CheckboxBlock && (isVirtualOccurrence(id) || cur.recurrenceRule != null)) {
+            val occurrenceDate = occurrenceDateFor(cur, id)
+            if (occurrenceDate != null) {
+                requestRecurringDeletion(listOf(RecurringDeletionTarget(id, occurrenceDate)))
+                return
+            }
+        }
+
         if (cur !is TextBlock) {
             val inheritedAlignment = cur.textAlignmentOrNull() ?: TextAlignment.LEFT
             modifyBlocks { list ->
@@ -1209,6 +1309,33 @@ abstract class BaseEditorViewModel(
 
     fun deleteSelectedBlocks() {
         val toDelete = _selectedBlockIds.value
+        val currentBlocks = _blocks.value
+
+        val recurringTargets = mutableListOf<RecurringDeletionTarget>()
+        val plainIds = mutableSetOf<String>()
+        for (id in toDelete) {
+            val block = currentBlocks.firstOrNull { it.id == id }
+            val occurrenceDate = (block as? CheckboxBlock)
+                ?.takeIf { isVirtualOccurrence(id) || it.recurrenceRule != null }
+                ?.let { occurrenceDateFor(it, id) }
+            if (occurrenceDate != null) {
+                recurringTargets.add(RecurringDeletionTarget(id, occurrenceDate))
+            } else {
+                plainIds.add(id)
+            }
+        }
+
+        if (recurringTargets.isNotEmpty()) {
+            requestRecurringDeletion(recurringTargets, plainIds)
+            return
+        }
+
+        performPlainDeletion(plainIds)
+        clearSelection()
+    }
+
+    private fun performPlainDeletion(toDelete: Set<String>) {
+        if (toDelete.isEmpty()) return
         val now = System.currentTimeMillis()
 
         modifyBlocks { list ->
@@ -1221,7 +1348,6 @@ abstract class BaseEditorViewModel(
             }
         }
 
-        clearSelection()
         scheduleAutosave()
     }
 
@@ -1274,6 +1400,10 @@ abstract class BaseEditorViewModel(
     }
 
     fun updateBlockText(blockId: String, newText: String) {
+        if (isVirtualOccurrence(blockId)) {
+            onVirtualOccurrenceTextEdited(blockId, newText)
+            return
+        }
         val existing = _blocks.value.firstOrNull { it.id == blockId }
         if (existing != null && !existing.isDeleted && getBlockText(existing) == newText) return
 

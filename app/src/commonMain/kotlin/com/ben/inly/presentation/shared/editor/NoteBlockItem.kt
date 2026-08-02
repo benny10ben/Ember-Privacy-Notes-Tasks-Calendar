@@ -204,7 +204,11 @@ fun NoteBlockItem(
         else -> ""
     }
 
-    val placeholderText = if (isFirstToggleChild) "Type something..." else ""
+    val placeholderText = when {
+        block is CheckboxBlock && block.reminderTimestamp != null -> "Untitled event"
+        isFirstToggleChild -> "Type something..."
+        else -> ""
+    }
 
     // LOCAL STATE FOR INSTANT TYPING
     var showPresetMenu by remember { mutableStateOf(false) }
@@ -742,6 +746,25 @@ fun NoteBlockItem(
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
                                     )
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(5.dp))
+                                            .background(MaterialTheme.colorScheme.surface)
+                                            .clickable {
+                                                val occurrenceDate = block.reminderTimestamp?.let {
+                                                    Instant.fromEpochMilliseconds(it)
+                                                        .toLocalDateTime(TimeZone.currentSystemDefault()).date.toString()
+                                                }
+                                                actions.onOpenEventOptions(block.id, occurrenceDate)
+                                            }
+                                            .padding(horizontal = 8.dp, vertical = 6.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.MoreVert, "Event options",
+                                            modifier = Modifier.size(15.dp),
+                                            tint = MaterialTheme.colorScheme.onBackground
+                                        )
+                                    }
                                 }
                             }
                         }

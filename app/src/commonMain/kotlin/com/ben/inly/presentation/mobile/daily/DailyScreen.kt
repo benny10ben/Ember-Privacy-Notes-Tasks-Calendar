@@ -9,9 +9,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -36,7 +33,6 @@ import com.ben.inly.domain.model.NoteBlock
 import com.ben.inly.domain.model.Stroke
 import com.ben.inly.domain.model.TextAlignment
 import com.ben.inly.domain.model.ViewType
-import com.ben.inly.domain.util.isDesktopPlatform
 import com.ben.inly.presentation.shared.components.KmpBackHandler
 import com.ben.inly.presentation.shared.components.NotePickerDialog
 import com.ben.inly.presentation.shared.editor.BlockSelectionPill
@@ -59,6 +55,9 @@ import com.ben.inly.presentation.shared.editor.GlobalEditorState
 import kotlinx.datetime.LocalDate
 import kotlin.math.abs
 import com.ben.inly.data.local.room.CalendarTaskEntity
+import com.ben.inly.presentation.calendar.CalendarViewModel
+import com.ben.inly.presentation.calendar.EventEditorSheetHost
+import com.ben.inly.presentation.calendar.RecurrenceScopeChooser
 import com.ben.inly.presentation.shared.UserSettings
 import com.ben.inly.presentation.shared.components.InlyBottomSheet
 import com.ben.inly.presentation.shared.components.TopBarIconButtonGroup
@@ -92,8 +91,6 @@ fun DailyScreen(
     onTakePhoto: (onPathSelected: (String) -> Unit) -> Unit = {},
     onPickDocument: (onPathSelected: (String) -> Unit) -> Unit = {},
     onOpenFile: (filePath: String, mimeType: String) -> Unit = { _, _ -> },
-    isSidebarVisible: Boolean = true,
-    onToggleSidebar: () -> Unit = {},
     onNavigateToEditor: (String) -> Unit = {},
     onNavigateToCalendar: () -> Unit = {},
     onNavigateToSettings: () -> Unit = {},
@@ -101,7 +98,8 @@ fun DailyScreen(
     showAddNoteDialog: Boolean = false,
     dateArg: String? = null,
     viewModel: DailyEditorViewModel = koinViewModel(),
-    syncViewModel: SyncViewModel = koinViewModel()
+    syncViewModel: SyncViewModel = koinViewModel(),
+    calendarViewModel: CalendarViewModel = koinViewModel()
 ) {
     val hazeState = remember { HazeState() }
 
@@ -118,6 +116,7 @@ fun DailyScreen(
     val previewCache by viewModel.previewCache.collectAsState()
     val canUndo by viewModel.canUndo.collectAsState()
     val canRedo by viewModel.canRedo.collectAsState()
+    val pendingRecurringDeletion by viewModel.pendingRecurringDeletion.collectAsState()
 
     val initialDate = remember { Clock.System.todayIn(TimeZone.currentSystemDefault()) }
     val initialPage = remember { Int.MAX_VALUE / 2 }
@@ -174,7 +173,7 @@ fun DailyScreen(
         }
     }
 
-    val showToolbar = !isSelectionMode && !showAddNoteDialog && (isKeyboardOpen || isDesktopPlatform)
+    val showToolbar = !isSelectionMode && !showAddNoteDialog && isKeyboardOpen
 
     val globalTags by viewModel.globalTags.collectAsState()
     val calendarTaskMap by viewModel.calendarTaskMap.collectAsState()
@@ -182,7 +181,8 @@ fun DailyScreen(
     var showDatabasePicker by remember { mutableStateOf(false) }
     var showNotePickerDialog by remember { mutableStateOf(false) }
 
-    var subNotePanelId by remember { mutableStateOf<String?>(null) }
+    var eventOptionsTargetBlockId by remember { mutableStateOf<String?>(null) }
+    var eventOptionsOccurrenceDate by remember { mutableStateOf<String?>(null) }
 
     SelectionModeObserver(isSelectionMode, onSelectionModeChange)
 
@@ -238,6 +238,10 @@ fun DailyScreen(
             override fun onBackspaceOnEmpty(id: String) = viewModel.handleBackspaceOnEmpty(id)
             override fun onToggleSelection(id: String) = viewModel.toggleSelection(id)
             override fun onUpdateReminder(id: String, timestamp: Long?) = viewModel.updateReminder(id, timestamp)
+            override fun onOpenEventOptions(blockId: String, occurrenceDate: String?) {
+                eventOptionsTargetBlockId = blockId
+                eventOptionsOccurrenceDate = occurrenceDate
+            }
             override fun onUrlSubmit(id: String, url: String) = viewModel.handleUrlSubmit(id, url)
             override fun onImagePicked(id: String, uri: String) = viewModel.handleImagePicked(id, uri)
             override fun onDocumentPicked(id: String, uri: String) = viewModel.handleDocumentPicked(id, uri)
@@ -318,23 +322,13 @@ fun DailyScreen(
             override fun onDeleteDatabaseView(blockId: String, viewId: String) = viewModel.deleteDatabaseView(blockId, viewId)
             override fun onSetActiveDatabaseView(blockId: String, viewId: String) = viewModel.setActiveDatabaseView(blockId, viewId)
             override fun onRenameDatabaseView(blockId: String, viewId: String, newName: String) = viewModel.renameDatabaseView(blockId, viewId, newName)
-            override fun onNoteLinkClick(noteId: String) {
-                if (isDesktopPlatform) {
-                    subNotePanelId = noteId
-                } else {
-                    onNavigateToEditor(noteId)
-                }
-            }
+            override fun onNoteLinkClick(noteId: String) = onNavigateToEditor(noteId)
             override fun onCreateLinkedNote(title: String): String {
                 return viewModel.createLinkedNote(title)
             }
             override fun onOpenDatabaseNote(blockId: String, rowId: String, colId: String, existingNoteId: String?) {
                 viewModel.openDatabaseNote(blockId, rowId, colId, existingNoteId) { resolvedNoteId ->
-                    if (isDesktopPlatform) {
-                        subNotePanelId = resolvedNoteId
-                    } else {
-                        onNavigateToEditor(resolvedNoteId)
-                    }
+                    onNavigateToEditor(resolvedNoteId)
                 }
             }
             override suspend fun getNoteTitle(noteId: String): String {
@@ -361,33 +355,6 @@ fun DailyScreen(
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
         ) {
-
-            if (isDesktopPlatform && !isSidebarVisible) {
-                IconButton(
-                    onClick = onToggleSidebar,
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(start = 16.dp, top = 16.dp)
-                        .zIndex(10f)
-                ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
-                        modifier = Modifier.size(42.dp)
-                    ) {
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier.fillMaxSize()
-                        ) {
-                            Icon(
-                                Icons.Default.Menu,
-                                contentDescription = "Open Sidebar",
-                                tint = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                    }
-                }
-            }
 
             Box(modifier = Modifier.fillMaxSize().hazeSource(state = hazeState).background(MaterialTheme.colorScheme.background)) {
                 HorizontalPager(
@@ -435,22 +402,16 @@ fun DailyScreen(
                             onSlashQueryChange = { slashQuery = it },
                             bottomContentPadding = bottomContentPadding,
                             isCurrentActivePage = isCurrentActivePage,
-                            topContentPadding = if (isDesktopPlatform) {
-                                if (!isSidebarVisible) 68.dp else 16.dp
-                            } else {
-                                rememberStableStatusBarsPadding().calculateTopPadding() + 68.dp
-                            },
-                            headerContent = if (isDesktopPlatform) null else {
-                                {
-                                    CollapsedWeekStrip(
-                                        selectedDate = selectedDate,
-                                        onDateSelected = { viewModel.selectDate(it) },
-                                        pagerState = pagerState,
-                                        initialPage = initialPage,
-                                        initialDate = initialDate
-                                    )
-                                    Spacer(Modifier.height(14.dp))
-                                }
+                            topContentPadding = rememberStableStatusBarsPadding().calculateTopPadding() + 68.dp,
+                            headerContent = {
+                                CollapsedWeekStrip(
+                                    selectedDate = selectedDate,
+                                    onDateSelected = { viewModel.selectDate(it) },
+                                    pagerState = pagerState,
+                                    initialPage = initialPage,
+                                    initialDate = initialDate
+                                )
+                                Spacer(Modifier.height(14.dp))
                             }
                         )
                     }
@@ -470,8 +431,8 @@ fun DailyScreen(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .imePadding()
-                    .then(if (isDesktopPlatform) Modifier else Modifier.navigationBarsPadding())
-                    .padding(bottom = 8.dp, start = if (isDesktopPlatform) 16.dp else 6.dp, end = if (isDesktopPlatform) 16.dp else 6.dp)
+                    .navigationBarsPadding()
+                    .padding(bottom = 8.dp, start = 6.dp, end = 6.dp)
             ) {
                 EditorToolbar(
                     mobileMenuState = mobileMenuState,
@@ -501,7 +462,7 @@ fun DailyScreen(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .imePadding()
-                    .then(if (isDesktopPlatform) Modifier.padding(bottom = 16.dp) else Modifier.navigationBarsPadding()),
+                    .navigationBarsPadding(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 BlockStyleBar(
@@ -562,13 +523,26 @@ fun DailyScreen(
                 onCreateBlankNote = {
                     val newNoteId = viewModel.createLinkedNote("Untitled")
                     showNotePickerDialog = false
-                    if (isDesktopPlatform) {
-                        subNotePanelId = newNoteId
-                    } else {
-                        onNavigateToEditor(newNoteId)
-                    }
+                    onNavigateToEditor(newNoteId)
                 }
             )
+
+            EventEditorSheetHost(
+                targetBlockId = eventOptionsTargetBlockId,
+                targetOccurrenceDate = eventOptionsOccurrenceDate,
+                onDismissTarget = {
+                    eventOptionsTargetBlockId = null
+                    eventOptionsOccurrenceDate = null
+                },
+                calendarViewModel = calendarViewModel
+            )
+
+            if (pendingRecurringDeletion != null) {
+                RecurrenceScopeChooser(
+                    onDismiss = { viewModel.dismissRecurringDeletion() },
+                    onScopeSelected = { scope -> viewModel.confirmRecurringDeletion(scope) }
+                )
+            }
         }
     }
 
@@ -592,7 +566,6 @@ fun DailyScreen(
                     onCalendarIconClick = { showCalendarSheet = true },
                     onNotificationsClick = { showScheduledTasksSheet = true },
                     onOpenCalendarScreenClick = onNavigateToCalendar,
-                    onToggleSidebar = onToggleSidebar,
                     hazeState = hazeState,
                     showSettingsMenu = showSettingsMenu,
                     onSettingsMenuOpen = { showSettingsMenu = true },
@@ -612,11 +585,7 @@ fun DailyScreen(
                     onDismiss = { showScheduledTasksSheet = false },
                     onTaskNoteLinkClick = { noteId ->
                         showScheduledTasksSheet = false
-                        if (isDesktopPlatform) {
-                            subNotePanelId = noteId
-                        } else {
-                            onNavigateToEditor(noteId)
-                        }
+                        onNavigateToEditor(noteId)
                     }
                 )
             }
@@ -641,7 +610,6 @@ private fun DailyTopBar(
     onCalendarIconClick: () -> Unit,
     onNotificationsClick: () -> Unit,
     onOpenCalendarScreenClick: () -> Unit,
-    onToggleSidebar: () -> Unit,
     hazeState: HazeState,
     showSettingsMenu: Boolean,
     onSettingsMenuOpen: () -> Unit,
@@ -654,8 +622,8 @@ private fun DailyTopBar(
         modifier = modifier
             .fillMaxWidth()
             .pointerInput(Unit) { detectTapGestures {} }
-            .then(if (isDesktopPlatform) Modifier else Modifier.stableStatusBarsPadding())
-            .padding(top = if (isDesktopPlatform) 16.dp else 8.dp, bottom = 10.dp)
+            .stableStatusBarsPadding()
+            .padding(top = 8.dp, bottom = 10.dp)
     ) {
         Row(
             modifier = Modifier
@@ -669,19 +637,6 @@ private fun DailyTopBar(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (isDesktopPlatform) {
-                    IconButton(
-                        onClick = onToggleSidebar,
-                        modifier = Modifier.offset(x = (-8).dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Menu,
-                            contentDescription = "Toggle Sidebar",
-                            tint = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                }
-
                 val isToday = selectedDate == Clock.System.todayIn(TimeZone.currentSystemDefault())
                 val titleText = if (isToday) "Today" else {
                     val shortDay = selectedDate.dayOfWeek.name.take(3).lowercase().replaceFirstChar { it.uppercase() }
@@ -694,7 +649,6 @@ private fun DailyTopBar(
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier
-                        .offset(x = if (isDesktopPlatform) (-6).dp else 0.dp)
                         .padding(top = 10.dp, bottom = 8.dp)
                         .noRippleClickable { onCalendarIconClick() }
                 )
