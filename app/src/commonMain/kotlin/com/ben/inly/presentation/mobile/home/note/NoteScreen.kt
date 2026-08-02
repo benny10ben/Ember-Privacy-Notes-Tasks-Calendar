@@ -19,6 +19,10 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.FormatSize
+import androidx.compose.material.icons.filled.FormatAlignLeft
+import androidx.compose.material.icons.filled.FormatAlignRight
+import androidx.compose.material.icons.filled.FormatAlignCenter
+import androidx.compose.material.icons.filled.FormatAlignJustify
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -79,6 +83,7 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.ui.platform.LocalDensity
 import com.ben.inly.domain.model.NoteBlock
+import com.ben.inly.domain.model.TextAlignment
 import com.ben.inly.domain.repository.EmojiRepository
 import com.ben.inly.domain.util.showFeedback
 import com.ben.inly.presentation.shared.components.InlyDesktopMenu
@@ -95,6 +100,7 @@ import androidx.compose.foundation.border
 import androidx.compose.material.icons.Icons
 import androidx.compose.ui.graphics.painter.Painter
 import com.ben.inly.presentation.shared.components.InlyButtonPrimary
+import com.ben.inly.presentation.shared.editor.BlockStyleBar
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
@@ -148,6 +154,7 @@ fun NoteScreen(
     val noteTitle by viewModel.noteTitle.collectAsState()
     val selectedBlockIds by viewModel.selectedBlockIds.collectAsState()
     val focusRequest by viewModel.focusRequest.collectAsState()
+    val selectionRequest by viewModel.selectionRequest.collectAsState()
     val noteIcon by viewModel.noteIcon.collectAsState()
     val isFavorite by viewModel.isFavorite.collectAsState()
     val coverImagePath by viewModel.coverImagePath.collectAsState()
@@ -156,6 +163,8 @@ fun NoteScreen(
     // Word Count States
     val showWordCount by viewModel.showWordCount.collectAsState()
     val wordCount by viewModel.wordCount.collectAsState()
+
+    val blockAlignment by viewModel.blockAlignment.collectAsState()
 
     var mobileMenuState by remember { mutableStateOf(MobileMenuState.MAIN) }
     var slashQuery by remember { mutableStateOf("") }
@@ -180,6 +189,11 @@ fun NoteScreen(
     val isSelectionMode = selectedBlockIds.isNotEmpty()
     val selectedBlocksList = blocks.filter { it.id in selectedBlockIds }
     val isSelectionPinned = selectedBlocksList.isNotEmpty() && selectedBlocksList.all { it.isPinned }
+
+    var showBlockStyleBar by remember { mutableStateOf(false) }
+    LaunchedEffect(isSelectionMode) {
+        if (!isSelectionMode) showBlockStyleBar = false
+    }
 
     var showOptionsMenu by remember { mutableStateOf(false) }
     var subNotePanelId by remember { mutableStateOf<String?>(null) }
@@ -243,6 +257,7 @@ fun NoteScreen(
         showOptionsMenu = false
         viewModel.toggleWordCount()
     }
+    val handleSetAlignment: (TextAlignment) -> Unit = { viewModel.setAllBlocksAlignment(it) }
     val handleAddIcon: () -> Unit = {
         showOptionsMenu = false
         showIconPicker = true
@@ -334,9 +349,11 @@ fun NoteScreen(
             override fun onToggleCheckbox(id: String, checked: Boolean) = viewModel.toggleCheckbox(id, checked)
             override fun onToggleExpand(id: String) = viewModel.toggleToggleBlock(id)
             override fun onFocusBlock(id: String) = viewModel.setFocusedBlock(id)
+            override fun onRequestCursorPosition(id: String, offset: Int) = viewModel.requestCursorPosition(id, offset)
             override fun onChangeBlockType(type: String) = viewModel.changeFocusedBlockType(type)
             override fun onToggleFormat(format: String) = viewModel.toggleFormat(format)
             override fun onAdjustIndentation(increase: Boolean) = viewModel.adjustIndentation(increase)
+            override fun onSetBlockAlignment(alignment: TextAlignment) = viewModel.setFocusedBlockAlignment(alignment)
             override fun onEnterPressed(id: String, before: String, after: String) = viewModel.handleEnter(id, before, after)
             override fun onBackspaceOnEmpty(id: String) = viewModel.handleBackspaceOnEmpty(id)
             override fun onToggleSelection(id: String) = viewModel.toggleSelection(id)
@@ -469,6 +486,8 @@ fun NoteScreen(
                     allLinkableNotes = allLinkableNotes,
                     actions = editorActions,
                     focusRequest = focusRequest,
+                    selectionRequest = selectionRequest,
+                    topBarClearancePx = topBarBottomPx,
                     selectedBlockIds = selectedBlockIds,
                     mobileMenuState = mobileMenuState,
                     onMobileMenuStateChange = { mobileMenuState = it },
@@ -516,6 +535,7 @@ fun NoteScreen(
                         onChangeBlockType = { editorActions.onChangeBlockType(it) },
                         onToggleFormat = { editorActions.onToggleFormat(it) },
                         onAdjustIndentation = { editorActions.onAdjustIndentation(it) },
+                        onSetAlignment = { editorActions.onSetBlockAlignment(it) },
                         onInsertMediaBlock = { editorActions.onInsertMediaBlock(it) },
                         onSelectCurrentBlock = {
                             GlobalEditorState.currentlyFocusedBlockId?.let { id ->
@@ -590,6 +610,7 @@ fun NoteScreen(
                             hasIcon = noteIcon != null,
                             hasCover = coverImagePath != null,
                             showWordCount = showWordCount,
+                            blockAlignment = blockAlignment,
                             onDismiss = { showOptionsMenu = false },
                             onToggleFavorite = handleToggleFavorite,
                             onAddIcon = handleAddIcon,
@@ -598,6 +619,7 @@ fun NoteScreen(
                             onAddCover = handleAddCover,
                             onRemoveCover = handleRemoveCover,
                             onToggleWordCount = handleToggleWordCount,
+                            onSetAlignment = handleSetAlignment,
                             onMoveToTrash = handleMoveToTrash,
                             onCopyPlain = handleCopyPlain,
                             onCopyMarkdown = handleCopyMarkdown,
@@ -612,29 +634,44 @@ fun NoteScreen(
                     }
                 )
 
-                BlockSelectionPill(
-                    isVisible = isSelectionMode,
-                    selectedCount = selectedBlockIds.size,
-                    onClearSelection = { viewModel.clearSelection() },
-                    onSelectAll = { viewModel.selectAllBlocks() },
-                    onCopy = {
-                        clipboardManager.setText(AnnotatedString(viewModel.getSelectedText()))
-                        viewModel.clearSelection()
-                    },
-                    onCut = { clipboardManager.setText(AnnotatedString(viewModel.cutSelectedBlocks())) },
-                    onAddBlockAbove = { viewModel.addBlockAboveSelection() },
-                    onAddBlockBelow = { viewModel.addBlockBelowSelection() },
-                    onDelete = { viewModel.deleteSelectedBlocks() },
-                    onTogglePin = { viewModel.togglePinSelectedBlocks() },
-                    isSelectionPinned = isSelectionPinned,
-                    selectedBlocks = selectedBlocksList,
-                    onUpdateLinkedNoteOptions = { id, showIcon, showCoverImage -> viewModel.updateLinkedNoteOptions(id, showIcon, showCoverImage) },
-                    hazeState = hazeState,
+                Column(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .imePadding()
-                        .then(if (isDesktopPlatform) Modifier.padding(bottom = 16.dp) else Modifier.navigationBarsPadding())
-                )
+                        .then(if (isDesktopPlatform) Modifier.padding(bottom = 16.dp) else Modifier.navigationBarsPadding()),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    BlockStyleBar(
+                        isVisible = isSelectionMode && showBlockStyleBar,
+                        onChangeBlockType = { viewModel.changeBlockTypeForSelectedBlocks(it) },
+                        onToggleFormat = { viewModel.toggleFormatForSelectedBlocks(it) },
+                        onAdjustIndentation = { viewModel.adjustIndentationForSelectedBlocks(it) },
+                        onSetAlignment = { viewModel.setSelectedBlocksAlignment(it) },
+                        hazeState = hazeState
+                    )
+                    BlockSelectionPill(
+                        isVisible = isSelectionMode,
+                        selectedCount = selectedBlockIds.size,
+                        onClearSelection = { viewModel.clearSelection() },
+                        onSelectAll = { viewModel.selectAllBlocks() },
+                        onCopy = {
+                            clipboardManager.setText(AnnotatedString(viewModel.getSelectedText()))
+                            viewModel.clearSelection()
+                        },
+                        onCut = { clipboardManager.setText(AnnotatedString(viewModel.cutSelectedBlocks())) },
+                        onAddBlockAbove = { viewModel.addBlockAboveSelection() },
+                        onAddBlockBelow = { viewModel.addBlockBelowSelection() },
+                        onDelete = { viewModel.deleteSelectedBlocks() },
+                        onTogglePin = { viewModel.togglePinSelectedBlocks() },
+                        isSelectionPinned = isSelectionPinned,
+                        selectedBlocks = selectedBlocksList,
+                        onUpdateLinkedNoteOptions = { id, showIcon, showCoverImage -> viewModel.updateLinkedNoteOptions(id, showIcon, showCoverImage) },
+                        showStyleButton = true,
+                        isStyleBarOpen = showBlockStyleBar,
+                        onToggleStyleBar = { showBlockStyleBar = !showBlockStyleBar },
+                        hazeState = hazeState
+                    )
+                }
 
                 if (!isDesktopPlatform) {
                     NoteOptionsBottomSheet(
@@ -643,6 +680,7 @@ fun NoteScreen(
                         hasIcon = noteIcon != null,
                         hasCover = coverImagePath != null,
                         showWordCount = showWordCount,
+                        blockAlignment = blockAlignment,
                         onDismiss = { showOptionsMenu = false },
                         onToggleFavorite = handleToggleFavorite,
                         onAddIcon = handleAddIcon,
@@ -651,6 +689,7 @@ fun NoteScreen(
                         onAddCover = handleAddCover,
                         onRemoveCover = handleRemoveCover,
                         onToggleWordCount = handleToggleWordCount,
+                        onSetAlignment = handleSetAlignment,
                         onMoveToTrash = handleMoveToTrash,
                         onCopyPlain = handleCopyPlain,
                         onCopyMarkdown = handleCopyMarkdown,
@@ -1206,6 +1245,7 @@ fun NoteOptionsDesktopMenu(
     hasIcon: Boolean,
     hasCover: Boolean,
     showWordCount: Boolean,
+    blockAlignment: TextAlignment?,
     onDismiss: () -> Unit,
     onToggleFavorite: () -> Unit,
     onAddIcon: () -> Unit,
@@ -1213,6 +1253,7 @@ fun NoteOptionsDesktopMenu(
     onAddCover: () -> Unit,
     onRemoveCover: () -> Unit,
     onToggleWordCount: () -> Unit,
+    onSetAlignment: (TextAlignment) -> Unit,
     onMoveToTrash: () -> Unit,
     onCopyPlain: () -> Unit = {},
     onCopyMarkdown: () -> Unit = {},
@@ -1271,6 +1312,12 @@ fun NoteOptionsDesktopMenu(
                             Icons.Default.FormatSize,
                             wordCountText
                         ) { onDismiss(); onToggleWordCount() }
+
+                        AlignmentIconRow(
+                            currentAlignment = blockAlignment,
+                            onSelect = onSetAlignment,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
 
                         if (!isEditingTemplate) {
                             HorizontalDivider(
@@ -1413,6 +1460,44 @@ private fun DesktopMenuItem(
     }
 }
 
+private val ALIGNMENT_OPTIONS = listOf(
+    TextAlignment.LEFT to Icons.Default.FormatAlignLeft,
+    TextAlignment.RIGHT to Icons.Default.FormatAlignRight,
+    TextAlignment.CENTER to Icons.Default.FormatAlignCenter,
+    TextAlignment.JUSTIFY to Icons.Default.FormatAlignJustify
+)
+
+@Composable
+private fun AlignmentIconRow(
+    currentAlignment: TextAlignment?,
+    onSelect: (TextAlignment) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceEvenly
+    ) {
+        ALIGNMENT_OPTIONS.forEach { (alignment, icon) ->
+            val isSelected = alignment == currentAlignment
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.Transparent)
+                    .clickable { onSelect(alignment) },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = alignment.name,
+                    tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NoteOptionsBottomSheet(
@@ -1421,6 +1506,7 @@ fun NoteOptionsBottomSheet(
     hasIcon: Boolean,
     hasCover: Boolean,
     showWordCount: Boolean,
+    blockAlignment: TextAlignment?,
     onDismiss: () -> Unit,
     onToggleFavorite: () -> Unit,
     onAddIcon: () -> Unit,
@@ -1428,6 +1514,7 @@ fun NoteOptionsBottomSheet(
     onAddCover: () -> Unit,
     onRemoveCover: () -> Unit,
     onToggleWordCount: () -> Unit,
+    onSetAlignment: (TextAlignment) -> Unit,
     onMoveToTrash: () -> Unit,
     onCopyPlain: () -> Unit = {},
     onCopyMarkdown: () -> Unit = {},
@@ -1476,6 +1563,12 @@ fun NoteOptionsBottomSheet(
             BottomSheetOptionItem(Icons.Default.FormatSize, wordCountText) {
                 closeAnd { onToggleWordCount() }
             }
+
+            AlignmentIconRow(
+                currentAlignment = blockAlignment,
+                onSelect = onSetAlignment,
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+            )
 
             if (!isEditingTemplate) {
                 HorizontalDivider(

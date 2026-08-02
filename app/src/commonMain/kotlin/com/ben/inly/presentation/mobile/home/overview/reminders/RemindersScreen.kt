@@ -28,6 +28,7 @@ import com.ben.inly.domain.model.ColumnType
 import com.ben.inly.domain.model.FilterConfig
 import com.ben.inly.domain.model.GalleryCardSize
 import com.ben.inly.domain.model.NoteBlock
+import com.ben.inly.domain.model.TextAlignment
 import com.ben.inly.domain.util.isDesktopPlatform
 import com.ben.inly.presentation.shared.components.KmpBackHandler
 import com.ben.inly.presentation.shared.editor.BlockSelectionPill
@@ -153,6 +154,7 @@ fun RemindersScreen(
                         override fun onUpdateText(id: String, text: String) = viewModel.updateBlockText(id, text)
                         override fun onToggleCheckbox(id: String, checked: Boolean) = viewModel.toggleCheckbox(id, checked)
                         override fun onFocusBlock(id: String) = viewModel.setFocusedBlock()
+                        override fun onRequestCursorPosition(id: String, offset: Int) {}
                         override fun onEnterPressed(id: String, before: String, after: String) = viewModel.handleEnter(id, before, after)
                         override fun onBackspaceOnEmpty(id: String) = viewModel.handleBackspaceOnEmpty(id)
                         override fun onToggleSelection(id: String) = viewModel.toggleSelection(id)
@@ -161,6 +163,7 @@ fun RemindersScreen(
                         override fun onChangeBlockType(type: String) {}
                         override fun onToggleFormat(format: String) {}
                         override fun onAdjustIndentation(increase: Boolean) {}
+                        override fun onSetBlockAlignment(alignment: TextAlignment) {}
                         override fun onToggleExpand(id: String) {}
                         override fun onUrlSubmit(id: String, url: String) {}
                         override fun onImagePicked(id: String, uri: String) {}

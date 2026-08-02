@@ -115,7 +115,7 @@ import kotlinx.coroutines.launch
 import kotlin.collections.get
 import kotlin.text.equals
 import com.ben.inly.data.local.room.NoteMetadataEntity
-import com.ben.inly.presentation.shared.editor.NoteLinkVisualTransformation
+import com.ben.inly.presentation.shared.editor.RichTextVisualTransformation
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -2724,7 +2724,7 @@ fun TableCell(
                         initialText = value,
                         columnType = columnType,
                         allLinkableNotes = allLinkableNotes,
-                        visualTransformation = if (columnType == ColumnType.TEXT) NoteLinkVisualTransformation(
+                        visualTransformation = if (columnType == ColumnType.TEXT) RichTextVisualTransformation(
                             linkColor = MaterialTheme.colorScheme.primary,
                             fadedColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
                             validNoteIds = validNoteIds

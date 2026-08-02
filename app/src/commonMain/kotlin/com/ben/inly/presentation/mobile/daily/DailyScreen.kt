@@ -19,6 +19,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
@@ -33,6 +35,7 @@ import com.ben.inly.domain.model.FilterConfig
 import com.ben.inly.domain.model.GalleryCardSize
 import com.ben.inly.domain.model.NoteBlock
 import com.ben.inly.domain.model.Stroke
+import com.ben.inly.domain.model.TextAlignment
 import com.ben.inly.domain.model.ViewType
 import com.ben.inly.domain.util.isDesktopPlatform
 import com.ben.inly.presentation.shared.components.KmpBackHandler
@@ -61,6 +64,7 @@ import com.ben.inly.presentation.shared.UserSettings
 import com.ben.inly.presentation.shared.components.InlyBottomSheet
 import com.ben.inly.presentation.shared.components.TopBarIconButtonGroup
 import com.ben.inly.presentation.shared.components.TopBarIconButtonItem
+import com.ben.inly.presentation.shared.editor.BlockStyleBar
 import com.ben.inly.presentation.shared.rememberStableStatusBarsPadding
 import com.ben.inly.presentation.shared.stableStatusBarsPadding
 import com.ben.inly.presentation.sync.SyncViewModel
@@ -109,6 +113,8 @@ fun DailyScreen(
     val selectedDate by viewModel.selectedDate.collectAsState()
     val selectedBlockIds by viewModel.selectedBlockIds.collectAsState()
     val focusRequest by viewModel.focusRequest.collectAsState()
+    val selectionRequest by viewModel.selectionRequest.collectAsState()
+    var topBarBottomPx by remember { mutableFloatStateOf(0f) }
     val loadedDateString by viewModel.loadedDateString.collectAsState()
     val previewCache by viewModel.previewCache.collectAsState()
 
@@ -119,6 +125,11 @@ fun DailyScreen(
     val isSelectionMode = selectedBlockIds.isNotEmpty()
     val selectedBlocksList = blocks.filter { it.id in selectedBlockIds }
     val isSelectionPinned = selectedBlocksList.isNotEmpty() && selectedBlocksList.all { it.isPinned }
+
+    var showBlockStyleBar by remember { mutableStateOf(false) }
+    LaunchedEffect(isSelectionMode) {
+        if (!isSelectionMode) showBlockStyleBar = false
+    }
 
     var showScheduledTasksSheet by remember { mutableStateOf(false) }
     var showCalendarSheet by remember { mutableStateOf(false) }
@@ -216,9 +227,11 @@ fun DailyScreen(
             override fun onToggleCheckbox(id: String, checked: Boolean) = viewModel.toggleCheckbox(id, checked)
             override fun onToggleExpand(id: String) = viewModel.toggleToggleBlock(id)
             override fun onFocusBlock(id: String) = viewModel.setFocusedBlock(id)
+            override fun onRequestCursorPosition(id: String, offset: Int) = viewModel.requestCursorPosition(id, offset)
             override fun onChangeBlockType(type: String) = viewModel.changeFocusedBlockType(type)
             override fun onToggleFormat(format: String) = viewModel.toggleFormat(format)
             override fun onAdjustIndentation(increase: Boolean) = viewModel.adjustIndentation(increase)
+            override fun onSetBlockAlignment(alignment: TextAlignment) = viewModel.setFocusedBlockAlignment(alignment)
             override fun onEnterPressed(id: String, before: String, after: String) = viewModel.handleEnter(id, before, after)
             override fun onBackspaceOnEmpty(id: String) = viewModel.handleBackspaceOnEmpty(id)
             override fun onToggleSelection(id: String) = viewModel.toggleSelection(id)
@@ -406,6 +419,8 @@ fun DailyScreen(
                         globalTags = globalTags,
                         actions = sharedEditorActions,
                         focusRequest = if (isCurrentActivePage) focusRequest else null,
+                        selectionRequest = if (isCurrentActivePage) selectionRequest else null,
+                        topBarClearancePx = topBarBottomPx,
                         selectedBlockIds = selectedBlockIds,
                         mobileMenuState = mobileMenuState,
                         onMobileMenuStateChange = { mobileMenuState = it },
@@ -458,6 +473,7 @@ fun DailyScreen(
                     onChangeBlockType = { sharedEditorActions.onChangeBlockType(it) },
                     onToggleFormat = { sharedEditorActions.onToggleFormat(it) },
                     onAdjustIndentation = { sharedEditorActions.onAdjustIndentation(it) },
+                    onSetAlignment = { sharedEditorActions.onSetBlockAlignment(it) },
                     onInsertMediaBlock = { sharedEditorActions.onInsertMediaBlock(it) },
                     onSelectCurrentBlock = {
                         GlobalEditorState.currentlyFocusedBlockId?.let { id ->
@@ -467,31 +483,46 @@ fun DailyScreen(
                 )
             }
 
-            BlockSelectionPill(
-                isVisible = isSelectionMode,
-                selectedCount = selectedBlockIds.size,
-                onClearSelection = { viewModel.clearSelection() },
-                onSelectAll = { viewModel.selectAllBlocks() },
-                onCopy = {
-                    clipboardManager.setText(AnnotatedString(viewModel.getSelectedText()))
-                    viewModel.clearSelection()
-                },
-                onCut = {
-                    clipboardManager.setText(AnnotatedString(viewModel.cutSelectedBlocks()))
-                },
-                onAddBlockAbove = { viewModel.addBlockAboveSelection() },
-                onAddBlockBelow = { viewModel.addBlockBelowSelection() },
-                onDelete = { viewModel.deleteSelectedBlocks() },
-                onTogglePin = { sharedEditorActions.onTogglePin() },
-                isSelectionPinned = isSelectionPinned,
-                selectedBlocks = selectedBlocksList,
-                onUpdateLinkedNoteOptions = { id, showIcon, showCoverImage -> viewModel.updateLinkedNoteOptions(id, showIcon, showCoverImage) },
-                hazeState = hazeState,
+            Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .imePadding()
-                    .then(if (isDesktopPlatform) Modifier.padding(bottom = 16.dp) else Modifier.navigationBarsPadding())
-            )
+                    .then(if (isDesktopPlatform) Modifier.padding(bottom = 16.dp) else Modifier.navigationBarsPadding()),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                BlockStyleBar(
+                    isVisible = isSelectionMode && showBlockStyleBar,
+                    onChangeBlockType = { viewModel.changeBlockTypeForSelectedBlocks(it) },
+                    onToggleFormat = { viewModel.toggleFormatForSelectedBlocks(it) },
+                    onAdjustIndentation = { viewModel.adjustIndentationForSelectedBlocks(it) },
+                    onSetAlignment = { viewModel.setSelectedBlocksAlignment(it) },
+                    hazeState = hazeState
+                )
+                BlockSelectionPill(
+                    isVisible = isSelectionMode,
+                    selectedCount = selectedBlockIds.size,
+                    onClearSelection = { viewModel.clearSelection() },
+                    onSelectAll = { viewModel.selectAllBlocks() },
+                    onCopy = {
+                        clipboardManager.setText(AnnotatedString(viewModel.getSelectedText()))
+                        viewModel.clearSelection()
+                    },
+                    onCut = {
+                        clipboardManager.setText(AnnotatedString(viewModel.cutSelectedBlocks()))
+                    },
+                    onAddBlockAbove = { viewModel.addBlockAboveSelection() },
+                    onAddBlockBelow = { viewModel.addBlockBelowSelection() },
+                    onDelete = { viewModel.deleteSelectedBlocks() },
+                    onTogglePin = { sharedEditorActions.onTogglePin() },
+                    isSelectionPinned = isSelectionPinned,
+                    selectedBlocks = selectedBlocksList,
+                    onUpdateLinkedNoteOptions = { id, showIcon, showCoverImage -> viewModel.updateLinkedNoteOptions(id, showIcon, showCoverImage) },
+                    showStyleButton = true,
+                    isStyleBarOpen = showBlockStyleBar,
+                    onToggleStyleBar = { showBlockStyleBar = !showBlockStyleBar },
+                    hazeState = hazeState
+                )
+            }
 
             DatabaseTemplatePickerSheet(
                 expanded = showDatabasePicker,
@@ -555,6 +586,7 @@ fun DailyScreen(
                     onNavigateToSettings = onNavigateToSettings,
                     onNavigateToTrash = onNavigateToTrash,
                     modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter).zIndex(2f)
+                        .onGloballyPositioned { topBarBottomPx = it.positionInRoot().y + it.size.height }
                 )
             }
 

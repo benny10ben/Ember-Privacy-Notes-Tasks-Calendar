@@ -25,6 +25,7 @@ import com.ben.inly.domain.model.FilterConfig
 import com.ben.inly.domain.model.GalleryCardSize
 import com.ben.inly.domain.model.NoteBlock
 import com.ben.inly.domain.model.Stroke
+import com.ben.inly.domain.model.TextAlignment
 import com.ben.inly.domain.model.ViewType
 import com.ben.inly.domain.util.isDesktopPlatform
 import com.ben.inly.presentation.shared.editor.BlockSelectionPill
@@ -36,6 +37,7 @@ import com.ben.inly.presentation.shared.editor.MobileMenuState
 import com.ben.inly.presentation.shared.editor.blockViews.databaseBlockView.DatabaseTemplatePickerSheet
 import com.ben.inly.presentation.shared.components.NotePickerDialog
 import com.ben.inly.presentation.mobile.home.note.SubNotePanel
+import com.ben.inly.presentation.shared.editor.BlockStyleBar
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 
@@ -68,6 +70,7 @@ fun DailyEditorPane(
     val blocks by viewModel.visibleBlocks.collectAsState()
     val selectedBlockIds by viewModel.selectedBlockIds.collectAsState()
     val focusRequest by viewModel.focusRequest.collectAsState()
+    val selectionRequest by viewModel.selectionRequest.collectAsState()
     val globalTags by viewModel.globalTags.collectAsState()
     val databaseTemplates by viewModel.databaseTemplates.collectAsState()
     var showDatabasePicker by remember { mutableStateOf(false) }
@@ -77,7 +80,11 @@ fun DailyEditorPane(
     val selectedBlocksList = blocks.filter { it.id in selectedBlockIds }
     val isSelectionPinned = selectedBlocksList.isNotEmpty() && selectedBlocksList.all { it.isPinned }
 
-    LaunchedEffect(isSelectionMode) { onSelectionModeChange(isSelectionMode) }
+    var showBlockStyleBar by remember { mutableStateOf(false) }
+    LaunchedEffect(isSelectionMode) {
+        onSelectionModeChange(isSelectionMode)
+        if (!isSelectionMode) showBlockStyleBar = false
+    }
 
     val density = LocalDensity.current
     val imeBottom = WindowInsets.ime.getBottom(density)
@@ -123,9 +130,11 @@ fun DailyEditorPane(
             override fun onToggleCheckbox(id: String, checked: Boolean) = viewModel.toggleCheckbox(id, checked)
             override fun onToggleExpand(id: String) = viewModel.toggleToggleBlock(id)
             override fun onFocusBlock(id: String) = viewModel.setFocusedBlock(id)
+            override fun onRequestCursorPosition(id: String, offset: Int) = viewModel.requestCursorPosition(id, offset)
             override fun onChangeBlockType(type: String) = viewModel.changeFocusedBlockType(type)
             override fun onToggleFormat(format: String) = viewModel.toggleFormat(format)
             override fun onAdjustIndentation(increase: Boolean) = viewModel.adjustIndentation(increase)
+            override fun onSetBlockAlignment(alignment: TextAlignment) = viewModel.setFocusedBlockAlignment(alignment)
             override fun onEnterPressed(id: String, before: String, after: String) = viewModel.handleEnter(id, before, after)
             override fun onBackspaceOnEmpty(id: String) = viewModel.handleBackspaceOnEmpty(id)
             override fun onToggleSelection(id: String) = viewModel.toggleSelection(id)
@@ -246,6 +255,7 @@ fun DailyEditorPane(
             globalTags = globalTags,
             actions = actions,
             focusRequest = focusRequest,
+            selectionRequest = selectionRequest,
             selectedBlockIds = selectedBlockIds,
             mobileMenuState = mobileMenuState,
             onMobileMenuStateChange = { mobileMenuState = it },
@@ -284,6 +294,7 @@ fun DailyEditorPane(
                 onChangeBlockType = { actions.onChangeBlockType(it) },
                 onToggleFormat = { actions.onToggleFormat(it) },
                 onAdjustIndentation = { actions.onAdjustIndentation(it) },
+                onSetAlignment = { actions.onSetBlockAlignment(it) },
                 onInsertMediaBlock = { actions.onInsertMediaBlock(it) },
                 onSelectCurrentBlock = {
                     GlobalEditorState.currentlyFocusedBlockId?.let { id ->
@@ -293,31 +304,46 @@ fun DailyEditorPane(
             )
         }
 
-        BlockSelectionPill(
-            isVisible = isSelectionMode,
-            selectedCount = selectedBlockIds.size,
-            onClearSelection = { viewModel.clearSelection() },
-            onSelectAll = { viewModel.selectAllBlocks() },
-            onCopy = {
-                clipboardManager.setText(AnnotatedString(viewModel.getSelectedText()))
-                viewModel.clearSelection()
-            },
-            onCut = {
-                clipboardManager.setText(AnnotatedString(viewModel.cutSelectedBlocks()))
-            },
-            onAddBlockAbove = { viewModel.addBlockAboveSelection() },
-            onAddBlockBelow = { viewModel.addBlockBelowSelection() },
-            onDelete = { viewModel.deleteSelectedBlocks() },
-            onTogglePin = { actions.onTogglePin() },
-            isSelectionPinned = isSelectionPinned,
-            selectedBlocks = selectedBlocksList,
-            onUpdateLinkedNoteOptions = { id, showIcon, showCoverImage -> viewModel.updateLinkedNoteOptions(id, showIcon, showCoverImage) },
-            hazeState = hazeState,
+        Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .imePadding()
-                .then(if (isDesktopPlatform) Modifier.padding(bottom = 16.dp) else Modifier.navigationBarsPadding())
-        )
+                .then(if (isDesktopPlatform) Modifier.padding(bottom = 16.dp) else Modifier.navigationBarsPadding()),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            BlockStyleBar(
+                isVisible = isSelectionMode && showBlockStyleBar,
+                onChangeBlockType = { viewModel.changeBlockTypeForSelectedBlocks(it) },
+                onToggleFormat = { viewModel.toggleFormatForSelectedBlocks(it) },
+                onAdjustIndentation = { viewModel.adjustIndentationForSelectedBlocks(it) },
+                onSetAlignment = { viewModel.setSelectedBlocksAlignment(it) },
+                hazeState = hazeState
+            )
+            BlockSelectionPill(
+                isVisible = isSelectionMode,
+                selectedCount = selectedBlockIds.size,
+                onClearSelection = { viewModel.clearSelection() },
+                onSelectAll = { viewModel.selectAllBlocks() },
+                onCopy = {
+                    clipboardManager.setText(AnnotatedString(viewModel.getSelectedText()))
+                    viewModel.clearSelection()
+                },
+                onCut = {
+                    clipboardManager.setText(AnnotatedString(viewModel.cutSelectedBlocks()))
+                },
+                onAddBlockAbove = { viewModel.addBlockAboveSelection() },
+                onAddBlockBelow = { viewModel.addBlockBelowSelection() },
+                onDelete = { viewModel.deleteSelectedBlocks() },
+                onTogglePin = { actions.onTogglePin() },
+                isSelectionPinned = isSelectionPinned,
+                selectedBlocks = selectedBlocksList,
+                onUpdateLinkedNoteOptions = { id, showIcon, showCoverImage -> viewModel.updateLinkedNoteOptions(id, showIcon, showCoverImage) },
+                showStyleButton = true,
+                isStyleBarOpen = showBlockStyleBar,
+                onToggleStyleBar = { showBlockStyleBar = !showBlockStyleBar },
+                hazeState = hazeState
+            )
+        }
 
         if (subNotePanelId != null) {
             SubNotePanel(

@@ -54,6 +54,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -90,7 +91,11 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.ui.zIndex
 import com.ben.inly.data.local.room.NoteMetadataEntity
 import com.ben.inly.domain.model.SolidDividerBlock
+import com.ben.inly.domain.model.InlineSpan
+import com.ben.inly.domain.model.TextAlignment
 import com.ben.inly.domain.model.ThreeDotDividerBlock
+import com.ben.inly.domain.model.inlineSpansOrEmpty
+import com.ben.inly.domain.model.textAlignmentOrNull
 import com.ben.inly.presentation.shared.components.MinimalDatePickerDialog
 import com.ben.inly.presentation.shared.components.NotePickerDialog
 import com.ben.inly.presentation.shared.components.MinimalTimePickerDialog
@@ -143,6 +148,13 @@ fun Modifier.mouseScrollable(scrollState: ScrollState): Modifier {
 
 val DefaultBlockShape = RoundedCornerShape(12.dp)
 
+private fun TextAlignment.toComposeTextAlign(): TextAlign = when (this) {
+    TextAlignment.LEFT -> TextAlign.Left
+    TextAlignment.RIGHT -> TextAlign.Right
+    TextAlignment.CENTER -> TextAlign.Center
+    TextAlignment.JUSTIFY -> TextAlign.Justify
+}
+
 // All NoteBlock subtypes are @Immutable: never mutate in place, always .copy()
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -161,6 +173,7 @@ fun NoteBlockItem(
     allLinkableNotes: List<NoteMetadataEntity> = emptyList(),
     onDismissSlashMenu: () -> Unit = {},
     isFirstToggleChild: Boolean = false,
+    selectionRequest: SelectionRequest? = null,
 ) {
     // STANDARD BLOCK LOGIC
     val density = LocalDensity.current
@@ -209,29 +222,21 @@ fun NoteBlockItem(
 
     var lastTappedYInBlock by remember { mutableFloatStateOf(0f) }
 
-    // FOCUS MANAGEMENT
+// Handles bring-into-view focus positioning for database blocks when the IME keyboard opens.
+    // Text blocks manage their own bring-into-view behavior relative to text cursor lines.
     LaunchedEffect(isFocused, imeBottom, blockHeight) {
-        if (isFocused && imeBottom > 0) {
-            if (isDatabase) {
-                val bufferPx = with(density) { 120.dp.toPx() }
-                val targetY = if (lastTappedYInBlock > 0f) lastTappedYInBlock else blockHeight / 2f
-                val targetRect = Rect(
-                    left = 0f,
-                    top = 0f,
-                    right = 1f,
-                    bottom = targetY + bufferPx
-                )
-                bringIntoViewRequester.bringIntoView(targetRect)
-            } else {
-                val bufferPx = with(density) { 100.dp.toPx() }
-                val targetRect = Rect(
-                    left = 0f,
-                    top = 0f,
-                    right = 1f,
-                    bottom = blockHeight + bufferPx
-                )
-                bringIntoViewRequester.bringIntoView(targetRect)
-            }
+        if (isFocused && imeBottom > 0 && isDatabase) {
+            // Debounces IME animation frame updates until the keyboard stabilizes.
+            delay(150.milliseconds)
+            val bufferPx = with(density) { 120.dp.toPx() }
+            val targetY = if (lastTappedYInBlock > 0f) lastTappedYInBlock else blockHeight / 2f
+            val targetRect = Rect(
+                left = 0f,
+                top = 0f,
+                right = 1f,
+                bottom = targetY + bufferPx
+            )
+            bringIntoViewRequester.bringIntoView(targetRect)
         }
     }
 
@@ -288,6 +293,7 @@ fun NoteBlockItem(
             block.isUnderlined -> TextDecoration.Underline
             else -> TextDecoration.None
         },
+        textAlign = block.textAlignmentOrNull()?.toComposeTextAlign() ?: TextAlign.Unspecified,
         color = if (isCheckboxChecked) MaterialTheme.colorScheme.outline else baseStyle.color
     )
 
@@ -401,6 +407,7 @@ fun NoteBlockItem(
                     onChangeBlockType = { actions.onChangeBlockType(it) },
                     onToggleFormat = { actions.onToggleFormat(it) },
                     onAdjustIndentation = { actions.onAdjustIndentation(it) },
+                    onSetAlignment = { actions.onSetBlockAlignment(it) },
                     onInsertMediaBlock = { actions.onInsertMediaBlock(it) }
                 )
             }
@@ -538,7 +545,7 @@ fun NoteBlockItem(
                 .onFocusChanged { focusState ->
                     val currentlyFocused = focusState.isFocused || focusState.hasFocus
                     isFocused = currentlyFocused
-                    if (currentlyFocused) onFocus(block.id)
+                    if (currentlyFocused) onFocus(block.id) else GlobalEditorState.currentSelection = TextRange.Zero
                 }
 
             val validNoteIds = remember(allLinkableNotes) { allLinkableNotes.map { it.noteId }.toSet() }
@@ -562,11 +569,14 @@ fun NoteBlockItem(
                                 allLinkableNotes = allLinkableNotes,
                                 onCreateLinkedNote = { actions.onCreateLinkedNote(it) },
                                 onOpenNote = { actions.onNoteLinkClick(it) },
-                                visualTransformation = if (block is CodeBlock) VisualTransformation.None else NoteLinkVisualTransformation(
+                                visualTransformation = if (block is CodeBlock) VisualTransformation.None else RichTextVisualTransformation(
                                     linkColor = MaterialTheme.colorScheme.primary,
                                     fadedColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                                    validNoteIds = validNoteIds
+                                    validNoteIds = validNoteIds,
+                                    inlineSpans = block.inlineSpansOrEmpty()
                                 ),
+                                selectionRequest = selectionRequest,
+                                focusRequest = focusRequest,
                                 onTextLayout = { textLayoutResult = it }
                             )
 
@@ -580,7 +590,7 @@ fun NoteBlockItem(
                                         detectTapGestures(
                                             onTap = { pos ->
                                                 var linkTapped = false
-                                                textLayoutResult?.let { layoutResult ->
+                                                val tappedOffset = textLayoutResult?.let { layoutResult ->
                                                     val offset = layoutResult.getOffsetForPosition(pos)
 
                                                     val start = maxOf(0, offset - 1)
@@ -594,15 +604,18 @@ fun NoteBlockItem(
                                                             actions.onNoteLinkClick(noteId)
                                                         }
                                                     }
+                                                    offset
                                                 }
                                                 if (!linkTapped) {
                                                     focusRequester.requestFocus()
                                                     keyboardController?.show()
+                                                    if (tappedOffset != null) actions.onRequestCursorPosition(block.id, tappedOffset)
                                                 }
                                             },
-                                            onDoubleTap = {
+                                            onDoubleTap = { pos ->
                                                 focusRequester.requestFocus()
                                                 keyboardController?.show()
+                                                textLayoutResult?.getOffsetForPosition(pos)?.let { actions.onRequestCursorPosition(block.id, it) }
                                             },
                                             onLongPress = { actions.onToggleSelection(block.id) }
                                         )
@@ -891,14 +904,32 @@ fun IsolatedEditorTextField(
     allLinkableNotes: List<NoteMetadataEntity>,
     onCreateLinkedNote: (String) -> String,
     onOpenNote: (String) -> Unit,
-    visualTransformation: VisualTransformation = VisualTransformation.None
+    visualTransformation: VisualTransformation = VisualTransformation.None,
+    selectionRequest: SelectionRequest? = null,
+    focusRequest: FocusRequest? = null
 ) {
-    var tfv by remember { mutableStateOf(TextFieldValue(initialText, TextRange(initialText.length))) }
+    var tfv by remember { mutableStateOf(TextFieldValue(initialText, TextRange.Zero)) }
     var lastSentText by remember { mutableStateOf(initialText) }
 
     var mentionQuery by remember { mutableStateOf<String?>(null) }
     var mentionStartIndex by remember { mutableIntStateOf(-1) }
     var isPendingDeletion by remember { mutableStateOf(false) }
+
+    var localTextLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
+    var isFieldFocused by remember { mutableStateOf(false) }
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    val density = LocalDensity.current
+    val imeBottom = WindowInsets.ime.getBottom(density)
+
+    LaunchedEffect(isFieldFocused, imeBottom, tfv.selection.end) {
+        if (!isFieldFocused || imeBottom <= 0) return@LaunchedEffect
+        delay(50.milliseconds)
+        val layout = localTextLayoutResult ?: return@LaunchedEffect
+        val cursorRect = runCatching {
+            layout.getCursorRect(tfv.selection.end.coerceIn(0, layout.layoutInput.text.length))
+        }.getOrNull() ?: return@LaunchedEffect
+        runCatching { bringIntoViewRequester.bringIntoView(cursorRect) }
+    }
 
     LaunchedEffect(initialText) {
         if (tfv.text != initialText && initialText != lastSentText) {
@@ -909,12 +940,42 @@ fun IsolatedEditorTextField(
         }
     }
 
+// Updates cursor placement when a FocusRequest targets this block with placeCursorAtEnd = true.
+    LaunchedEffect(focusRequest?.nonce) {
+        if (focusRequest?.id == blockId && focusRequest.placeCursorAtEnd) {
+            tfv = tfv.copy(selection = TextRange(tfv.text.length))
+        }
+    }
+
+    LaunchedEffect(selectionRequest?.nonce) {
+        if (selectionRequest?.blockId == blockId) {
+            val selection = selectionRequest.selection
+            tfv = tfv.copy(
+                selection = TextRange(
+                    selection.start.coerceIn(0, tfv.text.length),
+                    selection.end.coerceIn(0, tfv.text.length)
+                )
+            )
+        }
+    }
+
     Box(modifier = modifier.fillMaxWidth()) {
+        if (tfv.text.isEmpty() && placeholderText.isNotEmpty()) {
+            Text(
+                text = placeholderText,
+                style = textStyle.copy(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)),
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
         BasicTextField(
             value = tfv,
             visualTransformation = visualTransformation,
-            onTextLayout = { result -> onTextLayout(result) },
+            onTextLayout = { result ->
+                localTextLayoutResult = result
+                onTextLayout(result)
+            },
             onValueChange = { newValue ->
+                GlobalEditorState.currentSelection = newValue.selection
                 val newText = newValue.text
                 val cursor = newValue.selection.start
 
@@ -953,6 +1014,10 @@ fun IsolatedEditorTextField(
             modifier = Modifier
                 .fillMaxWidth()
                 .focusRequester(focusRequester)
+                .bringIntoViewRequester(bringIntoViewRequester)
+                .onFocusChanged {
+                    isFieldFocused = it.isFocused
+                }
                 .onPreviewKeyEvent { event ->
                     val isBackspace = event.key == Key.Backspace
                     val isEnter = event.key == Key.Enter || event.key == Key.NumPadEnter
@@ -996,18 +1061,7 @@ fun IsolatedEditorTextField(
                 },
             textStyle = textStyle,
             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-            enabled = !inSelectionMode,
-            decorationBox = { innerTextField ->
-                Box {
-                    if (tfv.text.isEmpty() && placeholderText.isNotEmpty()) {
-                        Text(
-                            text = placeholderText,
-                            style = textStyle.copy(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f))
-                        )
-                    }
-                    innerTextField()
-                }
-            }
+            enabled = !inSelectionMode
         )
 
         fun insertNoteLink(safeTitle: String, noteId: String) {
@@ -1052,17 +1106,21 @@ fun IsolatedEditorTextField(
     }
 }
 
-class NoteLinkVisualTransformation(
+// Replaces raw note link syntax (e.g. "[title](inly://note/id)") with styled display text ("@title")
+// and applies inline rich-text styles (bold, italic, strike, underline). Computes offset mappings
+// so cursor movements and tap targets accurately correspond to the underlying text.
+class RichTextVisualTransformation(
     private val linkColor: Color,
     private val fadedColor: Color,
-    private val validNoteIds: Set<String>
+    private val validNoteIds: Set<String>,
+    private val inlineSpans: List<InlineSpan> = emptyList()
 ) : VisualTransformation {
     override fun filter(text: AnnotatedString): TransformedText {
         val originalText = text.text
         val regex = """\[([^\]]+)\]\(inly://note/([^)]+)\)""".toRegex()
 
         val matches = regex.findAll(originalText).toList()
-        if (matches.isEmpty()) return TransformedText(text, OffsetMapping.Identity)
+        if (matches.isEmpty() && inlineSpans.isEmpty()) return TransformedText(text, OffsetMapping.Identity)
 
         val builder = AnnotatedString.Builder()
         val mapping = IntArray(originalText.length * 2 + 50)
@@ -1070,6 +1128,8 @@ class NoteLinkVisualTransformation(
 
         var originalIndex = 0
         var transformedIndex = 0
+        data class PendingLink(val noteId: String, val start: Int, val end: Int, val isMissing: Boolean)
+        val pendingLinks = mutableListOf<PendingLink>()
 
         for (match in matches) {
             val before = originalText.substring(originalIndex, match.range.first)
@@ -1084,17 +1144,11 @@ class NoteLinkVisualTransformation(
             val title = match.groupValues[1]
             val noteId = match.groupValues[2]
             val linkText = "@$title"
-
             val isMissing = !validNoteIds.contains(noteId)
-            val finalColor = if (isMissing) fadedColor else linkColor
-            val decoration = if (isMissing) TextDecoration.LineThrough else TextDecoration.None
 
             val linkStartTransformed = transformedIndex
-            builder.pushStyle(SpanStyle(color = finalColor, fontWeight = FontWeight.SemiBold, textDecoration = decoration))
-            builder.pushStringAnnotation(tag = "NOTE_LINK", annotation = noteId)
             builder.append(linkText)
-            builder.pop()
-            builder.pop()
+            pendingLinks.add(PendingLink(noteId, linkStartTransformed, transformedIndex + linkText.length, isMissing))
 
             for (i in linkText.indices) {
                 mapping[transformedIndex] = match.range.last + 1
@@ -1121,6 +1175,37 @@ class NoteLinkVisualTransformation(
 
         mapping[finalTransformedLength] = finalOriginalLength
         inverse[finalOriginalLength] = finalTransformedLength
+
+        pendingLinks.forEach { link ->
+            val finalColor = if (link.isMissing) fadedColor else linkColor
+            val decoration = if (link.isMissing) TextDecoration.LineThrough else TextDecoration.None
+            builder.addStyle(SpanStyle(color = finalColor, fontWeight = FontWeight.SemiBold, textDecoration = decoration), link.start, link.end)
+            builder.addStringAnnotation(tag = "NOTE_LINK", annotation = link.noteId, start = link.start, end = link.end)
+        }
+
+        inlineSpans.forEach { span ->
+            val start = span.start.coerceIn(0, finalOriginalLength)
+            val end = span.end.coerceIn(0, finalOriginalLength)
+            if (start >= end) return@forEach
+            val transformedStart = inverse[start]
+            val transformedEnd = inverse[end]
+            if (transformedStart >= transformedEnd) return@forEach
+            val decoration = when {
+                span.strikeThrough && span.underline -> TextDecoration.LineThrough + TextDecoration.Underline
+                span.strikeThrough -> TextDecoration.LineThrough
+                span.underline -> TextDecoration.Underline
+                else -> null
+            }
+            builder.addStyle(
+                SpanStyle(
+                    fontWeight = if (span.bold) FontWeight.Bold else null,
+                    fontStyle = if (span.italic) FontStyle.Italic else null,
+                    textDecoration = decoration
+                ),
+                transformedStart,
+                transformedEnd
+            )
+        }
 
         return TransformedText(
             builder.toAnnotatedString(),

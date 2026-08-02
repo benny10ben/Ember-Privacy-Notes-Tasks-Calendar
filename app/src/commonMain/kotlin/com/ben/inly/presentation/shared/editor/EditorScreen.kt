@@ -2,9 +2,12 @@ package com.ben.inly.presentation.shared.editor
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.BringIntoViewSpec
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.horizontalScroll
@@ -29,6 +32,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -48,6 +52,7 @@ import com.ben.inly.domain.model.LinkedNoteBlock
 import com.ben.inly.domain.model.NoteBlock
 import com.ben.inly.domain.model.NumberedListBlock
 import com.ben.inly.domain.model.QuoteBlock
+import com.ben.inly.domain.model.TextAlignment
 import com.ben.inly.domain.model.TextBlock
 import com.ben.inly.domain.model.ToggleBlock
 import com.ben.inly.domain.model.ViewType
@@ -57,8 +62,10 @@ import com.ben.inly.presentation.shared.components.KmpBackHandler
 import com.ben.inly.presentation.shared.editor.blockViews.LinkedNoteOptionsMenu
 import com.ben.inly.ui.theme.LocalAppIsDark
 import dev.chrisbanes.haze.HazeState
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.gestures.animateScrollBy
+import kotlin.time.Duration.Companion.milliseconds
 import androidx.compose.ui.platform.LocalDensity
 import kotlinx.coroutines.flow.MutableSharedFlow
 import androidx.compose.ui.text.style.TextOverflow
@@ -68,6 +75,7 @@ import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.hazeEffect
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableSet
+import kotlin.math.abs
 
 private val DefaultCornerShape = RoundedCornerShape(12.dp)
 
@@ -77,6 +85,29 @@ private fun Modifier.customInlyShadow(shape: Shape): Modifier = this.shadow(
     spotColor = Color.Black.copy(alpha = 0.25f),
     ambientColor = Color.Black.copy(alpha = 0.10f)
 )
+
+// Adjusts automatic bring-into-view scroll distances to account for top and bottom floating bars (top inset)
+// and key-board/navigation bars (bottom inset), ensuring focused items remain visible within the un-covered viewport.
+@OptIn(ExperimentalFoundationApi::class)
+private class ClearanceAwareBringIntoViewSpec(
+    private val topInsetPx: Float,
+    private val bottomInsetPx: Float
+) : BringIntoViewSpec {
+    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
+        val visibleTop = topInsetPx
+        val visibleBottom = containerSize - bottomInsetPx
+        val leadingEdge = offset
+        val trailingEdge = offset + size
+        val topDelta = leadingEdge - visibleTop
+        val bottomDelta = trailingEdge - visibleBottom
+        return when {
+            leadingEdge >= visibleTop && trailingEdge <= visibleBottom -> 0f
+            leadingEdge < visibleTop && trailingEdge > visibleBottom -> 0f
+            abs(topDelta) < abs(bottomDelta) -> topDelta
+            else -> bottomDelta
+        }
+    }
+}
 
 data class SlashMenuItemData(
     val label: String,
@@ -96,6 +127,11 @@ enum class MobileMenuState { MAIN, SLASH, MENU }
 
 object GlobalEditorState {
     var currentlyFocusedBlockId: String? = null
+
+    // Updated on every keystroke/tap/drag inside the focused block's text field so a toolbar button
+    // press elsewhere (EditorToolbar, the slash menu) can tell whether the user has a real text
+    // selection to apply inline formatting to, vs. just a cursor (whole-block formatting instead).
+    var currentSelection: TextRange = TextRange.Zero
 }
 
 object EditorEventBus {
@@ -110,9 +146,11 @@ interface EditorActions {
     fun onToggleCheckbox(id: String, checked: Boolean)
     fun onToggleExpand(id: String)
     fun onFocusBlock(id: String)
+    fun onRequestCursorPosition(id: String, offset: Int)
     fun onChangeBlockType(type: String)
     fun onToggleFormat(format: String)
     fun onAdjustIndentation(increase: Boolean)
+    fun onSetBlockAlignment(alignment: TextAlignment)
     fun onEnterPressed(id: String, before: String, after: String)
     fun onBackspaceOnEmpty(id: String)
     fun onToggleSelection(id: String)
@@ -178,7 +216,7 @@ interface EditorActions {
     fun onUpdateLinkedNoteOptions(id: String, showIcon: Boolean, showCoverImage: Boolean)
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun EditorScreen(
     modifier: Modifier = Modifier,
@@ -186,6 +224,7 @@ fun EditorScreen(
     globalTags: List<TagEntity>,
     actions: EditorActions,
     focusRequest: FocusRequest?,
+    selectionRequest: SelectionRequest? = null,
     selectedBlockIds: Set<String>,
     bottomContentPadding: Dp = 0.dp,
     topContentPadding: Dp = 0.dp,
@@ -198,7 +237,8 @@ fun EditorScreen(
     allLinkableNotes: List<NoteMetadataEntity> = emptyList(),
     isCurrentActivePage: Boolean = true,
     onScrollStateChange: (Boolean) -> Unit = {},
-    listState: LazyListState = rememberLazyListState()
+    listState: LazyListState = rememberLazyListState(),
+    topBarClearancePx: Float = 0f
 ) {
     val isSelectionMode = selectedBlockIds.isNotEmpty()
     val focusManager = LocalFocusManager.current
@@ -214,6 +254,7 @@ fun EditorScreen(
         val isKeyboardOpen = imeBottom > 0
         LaunchedEffect(isKeyboardOpen) {
             if (!isKeyboardOpen) {
+                delay(150.milliseconds)
                 focusManager.clearFocus()
                 activeBlockId = null
                 GlobalEditorState.currentlyFocusedBlockId = null
@@ -332,6 +373,7 @@ fun EditorScreen(
             override fun onChangeBlockType(type: String) = clearSlashAndExecute { actions.onChangeBlockType(type) }
             override fun onToggleFormat(format: String) = clearSlashAndExecute { actions.onToggleFormat(format) }
             override fun onAdjustIndentation(increase: Boolean) = clearSlashAndExecute { actions.onAdjustIndentation(increase) }
+            override fun onSetBlockAlignment(alignment: TextAlignment) = clearSlashAndExecute { actions.onSetBlockAlignment(alignment) }
             override fun onInsertMediaBlock(type: String) = clearSlashAndExecute { actions.onInsertMediaBlock(type) }
             override fun onTogglePin() = actions.onTogglePin()
             override fun onOpenDatabaseNote(blockId: String, rowId: String, colId: String, existingNoteId: String?) =
@@ -429,6 +471,13 @@ fun EditorScreen(
 
     val density = LocalDensity.current
 
+    val bringIntoViewSpec = remember(topBarClearancePx, density) {
+        ClearanceAwareBringIntoViewSpec(
+            topInsetPx = topBarClearancePx + with(density) { 16.dp.toPx() },
+            bottomInsetPx = with(density) { 64.dp.toPx() }
+        )
+    }
+
     val dynamicBottomPadding by animateDpAsState(
         targetValue = if (mobileMenuState != MobileMenuState.MAIN) 280.dp else 100.dp,
         label = "menuPadding"
@@ -482,6 +531,7 @@ fun EditorScreen(
             .fillMaxSize()
             .imePadding()
     ) {
+        CompositionLocalProvider(LocalBringIntoViewSpec provides bringIntoViewSpec) {
         LazyColumn(
                 state = listState,
                 modifier = Modifier
@@ -577,7 +627,8 @@ fun EditorScreen(
                             showSlashMenu = showSlashMenu,
                             slashQuery = slashQuery,
                             onDismissSlashMenu = onDismissSlash,
-                            isFirstToggleChild = isFirstToggleChild
+                            isFirstToggleChild = isFirstToggleChild,
+                            selectionRequest = selectionRequest
                         )
                     }
                 }
@@ -621,6 +672,7 @@ fun EditorScreen(
                     )
                 }
             }
+        }
     }
 }
 
@@ -636,6 +688,7 @@ fun EditorToolbar(
     onChangeBlockType: (String) -> Unit,
     onToggleFormat: (String) -> Unit,
     onAdjustIndentation: (Boolean) -> Unit,
+    onSetAlignment: (TextAlignment) -> Unit,
     onInsertMediaBlock: (String) -> Unit,
     onSelectCurrentBlock: () -> Unit,
     hazeState: HazeState
@@ -731,6 +784,21 @@ fun EditorToolbar(
 
                                 ToolbarDivider(tint)
 
+                                ToolbarButton(onClick = { onSetAlignment(TextAlignment.LEFT) }) {
+                                    Icon(Icons.Default.FormatAlignLeft, "Align left", tint = tint, modifier = Modifier.size(iconSize))
+                                }
+                                ToolbarButton(onClick = { onSetAlignment(TextAlignment.RIGHT) }) {
+                                    Icon(Icons.Default.FormatAlignRight, "Align right", tint = tint, modifier = Modifier.size(iconSize))
+                                }
+                                ToolbarButton(onClick = { onSetAlignment(TextAlignment.CENTER) }) {
+                                    Icon(Icons.Default.FormatAlignCenter, "Align center", tint = tint, modifier = Modifier.size(iconSize))
+                                }
+                                ToolbarButton(onClick = { onSetAlignment(TextAlignment.JUSTIFY) }) {
+                                    Icon(Icons.Default.FormatAlignJustify, "Justify", tint = tint, modifier = Modifier.size(iconSize))
+                                }
+
+                                ToolbarDivider(tint)
+
                                 ToolbarButton(onClick = { EditorEventBus.insertSlashEvent.tryEmit(Unit) }) {
                                     Icon(Icons.Default.Add, "More blocks", tint = tint, modifier = Modifier.size(iconSize + 1.dp))
                                 }
@@ -763,6 +831,11 @@ fun EditorToolbar(
                                         onAdjustIndentation(it)
                                         onMenuStateChange(MobileMenuState.MAIN)
                                     },
+                                    onSetAlignment = {
+                                        EditorEventBus.cleanupSlashEvent.tryEmit(Unit)
+                                        onSetAlignment(it)
+                                        onMenuStateChange(MobileMenuState.MAIN)
+                                    },
                                     onInsertMediaBlock = {
                                         EditorEventBus.cleanupSlashEvent.tryEmit(Unit)
                                         onInsertMediaBlock(it)
@@ -788,6 +861,10 @@ fun EditorToolbar(
                                     },
                                     onAdjustIndentation = {
                                         onAdjustIndentation(it)
+                                        onMenuStateChange(MobileMenuState.MAIN)
+                                    },
+                                    onSetAlignment = {
+                                        onSetAlignment(it)
                                         onMenuStateChange(MobileMenuState.MAIN)
                                     },
                                     onInsertMediaBlock = {
@@ -876,12 +953,14 @@ fun DesktopSlashMenuContent(
     onChangeBlockType: (String) -> Unit,
     onToggleFormat: (String) -> Unit,
     onAdjustIndentation: (Boolean) -> Unit,
+    onSetAlignment: (TextAlignment) -> Unit,
     onInsertMediaBlock: (String) -> Unit
 ) {
     val sections = remember(
         onChangeBlockType,
         onToggleFormat,
         onAdjustIndentation,
+        onSetAlignment,
         onInsertMediaBlock
     ) {
         listOf(
@@ -909,6 +988,12 @@ fun DesktopSlashMenuContent(
                 SlashMenuItemData("Italic Text", Icons.Default.FormatItalic) { onToggleFormat("italic") },
                 SlashMenuItemData("Underline Text", Icons.Default.FormatUnderlined) { onToggleFormat("underline") },
                 SlashMenuItemData("Strikethrough Text", Icons.Default.StrikethroughS) { onToggleFormat("strike") }
+            )),
+            SlashMenuSectionData("Alignment", listOf(
+                SlashMenuItemData("Align Left", Icons.Default.FormatAlignLeft) { onSetAlignment(TextAlignment.LEFT) },
+                SlashMenuItemData("Align Right", Icons.Default.FormatAlignRight) { onSetAlignment(TextAlignment.RIGHT) },
+                SlashMenuItemData("Align Center", Icons.Default.FormatAlignCenter) { onSetAlignment(TextAlignment.CENTER) },
+                SlashMenuItemData("Justify", Icons.Default.FormatAlignJustify) { onSetAlignment(TextAlignment.JUSTIFY) }
             )),
             SlashMenuSectionData("Indentation", listOf(
                 SlashMenuItemData("Decrease Indent", Icons.AutoMirrored.Filled.FormatIndentDecrease) { onAdjustIndentation(false) },
@@ -1036,6 +1121,9 @@ fun BlockSelectionPill(
     isSelectionPinned: Boolean = false,
     selectedBlocks: List<NoteBlock> = emptyList(),
     onUpdateLinkedNoteOptions: (id: String, showIcon: Boolean, showCoverImage: Boolean) -> Unit = { _, _, _ -> },
+    showStyleButton: Boolean = false,
+    isStyleBarOpen: Boolean = false,
+    onToggleStyleBar: () -> Unit = {},
     hazeState: HazeState
 ) {
     val selectedLinkedNoteBlock = selectedBlocks.singleOrNull() as? LinkedNoteBlock
@@ -1118,6 +1206,20 @@ fun BlockSelectionPill(
                     divider()
                 }
 
+                if (showStyleButton) {
+                    Box(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(if (isStyleBarOpen) tint.copy(alpha = 0.15f) else Color.Transparent)
+                            .clickable { onToggleStyleBar() }
+                            .padding(4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.FormatSize, "Style Selected Blocks", modifier = Modifier.size(iconSize), tint = tint)
+                    }
+                    divider()
+                }
+
                 Icon(Icons.Default.SelectAll, "Select All", modifier = Modifier.size(iconSize).clickable { onSelectAll() }, tint = tint)
                 Icon(Icons.Default.ContentCopy, "Copy", modifier = Modifier.size(iconSize).clickable { onCopy() }, tint = tint)
                 Icon(Icons.Default.ContentCut, "Cut", modifier = Modifier.size(iconSize).clickable { onCut() }, tint = tint)
@@ -1126,6 +1228,119 @@ fun BlockSelectionPill(
                 Icon(Icons.Default.ArrowDownward, "Add below", modifier = Modifier.size(iconSize).clickable { onAddBlockBelow() }, tint = tint)
                 divider()
                 Icon(Icons.Default.Delete, "Delete", modifier = Modifier.size(iconSize).clickable { onDelete() }, tint = tint)
+            }
+        }
+    }
+}
+
+// Bulk style bar shown above BlockSelectionPill once the user taps its "Style" button
+@Composable
+fun BlockStyleBar(
+    modifier: Modifier = Modifier,
+    isVisible: Boolean,
+    onChangeBlockType: (String) -> Unit,
+    onToggleFormat: (String) -> Unit,
+    onAdjustIndentation: (Boolean) -> Unit,
+    onSetAlignment: (TextAlignment) -> Unit,
+    hazeState: HazeState
+) {
+    val isDesktop = isDesktopPlatform
+    val pillColor = if (isDesktop) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.surface.copy(alpha = 0.75f)
+    val tint = MaterialTheme.colorScheme.primary
+    val iconSize = 19.dp
+
+    AnimatedVisibility(
+        visible = isVisible,
+        enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+        exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+        modifier = modifier.padding(horizontal = 24.dp)
+    ) {
+        Surface(
+            shape = DefaultCornerShape,
+            color = pillColor,
+            modifier = Modifier
+                .padding(bottom = 8.dp)
+                .customInlyShadow(DefaultCornerShape)
+                .clip(DefaultCornerShape)
+                .then(
+                    if (isDesktop) Modifier else Modifier.hazeEffect(
+                        state = hazeState,
+                        style = HazeStyle.Unspecified,
+                        block = null
+                    )
+                )
+        ) {
+            CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 36.dp) {
+                Row(
+                    modifier = Modifier
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 12.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    ToolbarButton(onClick = { onChangeBlockType("text") }) {
+                        Icon(Icons.AutoMirrored.Filled.Subject, "Text", tint = tint, modifier = Modifier.size(iconSize))
+                    }
+                    ToolbarLabel("H1", tint) { onChangeBlockType("h1") }
+                    ToolbarLabel("H2", tint) { onChangeBlockType("h2") }
+                    ToolbarButton(onClick = { onChangeBlockType("checkbox") }) {
+                        Icon(Icons.Default.CheckBox, "Checkbox", tint = tint, modifier = Modifier.size(iconSize))
+                    }
+                    ToolbarButton(onClick = { onChangeBlockType("bullet") }) {
+                        Icon(Icons.Default.FormatListBulleted, "Bulleted list", tint = tint, modifier = Modifier.size(iconSize))
+                    }
+                    ToolbarButton(onClick = { onChangeBlockType("number") }) {
+                        Icon(Icons.Default.FormatListNumbered, "Numbered list", tint = tint, modifier = Modifier.size(iconSize))
+                    }
+                    ToolbarButton(onClick = { onChangeBlockType("toggle") }) {
+                        Icon(Icons.Default.ChevronRight, "Toggle list", tint = tint, modifier = Modifier.size(iconSize))
+                    }
+                    ToolbarButton(onClick = { onChangeBlockType("quote") }) {
+                        Icon(Icons.Default.FormatQuote, "Quote", tint = tint, modifier = Modifier.size(iconSize))
+                    }
+                    ToolbarButton(onClick = { onChangeBlockType("code") }) {
+                        Icon(Icons.Default.Code, "Code", tint = tint, modifier = Modifier.size(iconSize))
+                    }
+
+                    ToolbarDivider(tint)
+
+                    ToolbarButton(onClick = { onToggleFormat("bold") }) {
+                        Icon(Icons.Default.FormatBold, "Bold", tint = tint, modifier = Modifier.size(iconSize))
+                    }
+                    ToolbarButton(onClick = { onToggleFormat("italic") }) {
+                        Icon(Icons.Default.FormatItalic, "Italic", tint = tint, modifier = Modifier.size(iconSize))
+                    }
+                    ToolbarButton(onClick = { onToggleFormat("strike") }) {
+                        Icon(Icons.Default.StrikethroughS, "Strikethrough", tint = tint, modifier = Modifier.size(iconSize))
+                    }
+                    ToolbarButton(onClick = { onToggleFormat("underline") }) {
+                        Icon(Icons.Default.FormatUnderlined, "Underline", tint = tint, modifier = Modifier.size(iconSize))
+                    }
+
+                    ToolbarDivider(tint)
+
+                    ToolbarButton(onClick = { onSetAlignment(TextAlignment.LEFT) }) {
+                        Icon(Icons.Default.FormatAlignLeft, "Align left", tint = tint, modifier = Modifier.size(iconSize))
+                    }
+                    ToolbarButton(onClick = { onSetAlignment(TextAlignment.RIGHT) }) {
+                        Icon(Icons.Default.FormatAlignRight, "Align right", tint = tint, modifier = Modifier.size(iconSize))
+                    }
+                    ToolbarButton(onClick = { onSetAlignment(TextAlignment.CENTER) }) {
+                        Icon(Icons.Default.FormatAlignCenter, "Align center", tint = tint, modifier = Modifier.size(iconSize))
+                    }
+                    ToolbarButton(onClick = { onSetAlignment(TextAlignment.JUSTIFY) }) {
+                        Icon(Icons.Default.FormatAlignJustify, "Justify", tint = tint, modifier = Modifier.size(iconSize))
+                    }
+
+                    ToolbarDivider(tint)
+
+                    ToolbarButton(onClick = { onAdjustIndentation(false) }) {
+                        Icon(Icons.AutoMirrored.Filled.FormatIndentDecrease, "Decrease indent", tint = tint, modifier = Modifier.size(iconSize))
+                    }
+                    ToolbarButton(onClick = { onAdjustIndentation(true) }) {
+                        Icon(Icons.AutoMirrored.Filled.FormatIndentIncrease, "Increase indent", tint = tint, modifier = Modifier.size(iconSize))
+                    }
+                }
             }
         }
     }

@@ -51,6 +51,27 @@ sealed class NoteBlock {
     abstract val updatedAt: Long
 }
 
+/** Paragraph alignment for the text-bearing block types - never applies to media/database blocks. */
+@Serializable
+enum class TextAlignment { LEFT, RIGHT, CENTER, JUSTIFY }
+
+/**
+ * A character-range formatting run within a block's text, e.g. bolding just the word "urgent" in
+ * "call the plumber, urgent" instead of the whole line. [start]/[end] are indices into that block's
+ * own `text` (end-exclusive) - see NoteBlockItem's RichTextVisualTransformation for how these get
+ * rendered, and BaseEditorViewModel.shiftSpansForEdit for how they stay valid as the text is edited.
+ */
+@Immutable
+@Serializable
+data class InlineSpan(
+    val start: Int,
+    val end: Int,
+    val bold: Boolean = false,
+    val italic: Boolean = false,
+    val strikeThrough: Boolean = false,
+    val underline: Boolean = false
+)
+
 @Immutable
 @Serializable
 @SerialName("text")
@@ -58,6 +79,8 @@ data class TextBlock(
     override val id: String,
     val text: String = "",
     override val indentationLevel: Int = 0,
+    val textAlignment: TextAlignment = TextAlignment.LEFT,
+    val inlineSpans: List<InlineSpan> = emptyList(),
     override val isBold: Boolean = false,
     override val isItalic: Boolean = false,
     override val isStrikeThrough: Boolean = false,
@@ -75,6 +98,8 @@ data class HeadingBlock(
     val text: String = "",
     val level: Int = 1,
     override val indentationLevel: Int = 0,
+    val textAlignment: TextAlignment = TextAlignment.LEFT,
+    val inlineSpans: List<InlineSpan> = emptyList(),
     override val isBold: Boolean = false,
     override val isItalic: Boolean = false,
     override val isStrikeThrough: Boolean = false,
@@ -91,6 +116,8 @@ data class QuoteBlock(
     override val id: String,
     val text: String = "",
     override val indentationLevel: Int = 0,
+    val textAlignment: TextAlignment = TextAlignment.LEFT,
+    val inlineSpans: List<InlineSpan> = emptyList(),
     override val isBold: Boolean = false,
     override val isItalic: Boolean = false,
     override val isStrikeThrough: Boolean = false,
@@ -108,6 +135,8 @@ data class CheckboxBlock(
     val text: String = "",
     val isChecked: Boolean = false,
     override val indentationLevel: Int = 0,
+    val textAlignment: TextAlignment = TextAlignment.LEFT,
+    val inlineSpans: List<InlineSpan> = emptyList(),
     override val isBold: Boolean = false,
     override val isItalic: Boolean = false,
     override val isStrikeThrough: Boolean = false,
@@ -130,6 +159,8 @@ data class BulletedListBlock(
     override val id: String,
     val text: String = "",
     override val indentationLevel: Int = 0,
+    val textAlignment: TextAlignment = TextAlignment.LEFT,
+    val inlineSpans: List<InlineSpan> = emptyList(),
     override val isBold: Boolean = false,
     override val isItalic: Boolean = false,
     override val isStrikeThrough: Boolean = false,
@@ -147,6 +178,8 @@ data class NumberedListBlock(
     val text: String = "",
     val number: Int = 1,
     override val indentationLevel: Int = 0,
+    val textAlignment: TextAlignment = TextAlignment.LEFT,
+    val inlineSpans: List<InlineSpan> = emptyList(),
     override val isBold: Boolean = false,
     override val isItalic: Boolean = false,
     override val isStrikeThrough: Boolean = false,
@@ -164,6 +197,8 @@ data class ToggleBlock(
     val text: String = "",
     val isExpanded: Boolean = true,
     override val indentationLevel: Int = 0,
+    val textAlignment: TextAlignment = TextAlignment.LEFT,
+    val inlineSpans: List<InlineSpan> = emptyList(),
     override val isBold: Boolean = false,
     override val isItalic: Boolean = false,
     override val isStrikeThrough: Boolean = false,
@@ -181,6 +216,7 @@ data class CodeBlock(
     val code: String = "",
     val language: String = "plaintext",
     override val indentationLevel: Int = 0,
+    val textAlignment: TextAlignment = TextAlignment.LEFT,
     override val isBold: Boolean = false,
     override val isItalic: Boolean = false,
     override val isStrikeThrough: Boolean = false,
@@ -524,6 +560,52 @@ fun NoteBlock.markDeleted(): NoteBlock = when (this) {
     is SketchBlock -> copy(isDeleted = true, updatedAt = System.currentTimeMillis())
     is SolidDividerBlock -> copy(isDeleted = true, updatedAt = System.currentTimeMillis())
     is ThreeDotDividerBlock -> copy(isDeleted = true, updatedAt = System.currentTimeMillis())
+}
+
+fun NoteBlock.textAlignmentOrNull(): TextAlignment? = when (this) {
+    is TextBlock -> textAlignment
+    is HeadingBlock -> textAlignment
+    is QuoteBlock -> textAlignment
+    is CheckboxBlock -> textAlignment
+    is BulletedListBlock -> textAlignment
+    is NumberedListBlock -> textAlignment
+    is ToggleBlock -> textAlignment
+    is CodeBlock -> textAlignment
+    else -> null
+}
+
+fun NoteBlock.withTextAlignment(alignment: TextAlignment, now: Long): NoteBlock = when (this) {
+    is TextBlock -> copy(textAlignment = alignment, updatedAt = now)
+    is HeadingBlock -> copy(textAlignment = alignment, updatedAt = now)
+    is QuoteBlock -> copy(textAlignment = alignment, updatedAt = now)
+    is CheckboxBlock -> copy(textAlignment = alignment, updatedAt = now)
+    is BulletedListBlock -> copy(textAlignment = alignment, updatedAt = now)
+    is NumberedListBlock -> copy(textAlignment = alignment, updatedAt = now)
+    is ToggleBlock -> copy(textAlignment = alignment, updatedAt = now)
+    is CodeBlock -> copy(textAlignment = alignment, updatedAt = now)
+    else -> this
+}
+
+fun NoteBlock.inlineSpansOrEmpty(): List<InlineSpan> = when (this) {
+    is TextBlock -> inlineSpans
+    is HeadingBlock -> inlineSpans
+    is QuoteBlock -> inlineSpans
+    is CheckboxBlock -> inlineSpans
+    is BulletedListBlock -> inlineSpans
+    is NumberedListBlock -> inlineSpans
+    is ToggleBlock -> inlineSpans
+    else -> emptyList()
+}
+
+fun NoteBlock.withInlineSpans(spans: List<InlineSpan>, now: Long): NoteBlock = when (this) {
+    is TextBlock -> copy(inlineSpans = spans, updatedAt = now)
+    is HeadingBlock -> copy(inlineSpans = spans, updatedAt = now)
+    is QuoteBlock -> copy(inlineSpans = spans, updatedAt = now)
+    is CheckboxBlock -> copy(inlineSpans = spans, updatedAt = now)
+    is BulletedListBlock -> copy(inlineSpans = spans, updatedAt = now)
+    is NumberedListBlock -> copy(inlineSpans = spans, updatedAt = now)
+    is ToggleBlock -> copy(inlineSpans = spans, updatedAt = now)
+    else -> this
 }
 
 fun NoteBlock.withPin(pinned: Boolean, now: Long): NoteBlock = when (this) {

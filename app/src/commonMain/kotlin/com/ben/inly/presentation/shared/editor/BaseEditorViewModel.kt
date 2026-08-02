@@ -1,6 +1,7 @@
 package com.ben.inly.presentation.shared.editor
 
 import androidx.compose.runtime.Stable
+import androidx.compose.ui.text.TextRange
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ben.inly.data.local.room.DatabaseTemplateEntity
@@ -32,6 +33,13 @@ import kotlin.time.Duration.Companion.milliseconds
 data class FocusRequest(
     val id: String,
     val placeCursorAtEnd: Boolean = false,
+    val nonce: String = UUID.randomUUID().toString()
+)
+
+@Stable
+data class SelectionRequest(
+    val blockId: String,
+    val selection: TextRange,
     val nonce: String = UUID.randomUUID().toString()
 )
 
@@ -122,6 +130,9 @@ abstract class BaseEditorViewModel(
     protected val _focusRequest = MutableStateFlow<FocusRequest?>(null)
     val focusRequest: StateFlow<FocusRequest?> = _focusRequest.asStateFlow()
 
+    protected val _selectionRequest = MutableStateFlow<SelectionRequest?>(null)
+    val selectionRequest: StateFlow<SelectionRequest?> = _selectionRequest.asStateFlow()
+
     protected val _selectedBlockIds = MutableStateFlow<Set<String>>(emptySet())
     val selectedBlockIds: StateFlow<Set<String>> = _selectedBlockIds.asStateFlow()
 
@@ -211,6 +222,26 @@ abstract class BaseEditorViewModel(
             list.map { b -> if (b.id in toToggle) b.withPin(!b.isPinned, now) else b }
         }
         clearSelection()
+        scheduleAutosave()
+    }
+
+    // Non-null only while every alignable block currently shares one alignment - drives which icon
+    // in NoteOptions shows as active. A mixed note (or one with no alignable blocks yet) shows none.
+    val blockAlignment: StateFlow<TextAlignment?> = _blocks.map { list ->
+        list.mapNotNullTo(HashSet()) { it.textAlignmentOrNull() }.singleOrNull()
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    fun setAllBlocksAlignment(alignment: TextAlignment) {
+        val now = System.currentTimeMillis()
+        modifyBlocks { list -> list.map { it.withTextAlignment(alignment, now) } }
+        scheduleAutosave()
+    }
+
+    fun setSelectedBlocksAlignment(alignment: TextAlignment) {
+        val ids = _selectedBlockIds.value
+        if (ids.isEmpty()) return
+        val now = System.currentTimeMillis()
+        modifyBlocks { list -> list.map { b -> if (b.id in ids) b.withTextAlignment(alignment, now) else b } }
         scheduleAutosave()
     }
 
@@ -357,8 +388,15 @@ abstract class BaseEditorViewModel(
         scheduleAutosave()
     }
 
+    // A real (non-collapsed) text selection means "format just this range" - otherwise format applies
+    // to the whole block.
     fun toggleFormat(format: String) {
         val id = currentlyFocusedBlockId ?: return
+        val selection = GlobalEditorState.currentSelection
+        if (!selection.collapsed) {
+            toggleInlineFormat(id, format, selection)
+            return
+        }
         val now = System.currentTimeMillis()
         modifyBlocks { list ->
             mapBlockById(list, id, now) { b ->
@@ -386,22 +424,190 @@ abstract class BaseEditorViewModel(
         else -> b
     }
 
+    private fun isFormatApplied(b: NoteBlock, format: String): Boolean = when (format) {
+        "bold" -> b.isBold
+        "italic" -> b.isItalic
+        "strike" -> b.isStrikeThrough
+        "underline" -> b.isUnderlined
+        else -> false
+    }
+
+    // Mixed selections turn the format ON everywhere (Docs/Word convention) rather than toggling
+    // each block independently, which would otherwise leave the selection in an inconsistent state.
+    fun toggleFormatForSelectedBlocks(format: String) {
+        val ids = _selectedBlockIds.value
+        if (ids.isEmpty()) return
+        val now = System.currentTimeMillis()
+        val turnOn = _blocks.value.any { it.id in ids && !isFormatApplied(it, format) }
+        modifyBlocks { list ->
+            list.map { b ->
+                if (b.id !in ids) return@map b
+                when (format) {
+                    "bold" -> updateFormat(b, turnOn, b.isItalic, b.isStrikeThrough, b.isUnderlined, now)
+                    "italic" -> updateFormat(b, b.isBold, turnOn, b.isStrikeThrough, b.isUnderlined, now)
+                    "strike" -> updateFormat(b, b.isBold, b.isItalic, turnOn, b.isUnderlined, now)
+                    "underline" -> updateFormat(b, b.isBold, b.isItalic, b.isStrikeThrough, turnOn, now)
+                    else -> b
+                }
+            }
+        }
+        scheduleAutosave()
+    }
+
+    // Applies [format] to exactly [start, end) of one block's text, leaving the rest of the block
+    // untouched. Delegates to toggleInlineSpanFormat, which expands the existing spans + this range
+    // into a flat per-character flag array, flips the target flag, and re-derives minimal spans from
+    // that - simpler to get right than manually splitting/merging overlapping InlineSpan ranges.
+    private fun toggleInlineFormat(blockId: String, format: String, selection: TextRange) {
+        val now = System.currentTimeMillis()
+        var newSelection: TextRange? = null
+        modifyBlocks { list ->
+            mapBlockById(list, blockId, now) { b ->
+                val text = getBlockText(b)
+                val start = selection.min.coerceIn(0, text.length)
+                val end = selection.max.coerceIn(0, text.length)
+                if (start >= end) return@mapBlockById b
+                newSelection = TextRange(start, end)
+                val newSpans = toggleInlineSpanFormat(b.inlineSpansOrEmpty(), text.length, start, end, format)
+                b.withInlineSpans(newSpans, now)
+            }
+        }
+        newSelection?.let { _selectionRequest.value = SelectionRequest(blockId, it) }
+        scheduleAutosave()
+    }
+
+    private data class CharFormatFlags(
+        var bold: Boolean = false,
+        var italic: Boolean = false,
+        var strike: Boolean = false,
+        var underline: Boolean = false
+    )
+
+    private fun List<InlineSpan>.toFlagsArray(length: Int): Array<CharFormatFlags> {
+        val flags = Array(length) { CharFormatFlags() }
+        for (span in this) {
+            val start = span.start.coerceIn(0, length)
+            val end = span.end.coerceIn(0, length)
+            for (i in start until end) {
+                if (span.bold) flags[i].bold = true
+                if (span.italic) flags[i].italic = true
+                if (span.strikeThrough) flags[i].strike = true
+                if (span.underline) flags[i].underline = true
+            }
+        }
+        return flags
+    }
+
+    private fun Array<CharFormatFlags>.toSpans(): List<InlineSpan> {
+        val result = mutableListOf<InlineSpan>()
+        var i = 0
+        while (i < size) {
+            val f = this[i]
+            if (!f.bold && !f.italic && !f.strike && !f.underline) {
+                i++
+                continue
+            }
+            var j = i + 1
+            while (j < size && this[j] == f) j++
+            result.add(InlineSpan(i, j, bold = f.bold, italic = f.italic, strikeThrough = f.strike, underline = f.underline))
+            i = j
+        }
+        return result
+    }
+
+    private fun toggleInlineSpanFormat(spans: List<InlineSpan>, textLength: Int, start: Int, end: Int, format: String): List<InlineSpan> {
+        if (start >= end || textLength <= 0) return spans
+        val flags = spans.toFlagsArray(textLength)
+        val isFullyOn = (start until end).all { i ->
+            when (format) {
+                "bold" -> flags[i].bold
+                "italic" -> flags[i].italic
+                "strike" -> flags[i].strike
+                "underline" -> flags[i].underline
+                else -> false
+            }
+        }
+        val newValue = !isFullyOn
+        for (i in start until end) {
+            when (format) {
+                "bold" -> flags[i].bold = newValue
+                "italic" -> flags[i].italic = newValue
+                "strike" -> flags[i].strike = newValue
+                "underline" -> flags[i].underline = newValue
+            }
+        }
+        return flags.toSpans()
+    }
+
+    // Keeps InlineSpan offsets valid as the underlying text is edited. Assumes a single contiguous
+    // insert/delete (true for normal typing/backspacing/pasting with one cursor) - finds the common
+    // prefix/suffix between old and new text and shifts anything outside that edited region by the
+    // resulting length delta. A span whose start falls inside the edited region collapses its start
+    // to the edit point rather than producing a nonsensical range.
+    private fun shiftSpansForEdit(spans: List<InlineSpan>, oldText: String, newText: String): List<InlineSpan> {
+        if (spans.isEmpty() || oldText == newText) return spans
+        val prefixLen = oldText.commonPrefixWith(newText).length
+        val maxSuffix = minOf(oldText.length, newText.length) - prefixLen
+        var suffixLen = 0
+        while (suffixLen < maxSuffix && oldText[oldText.length - 1 - suffixLen] == newText[newText.length - 1 - suffixLen]) {
+            suffixLen++
+        }
+        val oldChangeStart = prefixLen
+        val oldChangeEnd = oldText.length - suffixLen
+        val delta = (newText.length - suffixLen) - oldChangeEnd
+
+        fun mapOffset(old: Int): Int = when {
+            old <= oldChangeStart -> old
+            old >= oldChangeEnd -> old + delta
+            else -> oldChangeStart
+        }
+
+        return spans.mapNotNull { span ->
+            val newStart = mapOffset(span.start)
+            val newEnd = mapOffset(span.end)
+            if (newStart >= newEnd) null else span.copy(start = newStart, end = newEnd)
+        }
+    }
+
+    fun setFocusedBlockAlignment(alignment: TextAlignment) {
+        val id = currentlyFocusedBlockId ?: return
+        val now = System.currentTimeMillis()
+        modifyBlocks { list -> mapBlockById(list, id, now) { it.withTextAlignment(alignment, now) } }
+        scheduleAutosave()
+    }
+
+    private fun withIndentation(b: NoteBlock, newLevel: Int, now: Long): NoteBlock = when (b) {
+        is TextBlock -> b.copy(indentationLevel = newLevel, updatedAt = now)
+        is HeadingBlock -> b.copy(indentationLevel = newLevel, updatedAt = now)
+        is CheckboxBlock -> b.copy(indentationLevel = newLevel, updatedAt = now)
+        is BulletedListBlock -> b.copy(indentationLevel = newLevel, updatedAt = now)
+        is NumberedListBlock -> b.copy(indentationLevel = newLevel, updatedAt = now)
+        is ToggleBlock -> b.copy(indentationLevel = newLevel, updatedAt = now)
+        is QuoteBlock -> b.copy(indentationLevel = newLevel, updatedAt = now)
+        else -> b
+    }
+
     fun adjustIndentation(increment: Boolean) {
         val id = currentlyFocusedBlockId ?: return
         val now = System.currentTimeMillis()
         modifyBlocks { list ->
             mapBlockById(list, id, now) { b ->
                 val newLevel = if (increment) b.indentationLevel + 1 else maxOf(0, b.indentationLevel - 1)
-                when (b) {
-                    is TextBlock -> b.copy(indentationLevel = newLevel, updatedAt = now)
-                    is HeadingBlock -> b.copy(indentationLevel = newLevel, updatedAt = now)
-                    is CheckboxBlock -> b.copy(indentationLevel = newLevel, updatedAt = now)
-                    is BulletedListBlock -> b.copy(indentationLevel = newLevel, updatedAt = now)
-                    is NumberedListBlock -> b.copy(indentationLevel = newLevel, updatedAt = now)
-                    is ToggleBlock -> b.copy(indentationLevel = newLevel, updatedAt = now)
-                    is QuoteBlock -> b.copy(indentationLevel = newLevel, updatedAt = now)
-                    else -> b
-                }
+                withIndentation(b, newLevel, now)
+            }
+        }
+        scheduleAutosave()
+    }
+
+    fun adjustIndentationForSelectedBlocks(increment: Boolean) {
+        val ids = _selectedBlockIds.value
+        if (ids.isEmpty()) return
+        val now = System.currentTimeMillis()
+        modifyBlocks { list ->
+            list.map { b ->
+                if (b.id !in ids) return@map b
+                val newLevel = if (increment) b.indentationLevel + 1 else maxOf(0, b.indentationLevel - 1)
+                withIndentation(b, newLevel, now)
             }
         }
         scheduleAutosave()
@@ -444,16 +650,18 @@ abstract class BaseEditorViewModel(
                     }
                     mutable.add(idx + 1, newBlock.withPin(b.isPinned, now))
                 } else {
+                    val inheritedAlignment = b.textAlignmentOrNull() ?: TextAlignment.LEFT
+                    val inheritedSpans = shiftSpansForEdit(b.inlineSpansOrEmpty(), rawText, cleanedText)
                     val newBlock = when (type) {
-                        "text" -> TextBlock(id, cleanedText, b.indentationLevel, updatedAt = now)
-                        "h1" -> HeadingBlock(id, cleanedText, 1, b.indentationLevel, updatedAt = now)
-                        "h2" -> HeadingBlock(id, cleanedText, 2, b.indentationLevel, updatedAt = now)
-                        "checkbox" -> CheckboxBlock(id, cleanedText, false, b.indentationLevel, updatedAt = now)
-                        "quote" -> QuoteBlock(id, cleanedText, b.indentationLevel, updatedAt = now)
-                        "bullet" -> BulletedListBlock(id, cleanedText, b.indentationLevel, updatedAt = now)
-                        "number" -> NumberedListBlock(id, cleanedText, 1, b.indentationLevel, updatedAt = now)
-                        "toggle" -> ToggleBlock(id, cleanedText, true, b.indentationLevel, updatedAt = now)
-                        "code" -> CodeBlock(id, cleanedText, updatedAt = now)
+                        "text" -> TextBlock(id, cleanedText, b.indentationLevel, inheritedAlignment, inheritedSpans, updatedAt = now)
+                        "h1" -> HeadingBlock(id, cleanedText, 1, b.indentationLevel, inheritedAlignment, inheritedSpans, updatedAt = now)
+                        "h2" -> HeadingBlock(id, cleanedText, 2, b.indentationLevel, inheritedAlignment, inheritedSpans, updatedAt = now)
+                        "checkbox" -> CheckboxBlock(id, cleanedText, false, b.indentationLevel, inheritedAlignment, inheritedSpans, updatedAt = now)
+                        "quote" -> QuoteBlock(id, cleanedText, b.indentationLevel, inheritedAlignment, inheritedSpans, updatedAt = now)
+                        "bullet" -> BulletedListBlock(id, cleanedText, b.indentationLevel, inheritedAlignment, inheritedSpans, updatedAt = now)
+                        "number" -> NumberedListBlock(id, cleanedText, 1, b.indentationLevel, inheritedAlignment, inheritedSpans, updatedAt = now)
+                        "toggle" -> ToggleBlock(id, cleanedText, true, b.indentationLevel, inheritedAlignment, inheritedSpans, updatedAt = now)
+                        "code" -> CodeBlock(id, cleanedText, textAlignment = inheritedAlignment, updatedAt = now)
                         "voice" -> VoiceBlock(id, indentationLevel = b.indentationLevel, updatedAt = now)
                         "divider_solid" -> SolidDividerBlock(id = id, indentationLevel = b.indentationLevel, updatedAt = now)
                         "divider_dots" -> ThreeDotDividerBlock(id = id, indentationLevel = b.indentationLevel, updatedAt = now)
@@ -465,10 +673,39 @@ abstract class BaseEditorViewModel(
                     if (type == "toggle") {
                         val nextBlock = mutable.getOrNull(idx + 1)
                         if (nextBlock == null || nextBlock.indentationLevel <= b.indentationLevel) {
-                            mutable.add(idx + 1, TextBlock(UUID.randomUUID().toString(), "", b.indentationLevel + 1, updatedAt = now))
+                            mutable.add(idx + 1, TextBlock(UUID.randomUUID().toString(), "", b.indentationLevel + 1, inheritedAlignment, updatedAt = now))
                         }
                     }
                 }
+            }
+        }
+        scheduleAutosave()
+    }
+
+    // Bulk conversion for a multi-block selection.
+    fun changeBlockTypeForSelectedBlocks(type: String) {
+        val ids = _selectedBlockIds.value
+        if (ids.isEmpty()) return
+        val now = System.currentTimeMillis()
+        modifyBlocks { list ->
+            list.map { b ->
+                val alignment = b.textAlignmentOrNull()
+                if (b.id !in ids || alignment == null) return@map b
+                val text = getBlockText(b)
+                val spans = b.inlineSpansOrEmpty()
+                val newBlock = when (type) {
+                    "text" -> TextBlock(b.id, text, b.indentationLevel, alignment, spans, updatedAt = now)
+                    "h1" -> HeadingBlock(b.id, text, 1, b.indentationLevel, alignment, spans, updatedAt = now)
+                    "h2" -> HeadingBlock(b.id, text, 2, b.indentationLevel, alignment, spans, updatedAt = now)
+                    "checkbox" -> CheckboxBlock(b.id, text, false, b.indentationLevel, alignment, spans, updatedAt = now)
+                    "quote" -> QuoteBlock(b.id, text, b.indentationLevel, alignment, spans, updatedAt = now)
+                    "bullet" -> BulletedListBlock(b.id, text, b.indentationLevel, alignment, spans, updatedAt = now)
+                    "number" -> NumberedListBlock(b.id, text, 1, b.indentationLevel, alignment, spans, updatedAt = now)
+                    "toggle" -> ToggleBlock(b.id, text, true, b.indentationLevel, alignment, spans, updatedAt = now)
+                    "code" -> CodeBlock(b.id, text, textAlignment = alignment, updatedAt = now)
+                    else -> b
+                }
+                newBlock.withPin(b.isPinned, now)
             }
         }
         scheduleAutosave()
@@ -486,6 +723,25 @@ abstract class BaseEditorViewModel(
         else -> ""
     }
 
+    // Splits a block's existing InlineSpans at [splitPoint] (the cursor position where Enter was
+    // pressed) so the "before" half keeps spans in their original coordinates and the "after" half
+    // gets spans clipped to the tail and rebased to start at 0 in the new block's own text.
+    private fun splitSpansAt(spans: List<InlineSpan>, splitPoint: Int): Pair<List<InlineSpan>, List<InlineSpan>> {
+        val before = mutableListOf<InlineSpan>()
+        val after = mutableListOf<InlineSpan>()
+        for (span in spans) {
+            when {
+                span.end <= splitPoint -> before.add(span)
+                span.start >= splitPoint -> after.add(span.copy(start = span.start - splitPoint, end = span.end - splitPoint))
+                else -> {
+                    before.add(span.copy(end = splitPoint))
+                    after.add(span.copy(start = 0, end = span.end - splitPoint))
+                }
+            }
+        }
+        return before to after
+    }
+
     fun handleEnter(id: String, textBefore: String, textAfter: String) {
         var blockToFocusId = ""
         val now = System.currentTimeMillis()
@@ -496,35 +752,27 @@ abstract class BaseEditorViewModel(
                 blockToFocusId = newId
                 var insertIdx = idx + 1
 
-                val updatedCurrent = when (cur) {
-                    is TextBlock -> cur.copy(text = textBefore, updatedAt = now)
-                    is HeadingBlock -> cur.copy(text = textBefore, updatedAt = now)
-                    is CheckboxBlock -> cur.copy(text = textBefore, updatedAt = now)
-                    is BulletedListBlock -> cur.copy(text = textBefore, updatedAt = now)
-                    is NumberedListBlock -> cur.copy(text = textBefore, updatedAt = now)
-                    is ToggleBlock -> cur.copy(text = textBefore, updatedAt = now)
-                    is CodeBlock -> cur.copy(code = textBefore, updatedAt = now)
-                    is QuoteBlock -> cur.copy(text = textBefore, updatedAt = now)
-                    else -> cur
-                }
+                val (spansBefore, spansAfter) = splitSpansAt(cur.inlineSpansOrEmpty(), textBefore.length)
+                val updatedCurrent = withText(cur, textBefore, now, spansBefore)
 
+                val inheritedAlignment = cur.textAlignmentOrNull() ?: TextAlignment.LEFT
                 val newBlock = when (cur) {
-                    is CheckboxBlock -> CheckboxBlock(newId, textAfter, false, cur.indentationLevel, isPinned = cur.isPinned, updatedAt = now)
-                    is BulletedListBlock -> BulletedListBlock(newId, textAfter, cur.indentationLevel, isPinned = cur.isPinned, updatedAt = now)
-                    is NumberedListBlock -> NumberedListBlock(newId, textAfter, cur.number + 1, cur.indentationLevel, isPinned = cur.isPinned, updatedAt = now)
-                    is HeadingBlock -> TextBlock(newId, textAfter, 0, isPinned = cur.isPinned, updatedAt = now)
-                    is QuoteBlock -> QuoteBlock(newId, textAfter, cur.indentationLevel, isPinned = cur.isPinned, updatedAt = now)
+                    is CheckboxBlock -> CheckboxBlock(newId, textAfter, false, cur.indentationLevel, inheritedAlignment, spansAfter, isPinned = cur.isPinned, updatedAt = now)
+                    is BulletedListBlock -> BulletedListBlock(newId, textAfter, cur.indentationLevel, inheritedAlignment, spansAfter, isPinned = cur.isPinned, updatedAt = now)
+                    is NumberedListBlock -> NumberedListBlock(newId, textAfter, cur.number + 1, cur.indentationLevel, inheritedAlignment, spansAfter, isPinned = cur.isPinned, updatedAt = now)
+                    is HeadingBlock -> TextBlock(newId, textAfter, 0, inheritedAlignment, spansAfter, isPinned = cur.isPinned, updatedAt = now)
+                    is QuoteBlock -> QuoteBlock(newId, textAfter, cur.indentationLevel, inheritedAlignment, spansAfter, isPinned = cur.isPinned, updatedAt = now)
                     is ToggleBlock -> {
                         if (cur.isExpanded) {
-                            TextBlock(newId, textAfter, cur.indentationLevel + 1, isPinned = cur.isPinned, updatedAt = now)
+                            TextBlock(newId, textAfter, cur.indentationLevel + 1, inheritedAlignment, spansAfter, isPinned = cur.isPinned, updatedAt = now)
                         } else {
                             var i = idx + 1
                             while (i < mutable.size && mutable[i].indentationLevel > cur.indentationLevel) i++
                             insertIdx = i
-                            ToggleBlock(newId, textAfter, false, cur.indentationLevel, isPinned = cur.isPinned, updatedAt = now)
+                            ToggleBlock(newId, textAfter, false, cur.indentationLevel, inheritedAlignment, spansAfter, isPinned = cur.isPinned, updatedAt = now)
                         }
                     }
-                    else -> TextBlock(newId, textAfter, cur.indentationLevel, isPinned = cur.isPinned, updatedAt = now)
+                    else -> TextBlock(newId, textAfter, cur.indentationLevel, inheritedAlignment, spansAfter, isPinned = cur.isPinned, updatedAt = now)
                 }
 
                 mutable[idx] = updatedCurrent
@@ -547,9 +795,10 @@ abstract class BaseEditorViewModel(
         val now = System.currentTimeMillis()
 
         if (cur !is TextBlock) {
+            val inheritedAlignment = cur.textAlignmentOrNull() ?: TextAlignment.LEFT
             modifyBlocks { list ->
                 spliceAtBlock(list, id, now) { mutable, i ->
-                    mutable[i] = TextBlock(cur.id, "", cur.indentationLevel, isPinned = cur.isPinned, updatedAt = now)
+                    mutable[i] = TextBlock(cur.id, "", cur.indentationLevel, inheritedAlignment, isPinned = cur.isPinned, updatedAt = now)
                 }
             }
             scheduleAutosave()
@@ -615,7 +864,8 @@ abstract class BaseEditorViewModel(
             val idx = list.indexOfFirst { it.id == targetId }
             val indent = if (idx != -1) list[idx].indentationLevel else 0
             val isPinnedContext = if (idx != -1) list[idx].isPinned else false
-            val new = TextBlock(id = newId, text = "", indentationLevel = indent, isPinned = isPinnedContext, updatedAt = now)
+            val alignmentContext = if (idx != -1) list[idx].textAlignmentOrNull() ?: TextAlignment.LEFT else TextAlignment.LEFT
+            val new = TextBlock(id = newId, text = "", indentationLevel = indent, textAlignment = alignmentContext, isPinned = isPinnedContext, updatedAt = now)
             list.toMutableList().apply {
                 if (idx != -1) add(idx + 1, new) else add(new)
             }
@@ -625,6 +875,17 @@ abstract class BaseEditorViewModel(
     }
 
     fun setFocusedBlock(id: String) { currentlyFocusedBlockId = id }
+
+    // Tapping an unfocused block's text goes through a separate tap-detection overlay first (to
+    // distinguish tapping a note-link from tapping plain text - see NoteBlockItem), which already
+    // grants focus directly via its own FocusRequester for instant response. That path alone never
+    // touches the field's TextFieldValue.selection though, so the cursor stayed wherever it last
+    // was (usually the end) instead of where the tap landed. This rides the same SelectionRequest
+    // channel toggleInlineFormat uses to fix that, in parallel with (not instead of) the direct focus.
+    fun requestCursorPosition(blockId: String, offset: Int) {
+        currentlyFocusedBlockId = blockId
+        _selectionRequest.value = SelectionRequest(blockId, TextRange(offset))
+    }
     fun clearFocusRequest() { _focusRequest.value = null }
     fun toggleSelection(id: String) { _selectedBlockIds.update { if (it.contains(id)) it - id else it + id } }
     fun clearSelection() { _selectedBlockIds.value = emptySet() }
@@ -666,7 +927,8 @@ abstract class BaseEditorViewModel(
         modifyBlocks { list ->
             spliceAtBlock(list, selected.first(), now) { mutable, idx ->
                 val targetLevel = mutable[idx].indentationLevel
-                mutable.add(idx, TextBlock(id = UUID.randomUUID().toString(), text = "", indentationLevel = targetLevel, updatedAt = now))
+                val targetAlignment = mutable[idx].textAlignmentOrNull() ?: TextAlignment.LEFT
+                mutable.add(idx, TextBlock(id = UUID.randomUUID().toString(), text = "", indentationLevel = targetLevel, textAlignment = targetAlignment, updatedAt = now))
             }
         }
         clearSelection()
@@ -680,11 +942,24 @@ abstract class BaseEditorViewModel(
         modifyBlocks { list ->
             spliceAtBlock(list, selected.last(), now) { mutable, idx ->
                 val targetLevel = mutable[idx].indentationLevel
-                mutable.add(idx + 1, TextBlock(id = UUID.randomUUID().toString(), text = "", indentationLevel = targetLevel, updatedAt = now))
+                val targetAlignment = mutable[idx].textAlignmentOrNull() ?: TextAlignment.LEFT
+                mutable.add(idx + 1, TextBlock(id = UUID.randomUUID().toString(), text = "", indentationLevel = targetLevel, textAlignment = targetAlignment, updatedAt = now))
             }
         }
         clearSelection()
         scheduleAutosave()
+    }
+
+    private fun withText(b: NoteBlock, newText: String, now: Long, spans: List<InlineSpan> = b.inlineSpansOrEmpty()): NoteBlock = when (b) {
+        is TextBlock -> b.copy(text = newText, inlineSpans = spans, updatedAt = now)
+        is HeadingBlock -> b.copy(text = newText, inlineSpans = spans, updatedAt = now)
+        is CheckboxBlock -> b.copy(text = newText, inlineSpans = spans, updatedAt = now)
+        is BulletedListBlock -> b.copy(text = newText, inlineSpans = spans, updatedAt = now)
+        is NumberedListBlock -> b.copy(text = newText, inlineSpans = spans, updatedAt = now)
+        is ToggleBlock -> b.copy(text = newText, inlineSpans = spans, updatedAt = now)
+        is CodeBlock -> b.copy(code = newText, updatedAt = now)
+        is QuoteBlock -> b.copy(text = newText, inlineSpans = spans, updatedAt = now)
+        else -> b
     }
 
     fun updateBlockText(blockId: String, newText: String) {
@@ -692,17 +967,8 @@ abstract class BaseEditorViewModel(
 
         modifyBlocks { list ->
             mapBlockById(list, blockId, now) { b ->
-                when (b) {
-                    is TextBlock -> b.copy(text = newText, updatedAt = now)
-                    is HeadingBlock -> b.copy(text = newText, updatedAt = now)
-                    is CheckboxBlock -> b.copy(text = newText, updatedAt = now)
-                    is BulletedListBlock -> b.copy(text = newText, updatedAt = now)
-                    is NumberedListBlock -> b.copy(text = newText, updatedAt = now)
-                    is ToggleBlock -> b.copy(text = newText, updatedAt = now)
-                    is CodeBlock -> b.copy(code = newText, updatedAt = now)
-                    is QuoteBlock -> b.copy(text = newText, updatedAt = now)
-                    else -> b
-                }
+                val shiftedSpans = shiftSpansForEdit(b.inlineSpansOrEmpty(), getBlockText(b), newText)
+                withText(b, newText, now, shiftedSpans)
             }
         }
         scheduleAutosave()
@@ -1363,7 +1629,8 @@ abstract class BaseEditorViewModel(
         modifyBlocks { list ->
             spliceAtBlock(list, id, now) { mutable, idx ->
                 val indent = mutable[idx].indentationLevel
-                mutable.add(idx, TextBlock(id = newId, text = "", indentationLevel = indent, updatedAt = now))
+                val alignment = mutable[idx].textAlignmentOrNull() ?: TextAlignment.LEFT
+                mutable.add(idx, TextBlock(id = newId, text = "", indentationLevel = indent, textAlignment = alignment, updatedAt = now))
             }
         }
         _focusRequest.value = FocusRequest(id = newId)
@@ -1376,7 +1643,8 @@ abstract class BaseEditorViewModel(
         modifyBlocks { list ->
             spliceAtBlock(list, id, now) { mutable, idx ->
                 val indent = mutable[idx].indentationLevel
-                mutable.add(idx + 1, TextBlock(id = newId, text = "", indentationLevel = indent, updatedAt = now))
+                val alignment = mutable[idx].textAlignmentOrNull() ?: TextAlignment.LEFT
+                mutable.add(idx + 1, TextBlock(id = newId, text = "", indentationLevel = indent, textAlignment = alignment, updatedAt = now))
             }
         }
         _focusRequest.value = FocusRequest(id = newId)
