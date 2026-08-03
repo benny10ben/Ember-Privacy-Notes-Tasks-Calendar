@@ -218,7 +218,26 @@ fun NoteBlockItem(
     var isReminderPickerOpening by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
-    val isKeyboardOpen = WindowInsets.ime.getBottom(density) > 0
+    val imeInsets = WindowInsets.ime
+    val isKeyboardOpen = imeInsets.getBottom(density) > 0
+
+    val afterKeyboardCloses: (action: () -> Unit) -> Unit = { action ->
+        if (!isKeyboardOpen) {
+            action()
+        } else {
+            isReminderPickerOpening = true
+            focusManager.clearFocus()
+            keyboardController?.hide()
+            scope.launch {
+                withTimeoutOrNull(600.milliseconds) {
+                    snapshotFlow { imeInsets.getBottom(density) }.first { it == 0 }
+                }
+                delay(50L.milliseconds)
+                action()
+                isReminderPickerOpening = false
+            }
+        }
+    }
 
     val isDatabase = block is DatabaseBlock
 
@@ -653,24 +672,28 @@ fun NoteBlockItem(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(5.dp))
-                                        .background(MaterialTheme.colorScheme.surface)
+                                if (hasReminder) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(5.dp))
+                                            .background(MaterialTheme.colorScheme.surface)
                                         .clickable {
                                             val occurrenceDate = block.reminderTimestamp?.let {
                                                 Instant.fromEpochMilliseconds(it)
                                                     .toLocalDateTime(TimeZone.currentSystemDefault()).date.toString()
                                             }
-                                            actions.onOpenEventOptions(block.id, occurrenceDate)
+                                            afterKeyboardCloses {
+                                                actions.onOpenEventOptions(block.id, occurrenceDate)
+                                            }
                                         }
-                                        .padding(horizontal = 8.dp, vertical = 6.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Default.MoreVert, "Event options",
-                                        modifier = Modifier.size(15.dp),
-                                        tint = MaterialTheme.colorScheme.onBackground
-                                    )
+                                            .padding(horizontal = 8.dp, vertical = 6.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.MoreVert, "Event options",
+                                            modifier = Modifier.size(15.dp),
+                                            tint = MaterialTheme.colorScheme.onBackground
+                                        )
+                                    }
                                 }
                                 Box {
                                     Row(

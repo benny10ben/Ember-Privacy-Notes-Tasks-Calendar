@@ -218,11 +218,6 @@ fun DbOptionRow(
     }
 }
 
-/**
- * Shown whenever the user asks to insert a new database (slash menu, editor toolbar, or the
- * "+" quick-add). Lets them start blank or reuse a saved schema (columns + views, never rows)
- * instead of always starting from a single blank "Name" column.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DatabaseTemplatePickerSheet(
@@ -232,15 +227,17 @@ fun DatabaseTemplatePickerSheet(
     onCreateBlank: () -> Unit,
     onSelectTemplate: (DatabaseTemplateEntity) -> Unit
 ) {
-    InlyBottomSheet(expanded = expanded, onDismiss = onDismiss, title = "Add Database") { _ ->
-    CompositionLocalProvider(
+    InlyBottomSheet(expanded = expanded, onDismiss = onDismiss, title = "Add Database") { closeAnd ->
+        CompositionLocalProvider(
         LocalIndication provides if (isDesktopPlatform) ripple() else NoRippleIndicationNodeFactory,
         LocalRippleConfiguration provides if (isDesktopPlatform) LocalRippleConfiguration.current else null,
     ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 22.dp)) {
             DbOptionRow(icon = painterResource(Res.drawable.hash), text = "Create Blank Database") {
-                onDismiss()
-                onCreateBlank()
+                closeAnd {
+                    onDismiss()
+                    onCreateBlank()
+                }
             }
 
             if (templates.isNotEmpty()) {
@@ -257,8 +254,10 @@ fun DatabaseTemplatePickerSheet(
                 )
                 templates.forEach { template ->
                     DbOptionRow(icon = painterResource(Res.drawable.files), text = template.name) {
-                        onDismiss()
-                        onSelectTemplate(template)
+                        closeAnd {
+                            onDismiss()
+                            onSelectTemplate(template)
+                        }
                     }
                 }
             }

@@ -103,6 +103,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.ui.graphics.painter.Painter
 import com.ben.inly.presentation.shared.components.InlyButtonPrimary
 import com.ben.inly.presentation.shared.editor.BlockStyleBar
+import com.ben.inly.presentation.shared.components.rememberKeyboardHandoff
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
@@ -256,6 +257,7 @@ fun NoteScreen(
     val isLoading by viewModel.isLoading.collectAsState()
 
     val scope = rememberCoroutineScope()
+    val handoff = rememberKeyboardHandoff()
 
     val handleToggleFavorite: () -> Unit = {
         showOptionsMenu = false
@@ -350,7 +352,7 @@ fun NoteScreen(
         scope.launch { editorListState.animateScrollToItem(0) }
     }
 
-    val editorActions = remember(viewModel, onOpenFile) {
+    val editorActions = remember(viewModel, onOpenFile, handoff) {
         object : EditorActions {
             override fun onClearSlashQuery() = viewModel.clearActiveSlashQuery()
             override fun onClearFocusRequest() = viewModel.clearFocusRequest()
@@ -377,8 +379,8 @@ fun NoteScreen(
             override fun onAddBlankBlock() = viewModel.addBlankBlockBelowFocused()
             override fun onInsertMediaBlock(type: String) {
                 when (type) {
-                    "database" -> showDatabasePicker = true
-                    "linked_note" -> showNotePickerDialog = true
+                    "database" -> handoff.run { showDatabasePicker = true }
+                    "linked_note" -> handoff.run { showNotePickerDialog = true }
                     else -> viewModel.insertNewMediaBlock(type)
                 }
             }

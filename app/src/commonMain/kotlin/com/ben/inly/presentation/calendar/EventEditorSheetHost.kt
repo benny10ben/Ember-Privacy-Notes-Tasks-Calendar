@@ -33,8 +33,7 @@ fun EventEditorSheetHost(
     // emission has landed - collectAsState just always reflects whatever the flow has emitted so
     // far, recomputing from scratch whenever the key changes.
     val resolvedEvent: CalendarEvent? by remember(targetBlockId, targetOccurrenceDate) {
-        val id = targetBlockId
-        if (id == null) flowOf(null) else calendarViewModel.eventForBlock(id, targetOccurrenceDate)
+        if (targetBlockId == null) flowOf(null) else calendarViewModel.eventForBlock(targetBlockId, targetOccurrenceDate)
     }.collectAsState(initial = null)
 
     LaunchedEffect(targetBlockId, resolvedEvent?.blockId) {

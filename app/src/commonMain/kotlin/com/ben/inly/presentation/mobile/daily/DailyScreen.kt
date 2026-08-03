@@ -62,6 +62,7 @@ import com.ben.inly.presentation.shared.UserSettings
 import com.ben.inly.presentation.shared.components.InlyBottomSheet
 import com.ben.inly.presentation.shared.components.TopBarIconButtonGroup
 import com.ben.inly.presentation.shared.components.TopBarIconButtonItem
+import com.ben.inly.presentation.shared.components.rememberKeyboardHandoff
 import com.ben.inly.presentation.shared.editor.BlockStyleBar
 import com.ben.inly.presentation.shared.rememberStableStatusBarsPadding
 import com.ben.inly.presentation.shared.stableStatusBarsPadding
@@ -180,6 +181,7 @@ fun DailyScreen(
     val databaseTemplates by viewModel.databaseTemplates.collectAsState()
     var showDatabasePicker by remember { mutableStateOf(false) }
     var showNotePickerDialog by remember { mutableStateOf(false) }
+    val handoff = rememberKeyboardHandoff()
 
     var eventOptionsTargetBlockId by remember { mutableStateOf<String?>(null) }
     var eventOptionsOccurrenceDate by remember { mutableStateOf<String?>(null) }
@@ -221,7 +223,7 @@ fun DailyScreen(
 
     var isListScrollEnabled by remember { mutableStateOf(true) }
 
-    val sharedEditorActions = remember(viewModel, onOpenFile) {
+    val sharedEditorActions = remember(viewModel, onOpenFile, handoff) {
         object : EditorActions {
             override fun onClearSlashQuery() = viewModel.clearActiveSlashQuery()
             override fun onClearFocusRequest() = viewModel.clearFocusRequest()
@@ -248,8 +250,8 @@ fun DailyScreen(
             override fun onAddBlankBlock() = viewModel.addBlankBlockBelowFocused()
             override fun onInsertMediaBlock(type: String) {
                 when (type) {
-                    "database" -> showDatabasePicker = true
-                    "linked_note" -> showNotePickerDialog = true
+                    "database" -> handoff.run { showDatabasePicker = true }
+                    "linked_note" -> handoff.run { showNotePickerDialog = true }
                     else -> viewModel.insertNewMediaBlock(type)
                 }
             }
