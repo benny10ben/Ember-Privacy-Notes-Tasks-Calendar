@@ -21,6 +21,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
+import kotlinx.datetime.Clock
+import kotlinx.datetime.DatePeriod
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.minus
+import kotlinx.datetime.plus
+import kotlinx.datetime.todayIn
 import org.koin.compose.viewmodel.koinViewModel
 import com.ben.inly.presentation.shared.stableStatusBarsPadding
 import com.ben.inly.domain.model.CellData
@@ -61,6 +68,38 @@ fun RemindersScreen(
     val clipboardManager = LocalClipboardManager.current
     val focusRequest: FocusRequest? by viewModel.focusRequest.collectAsState()
     val allLinkableNotes by viewModel.allLinkableNotes.collectAsState(emptyList())
+    val blockLocations by viewModel.blockLocations.collectAsState()
+
+    val inboxNoteId = remember(allLinkableNotes) {
+        allLinkableNotes.firstOrNull { it.title.equals("Inbox", ignoreCase = true) && !it.isDaily }?.noteId
+    }
+    val noteTitleById = remember(allLinkableNotes) {
+        allLinkableNotes.associate { it.noteId to it.title }
+    }
+    val sectionLabelFor = remember(blockLocations, inboxNoteId, noteTitleById) {
+        { block: NoteBlock ->
+            val location = blockLocations[block.id]
+            when {
+                location == null -> null
+                !location.isDaily && location.noteId == inboxNoteId -> null
+                location.isDaily -> dailyDateLabel(location.noteId)
+                else -> noteTitleById[location.noteId] ?: "Note"
+            }
+        }
+    }
+    val groupedBlocks = remember(blocks, blockLocations, inboxNoteId, noteTitleById) {
+        val (rest, located) = blocks.partition { block ->
+            val location = blockLocations[block.id]
+            location == null || (!location.isDaily && location.noteId == inboxNoteId)
+        }
+        val dailyBlocks = located
+            .filter { blockLocations[it.id]?.isDaily == true }
+            .sortedBy { blockLocations[it.id]?.noteId }
+        val noteBlocks = located
+            .filter { blockLocations[it.id]?.isDaily == false }
+            .sortedBy { noteTitleById[blockLocations[it.id]?.noteId] ?: "" }
+        rest + dailyBlocks + noteBlocks
+    }
 
     KmpBackHandler(enabled = isSelectionMode) {
         viewModel.clearSelection()
@@ -234,13 +273,14 @@ fun RemindersScreen(
                 }
 
                 EditorScreen(
-                    blocks = blocks,
+                    blocks = groupedBlocks,
                     globalTags = emptyList(),
                     actions = editorActions,
                     focusRequest = focusRequest,
                     selectedBlockIds = selectedBlockIds,
                     topContentPadding = topPadding,
                     allLinkableNotes = allLinkableNotes,
+                    sectionLabelFor = sectionLabelFor,
                     headerContent = {
                         ScreenTitle(
                             isShowingCompleted,
@@ -292,6 +332,25 @@ fun RemindersScreen(
                     .align(Alignment.BottomCenter)
                     .then(if (isDesktopPlatform) Modifier.padding(bottom = 16.dp) else Modifier.navigationBarsPadding())
             )
+        }
+    }
+}
+
+private fun dailyDateLabel(dateString: String): String {
+    val date = try {
+        LocalDate.parse(dateString)
+    } catch (e: IllegalArgumentException) {
+        return dateString
+    }
+    val today = Clock.System.todayIn(TimeZone.currentSystemDefault())
+    return when (date) {
+        today -> "Today"
+        today.plus(DatePeriod(days = 1)) -> "Tomorrow"
+        today.minus(DatePeriod(days = 1)) -> "Yesterday"
+        else -> {
+            val shortDay = date.dayOfWeek.name.take(3).lowercase().replaceFirstChar { it.uppercase() }
+            val shortMonth = date.month.name.take(3).lowercase().replaceFirstChar { it.uppercase() }
+            "$shortDay, $shortMonth ${date.dayOfMonth}"
         }
     }
 }

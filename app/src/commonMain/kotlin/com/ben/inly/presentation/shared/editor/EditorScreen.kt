@@ -234,6 +234,7 @@ fun EditorScreen(
     topContentPadding: Dp = 0.dp,
     toolbarOffset: Dp = 0.dp,
     headerContent: (@Composable LazyItemScope.() -> Unit)? = null,
+    sectionLabelFor: ((NoteBlock) -> String?)? = null,
     mobileMenuState: MobileMenuState = MobileMenuState.MAIN,
     onMobileMenuStateChange: (MobileMenuState) -> Unit = {},
     slashQuery: String = "",
@@ -612,6 +613,22 @@ fun EditorScreen(
 
                     val previousBlock = blocks.getOrNull(index - 1)
                     val isFirstToggleChild = previousBlock is ToggleBlock && block.indentationLevel == previousBlock.indentationLevel + 1
+
+                    if (sectionLabelFor != null) {
+                        val label = sectionLabelFor(block)
+                        val previousLabel = previousBlock?.let(sectionLabelFor)
+                        if (label != null && label != previousLabel) {
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = if (isDesktopPlatform) 36.dp else 16.dp)
+                                    .padding(top = if (index == 0) 0.dp else 20.dp, bottom = 8.dp)
+                            )
+                        }
+                    }
 
                     Box(modifier = Modifier.fillMaxWidth()) {
                         NoteBlockItem(

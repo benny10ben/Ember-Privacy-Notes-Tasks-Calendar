@@ -59,6 +59,9 @@ class RemindersViewModel constructor(
     private val blockSourceMap = mutableMapOf<String, BlockLocation>()
     private val sessionBlockCache = mutableMapOf<String, BlockLocation>()
 
+    private val _blockLocations = MutableStateFlow<Map<String, BlockLocation>>(emptyMap())
+    val blockLocations: StateFlow<Map<String, BlockLocation>> = _blockLocations.asStateFlow()
+
     private val localEditTimestamps = mutableMapOf<String, Long>()
     private val localToggleTimestamps = mutableMapOf<String, Long>()
 
@@ -127,6 +130,7 @@ class RemindersViewModel constructor(
                 }
 
                 blockSourceMap.putAll(sessionBlockCache)
+                _blockLocations.value = blockSourceMap.toMap()
 
                 _activeBlocks.update { currentList ->
                     val updatedList = currentList.mapNotNull { block ->
@@ -239,6 +243,7 @@ class RemindersViewModel constructor(
                     val location = BlockLocation(noteId = inboxMeta.noteId, isDaily = false)
                     blockSourceMap[id] = location
                     sessionBlockCache[id] = location
+                    _blockLocations.value = blockSourceMap.toMap()
 
                     _activeBlocks.update { currentList ->
                         listOf(newBlock) + currentList
@@ -388,6 +393,7 @@ class RemindersViewModel constructor(
                     }
 
                     blockSourceMap[blockId] = loc.copy(noteId = targetDateString)
+                    _blockLocations.value = blockSourceMap.toMap()
                     SyncEventBus.emitBlockMoved(blockId, fromDateString = loc.noteId, toDateString = targetDateString)
                     notificationTitle = repository.getDailyNoteMetadata(targetDateString)?.title?.ifBlank { "Daily Note" } ?: "Daily Note"
                 } else if (loc.isDaily) {
@@ -531,6 +537,7 @@ class RemindersViewModel constructor(
                 val inboxLoc = BlockLocation(noteId = inboxMeta.noteId, isDaily = false)
                 blockSourceMap[newId] = inboxLoc
                 sessionBlockCache[newId] = inboxLoc
+                _blockLocations.value = blockSourceMap.toMap()
                 localEditTimestamps[newId] = System.currentTimeMillis()
 
                 SyncCoordinator.mutex.withLock {
