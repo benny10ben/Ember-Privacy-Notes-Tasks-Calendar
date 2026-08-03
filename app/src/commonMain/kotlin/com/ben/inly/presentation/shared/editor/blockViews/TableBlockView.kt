@@ -97,7 +97,6 @@ import inly.app.generated.resources.plus
 import inly.app.generated.resources.trash
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeout
 import org.jetbrains.compose.resources.painterResource
 import kotlin.time.Duration.Companion.milliseconds
 
