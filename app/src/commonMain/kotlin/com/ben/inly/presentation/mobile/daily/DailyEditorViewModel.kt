@@ -563,11 +563,29 @@ class DailyEditorViewModel(
         }
     }
 
-    // Ids currently materialized into extraVisibleBlocks below - backs isVirtualOccurrence so
-    // toggleCheckbox/updateBlockText/handleBackspaceOnEmpty/deleteSelectedBlocks in
-    // BaseEditorViewModel route these through the recurrence-aware paths instead of trying to
-    // mutate this day's own (unrelated) note content.
     private val _virtualOccurrenceIds = MutableStateFlow<Set<String>>(emptySet())
+    override fun orderForDisplay(
+        pinned: List<NoteBlock>,
+        extra: List<NoteBlock>,
+        rest: List<NoteBlock>
+    ): List<NoteBlock> {
+        if (extra.isEmpty() && rest.none { it is CheckboxBlock && it.recurrenceRule != null }) {
+            return pinned + rest
+        }
+
+        val recurring = mutableListOf<NoteBlock>()
+        val everythingElse = mutableListOf<NoteBlock>()
+        for (block in rest) {
+            if (block is CheckboxBlock && block.recurrenceRule != null) recurring += block
+            else everythingElse += block
+        }
+
+        recurring += extra
+        // Stable sort: equal timestamps keep their relative order, and anything somehow missing a
+        // timestamp sinks to the end of the band rather than jumping to the front.
+        recurring.sortBy { (it as? CheckboxBlock)?.reminderTimestamp ?: Long.MAX_VALUE }
+        return pinned + recurring + everythingElse
+    }
 
     override fun isVirtualOccurrence(blockId: String): Boolean = blockId in _virtualOccurrenceIds.value
     override fun virtualOccurrenceDate(blockId: String): String? = currentDateString

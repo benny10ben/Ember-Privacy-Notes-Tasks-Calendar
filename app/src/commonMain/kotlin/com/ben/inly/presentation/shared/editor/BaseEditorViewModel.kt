@@ -147,13 +147,13 @@ abstract class BaseEditorViewModel(
                 visible.add(block)
                 if (block is ToggleBlock && !block.isExpanded) skipUntilLevel = block.indentationLevel
             }
+            val realIds = visible.mapTo(HashSet()) { it.id }
+            val (pinnedReal, unpinnedReal) = visible.partition { it.isPinned }
 
-            // Last-resort guard against a stray top-level duplicate id (sync corruption, a stale copy
-            // left behind by a non-recursive removal, ...) reaching EditorScreen's LazyColumn, which
-            // crashes with "Key was already used" the moment two entries in this list share an id.
+            val ordered = orderForDisplay(pinnedReal, extra.filter { it.id !in realIds }, unpinnedReal)
+
             val deduped = LinkedHashMap<String, NoteBlock>()
-            visible.forEach { deduped[it.id] = it }
-            extra.forEach { deduped.putIfAbsent(it.id, it) }
+            ordered.forEach { deduped[it.id] = it }
             deduped.values.toList()
         }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     }
@@ -173,6 +173,17 @@ abstract class BaseEditorViewModel(
     // A "virtual occurrence" is a CheckboxBlock materialized into _blocks for a recurring series
     // whose literal storage lives elsewhere (see DailyEditorViewModel) - only DailyEditorViewModel
     // overrides these; NoteEditorViewModel never has any, so the defaults are all no-ops/false.
+    // Interleaves the three display groups. Base keeps them as three contiguous runs; only
+    // DailyEditorViewModel overrides this, to merge recurring checkboxes into the virtual band and
+    // sort the result by reminder time. Purely presentational - `extra` is display-only and the
+    // real blocks keep their _blocks order, so nothing here reaches a save path. Implementations
+    // must return every input block exactly once and must not fabricate new ones.
+    protected open fun orderForDisplay(
+        pinned: List<NoteBlock>,
+        extra: List<NoteBlock>,
+        rest: List<NoteBlock>
+    ): List<NoteBlock> = pinned + extra + rest
+
     protected open fun isVirtualOccurrence(blockId: String): Boolean = false
     protected open fun onVirtualOccurrenceToggled(blockId: String, isChecked: Boolean) {}
     protected open fun onVirtualOccurrenceTextEdited(blockId: String, text: String) {}
@@ -1140,6 +1151,22 @@ abstract class BaseEditorViewModel(
     }
 
     fun handleEnter(id: String, textBefore: String, textAfter: String) {
+        if (isVirtualOccurrence(id)) {
+            val firstUnpinned = _blocks.value.firstOrNull { !it.isDeleted && !it.isPinned }
+            if (firstUnpinned is TextBlock && firstUnpinned.text.isEmpty()) {
+                _focusRequest.value = FocusRequest(id = firstUnpinned.id, placeCursorAtEnd = true)
+                return
+            }
+            val newId = UUID.randomUUID().toString()
+            modifyBlocks { list ->
+                list.toMutableList().apply {
+                    add(0, TextBlock(id = newId, text = "", indentationLevel = 0, updatedAt = System.currentTimeMillis()))
+                }
+            }
+            _focusRequest.value = FocusRequest(id = newId, placeCursorAtEnd = true)
+            scheduleAutosave()
+            return
+        }
         var blockToFocusId = ""
         val now = System.currentTimeMillis()
         modifyBlocks { list ->
