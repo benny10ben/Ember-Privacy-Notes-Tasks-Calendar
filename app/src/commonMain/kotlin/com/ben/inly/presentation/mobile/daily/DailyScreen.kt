@@ -402,7 +402,7 @@ fun DailyScreen(
                             onSlashQueryChange = { slashQuery = it },
                             bottomContentPadding = bottomContentPadding,
                             isCurrentActivePage = isCurrentActivePage,
-                            topContentPadding = rememberStableStatusBarsPadding().calculateTopPadding() + 68.dp,
+                            topContentPadding = rememberStableStatusBarsPadding().calculateTopPadding() + 72.dp,
                             headerContent = {
                                 CollapsedWeekStrip(
                                     selectedDate = selectedDate,
@@ -411,7 +411,7 @@ fun DailyScreen(
                                     initialPage = initialPage,
                                     initialDate = initialDate
                                 )
-                                Spacer(Modifier.height(14.dp))
+                                Spacer(Modifier.height(18.dp))
                             }
                         )
                     }

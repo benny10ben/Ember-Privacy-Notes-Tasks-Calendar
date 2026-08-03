@@ -262,12 +262,18 @@ fun EditorScreen(
     }
 
     if (!isDesktopPlatform && isCurrentActivePage) {
-        val imeBottom = WindowInsets.ime.getBottom(LocalDensity.current)
-        val isKeyboardOpen = imeBottom > 0
+        val closeDensity = LocalDensity.current
+        val imeBottom = WindowInsets.ime.getBottom(closeDensity)
+        // Some devices never settle the ime inset back to exactly 0 after a system-driven
+        // dismiss (back gesture, drag-to-close) - NoteBlockItem's IsolatedEditorTextField already
+        // works around the same platform gap with a timeout. A small px tolerance here avoids
+        // this effect waiting forever on a residual non-zero inset.
+        val keyboardClosedThresholdPx = remember(closeDensity) { with(closeDensity) { 2.dp.toPx() } }
+        val isKeyboardOpen = imeBottom > keyboardClosedThresholdPx
         LaunchedEffect(isKeyboardOpen, focusHandoffInFlight) {
             if (isKeyboardOpen || focusHandoffInFlight) return@LaunchedEffect
             delay(250.milliseconds)
-            focusManager.clearFocus()
+            focusManager.clearFocus(force = true)
             activeBlockId = null
             GlobalEditorState.currentlyFocusedBlockId = null
             localFocusRequest = null
