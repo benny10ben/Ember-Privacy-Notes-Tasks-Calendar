@@ -653,6 +653,25 @@ fun NoteBlockItem(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(5.dp))
+                                        .background(MaterialTheme.colorScheme.surface)
+                                        .clickable {
+                                            val occurrenceDate = block.reminderTimestamp?.let {
+                                                Instant.fromEpochMilliseconds(it)
+                                                    .toLocalDateTime(TimeZone.currentSystemDefault()).date.toString()
+                                            }
+                                            actions.onOpenEventOptions(block.id, occurrenceDate)
+                                        }
+                                        .padding(horizontal = 8.dp, vertical = 6.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.MoreVert, "Event options",
+                                        modifier = Modifier.size(15.dp),
+                                        tint = MaterialTheme.colorScheme.onBackground
+                                    )
+                                }
                                 Box {
                                     Row(
                                         modifier = Modifier
@@ -746,25 +765,6 @@ fun NoteBlockItem(
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
                                     )
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(5.dp))
-                                            .background(MaterialTheme.colorScheme.surface)
-                                            .clickable {
-                                                val occurrenceDate = block.reminderTimestamp?.let {
-                                                    Instant.fromEpochMilliseconds(it)
-                                                        .toLocalDateTime(TimeZone.currentSystemDefault()).date.toString()
-                                                }
-                                                actions.onOpenEventOptions(block.id, occurrenceDate)
-                                            }
-                                            .padding(horizontal = 8.dp, vertical = 6.dp)
-                                    ) {
-                                        Icon(
-                                            Icons.Default.MoreVert, "Event options",
-                                            modifier = Modifier.size(15.dp),
-                                            tint = MaterialTheme.colorScheme.onBackground
-                                        )
-                                    }
                                 }
                             }
                         }
