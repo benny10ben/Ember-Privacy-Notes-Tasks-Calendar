@@ -1605,6 +1605,7 @@ abstract class BaseEditorViewModel(
                 }
                 "voice" -> VoiceBlock(id = newId, indentationLevel = indent, isPinned = isPinnedContext, updatedAt = now)
                 "database" -> buildDatabaseBlock(newId, indent, isPinnedContext, now, databaseTemplate)
+                "table" -> TableBlock(id = newId, indentationLevel = indent, isPinned = isPinnedContext, updatedAt = now)
                 "sketch" -> SketchBlock(id = newId, indentationLevel = indent, isPinned = isPinnedContext, updatedAt = now)
                 else -> return@modifyBlocks list
             }
@@ -1640,6 +1641,36 @@ abstract class BaseEditorViewModel(
         modifyBlocks { list ->
             mapBlockById(list, blockId) {
                 if (it is SketchBlock) it.copy(strokes = strokes, updatedAt = now) else it
+            }
+        }
+        scheduleAutosave()
+    }
+
+    fun updateTable(blockId: String, rows: List<List<String>>) {
+        val now = System.currentTimeMillis()
+        modifyBlocks { list ->
+            mapBlockById(list, blockId) {
+                if (it is TableBlock) it.copy(rows = rows, updatedAt = now) else it
+            }
+        }
+        scheduleAutosave()
+    }
+
+    fun updateTableStyle(
+        blockId: String,
+        cellStyles: Map<String, TableCellStyle>,
+        rowStyles: Map<String, TableCellStyle>,
+        columnStyles: Map<String, TableCellStyle>
+    ) {
+        val now = System.currentTimeMillis()
+        modifyBlocks { list ->
+            mapBlockById(list, blockId) {
+                if (it is TableBlock) it.copy(
+                    cellStyles = cellStyles,
+                    rowStyles = rowStyles,
+                    columnStyles = columnStyles,
+                    updatedAt = now
+                ) else it
             }
         }
         scheduleAutosave()
@@ -1981,6 +2012,21 @@ abstract class BaseEditorViewModel(
                     val moved = cols.removeAt(fromIndex)
                     cols.add(toIndex, moved)
                     db.copy(columns = cols, updatedAt = now)
+                } else db
+            }
+        }
+        scheduleAutosave()
+    }
+
+    fun reorderDbRows(blockId: String, fromIndex: Int, toIndex: Int) {
+        val now = System.currentTimeMillis()
+        modifyBlocks { list ->
+            mapBlockById(list, blockId) { db ->
+                if (db is DatabaseBlock) {
+                    val rows = db.rows.toMutableList()
+                    val moved = rows.removeAt(fromIndex)
+                    rows.add(toIndex, moved)
+                    db.copy(rows = rows, updatedAt = now)
                 } else db
             }
         }

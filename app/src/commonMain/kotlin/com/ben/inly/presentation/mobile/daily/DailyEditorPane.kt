@@ -184,6 +184,7 @@ fun DailyEditorPane(
             override fun onAddDbFilter(blockId: String, colId: String, operator: String, value: String) = viewModel.addDbFilter(blockId, colId, operator, value)
             override fun onRemoveDbFilter(blockId: String, config: FilterConfig) = viewModel.removeDbFilter(blockId, config)
             override fun onReorderDbColumns(blockId: String, from: Int, to: Int) = viewModel.reorderDbColumns(blockId, from, to)
+            override fun onReorderDbRows(blockId: String, from: Int, to: Int) = viewModel.reorderDbRows(blockId, from, to)
             override fun onReorderDatabaseViews(blockId: String, from: Int, to: Int) = viewModel.reorderDatabaseViews(blockId, from, to)
             override fun onUpdateDbFormula(blockId: String, colId: String, expression: String) = viewModel.updateDbFormula(blockId, colId, expression)
             override fun onDeleteDbColumn(blockId: String, colId: String) = viewModel.deleteDbColumn(blockId, colId)
@@ -222,6 +223,14 @@ fun DailyEditorPane(
             override fun onTogglePin() = viewModel.togglePinSelectedBlocks()
             override fun onUpdateSketch(id: String, strokes: List<Stroke>) =
                 viewModel.updateSketchStrokes(id, strokes)
+            override fun onUpdateTable(id: String, rows: List<List<String>>) =
+                viewModel.updateTable(id, rows)
+            override fun onUpdateTableStyle(
+                id: String,
+                cellStyles: Map<String, com.ben.inly.domain.model.TableCellStyle>,
+                rowStyles: Map<String, com.ben.inly.domain.model.TableCellStyle>,
+                columnStyles: Map<String, com.ben.inly.domain.model.TableCellStyle>
+            ) = viewModel.updateTableStyle(id, cellStyles, rowStyles, columnStyles)
             override fun onAddBlockAbove(id: String) = viewModel.addBlockAbove(id)
             override fun onAddBlockBelow(id: String) = viewModel.addBlockBelow(id)
             override fun onUpdateDbAggregation(blockId: String, colId: String, aggregationType: String?) =

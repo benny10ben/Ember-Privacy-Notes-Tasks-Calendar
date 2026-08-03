@@ -224,6 +224,7 @@ fun RemindersScreen(
                         override fun onAddDbFilter(blockId: String, colId: String, operator: String, value: String) {}
                         override fun onRemoveDbFilter(blockId: String, config: FilterConfig) {}
                         override fun onReorderDbColumns(blockId: String, from: Int, to: Int) {}
+                        override fun onReorderDbRows(blockId: String, from: Int, to: Int) {}
                         override fun onReorderDatabaseViews(blockId: String, from: Int, to: Int) {}
                         override fun onUpdateDbFormula(blockId: String, colId: String, expression: String) {}
                         override fun onDeleteDbColumn(blockId: String, colId: String) {}
@@ -246,6 +247,13 @@ fun RemindersScreen(
                         override fun onTogglePin() {}
                         override fun setScrollEnabled(enabled: Boolean) {}
                         override fun onUpdateSketch(id: String, strokes: List<com.ben.inly.domain.model.Stroke>) {}
+                        override fun onUpdateTable(id: String, rows: List<List<String>>) {}
+                        override fun onUpdateTableStyle(
+                            id: String,
+                            cellStyles: Map<String, com.ben.inly.domain.model.TableCellStyle>,
+                            rowStyles: Map<String, com.ben.inly.domain.model.TableCellStyle>,
+                            columnStyles: Map<String, com.ben.inly.domain.model.TableCellStyle>
+                        ) {}
                         override fun onAddBlockAbove(id: String) {}
                         override fun onAddBlockBelow(id: String) {}
                         override fun onUpdateDbAggregation(blockId: String, colId: String, aggregationType: String?) {}

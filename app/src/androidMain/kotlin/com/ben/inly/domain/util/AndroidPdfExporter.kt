@@ -247,6 +247,32 @@ fun generateAndSaveAndroidPdf(
                     }
                 }
 
+                is TableBlock -> {
+                    val colCount = block.rows.firstOrNull()?.size ?: 0
+                    if (colCount == 0) continue
+
+                    val colWidth = availableWidth / colCount
+                    val rowHeight = 20f
+                    textPaint.textSize = 10f
+                    val borderPaint = android.graphics.Paint().apply {
+                        color = android.graphics.Color.LTGRAY
+                        style = android.graphics.Paint.Style.STROKE
+                    }
+
+                    for (row in block.rows) {
+                        checkPagination(rowHeight)
+                        var currentX = startX + indent
+                        for (cellText in row) {
+                            val truncated = android.text.TextUtils.ellipsize(cellText, textPaint, colWidth.toFloat() - 10f, android.text.TextUtils.TruncateAt.END).toString()
+                            canvas.drawText(truncated, currentX + 5f, currentY + 14f, textPaint)
+                            canvas.drawRect(currentX, currentY, currentX + colWidth, currentY + rowHeight, borderPaint)
+                            currentX += colWidth
+                        }
+                        currentY += rowHeight
+                    }
+                    currentY += 15f
+                }
+
                 else -> {}
             }
         }

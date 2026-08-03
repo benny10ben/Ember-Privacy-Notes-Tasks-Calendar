@@ -297,6 +297,14 @@ class NoteIndexer(
             }
         }
 
+        is TableBlock -> buildString {
+            appendLine("Table:")
+            block.rows.forEach { row ->
+                val rowText = row.filter { it.isNotBlank() }.joinToString(" | ")
+                if (rowText.isNotBlank()) appendLine("  - $rowText")
+            }
+        }.trim().ifBlank { null }
+
         is ImageBlock    -> null
         is DocumentBlock -> null
         is VoiceBlock    -> null

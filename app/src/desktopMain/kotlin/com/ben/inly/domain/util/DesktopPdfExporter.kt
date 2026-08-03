@@ -11,6 +11,7 @@ import com.ben.inly.domain.model.NoteBlock
 import com.ben.inly.domain.model.NumberedListBlock
 import com.ben.inly.domain.model.QuoteBlock
 import com.ben.inly.domain.model.SolidDividerBlock
+import com.ben.inly.domain.model.TableBlock
 import com.ben.inly.domain.model.TextBlock
 import org.apache.pdfbox.pdmodel.PDDocument
 import org.apache.pdfbox.pdmodel.PDPage
@@ -318,6 +319,56 @@ fun generateDesktopPdf(file: File, title: String, blocks: List<NoteBlock>) {
                             e.printStackTrace()
                         }
                     }
+                }
+                is TableBlock -> {
+                    val colCount = block.rows.firstOrNull()?.size ?: 0
+                    if (colCount == 0) continue
+
+                    val rowHeight = 22f
+                    val cellPadding = 4f
+                    val tableFontSize = 10f
+                    val colWidth = maxWidth / colCount
+
+                    contentStream.setStrokingColor(Color.LIGHT_GRAY)
+                    contentStream.setLineWidth(0.5f)
+
+                    fun truncateForCell(text: String, maxW: Float): String {
+                        val safeText = text.replace(Regex("[^\\x20-\\x7E\\u00A0-\\u00FF]"), "").trim()
+                        if (safeText.isEmpty()) return ""
+                        try {
+                            if ((bodyFont.getStringWidth(safeText) / 1000f) * tableFontSize <= maxW) return safeText
+                            var truncated = safeText
+                            while (truncated.isNotEmpty() && (bodyFont.getStringWidth("$truncated...") / 1000f) * tableFontSize > maxW) {
+                                truncated = truncated.dropLast(1)
+                            }
+                            return if (truncated.isEmpty()) "" else "$truncated..."
+                        } catch (_: Exception) {
+                            return ""
+                        }
+                    }
+
+                    for (row in block.rows) {
+                        checkPagination(rowHeight)
+                        var currentX = startX
+
+                        for (cellText in row) {
+                            contentStream.addRect(currentX, currentY - rowHeight, colWidth, rowHeight)
+                            contentStream.stroke()
+
+                            val text = truncateForCell(cellText.replace(Regex("[\\n\\r\\t]"), " "), colWidth - (cellPadding * 2))
+                            if (text.isNotEmpty()) {
+                                contentStream.beginText()
+                                contentStream.setFont(bodyFont, tableFontSize)
+                                contentStream.newLineAtOffset(currentX + cellPadding, currentY - rowHeight + 7f)
+                                contentStream.showText(text)
+                                contentStream.endText()
+                            }
+                            currentX += colWidth
+                        }
+                        currentY -= rowHeight
+                    }
+
+                    currentY -= 16f
                 }
                 else -> { /* Ignore complex blocks */ }
             }

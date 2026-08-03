@@ -91,6 +91,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.ui.zIndex
 import com.ben.inly.data.local.room.NoteMetadataEntity
 import com.ben.inly.domain.model.SolidDividerBlock
+import com.ben.inly.domain.model.TableBlock
 import com.ben.inly.domain.model.InlineSpan
 import com.ben.inly.domain.model.TextAlignment
 import com.ben.inly.domain.model.ThreeDotDividerBlock
@@ -110,6 +111,7 @@ import com.ben.inly.presentation.shared.editor.blockViews.AudioBlockView
 import com.ben.inly.presentation.shared.editor.blockViews.BookmarkBlockView
 import com.ben.inly.presentation.shared.editor.blockViews.LinkedNoteBlockView
 import com.ben.inly.presentation.shared.editor.blockViews.plugins.SketchCanvasBlockView
+import com.ben.inly.presentation.shared.editor.blockViews.TableBlockView
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.OffsetMapping
@@ -200,7 +202,7 @@ fun NoteBlockItem(
         is BulletedListBlock -> block.text
         is NumberedListBlock -> block.text
         is ToggleBlock -> block.text
-        is BookmarkBlock, is ImageBlock, is DocumentBlock, is DatabaseBlock, is VoiceBlock, is SketchBlock -> ""
+        is BookmarkBlock, is ImageBlock, is DocumentBlock, is DatabaseBlock, is TableBlock, is VoiceBlock, is SketchBlock -> ""
         else -> ""
     }
 
@@ -265,7 +267,7 @@ fun NoteBlockItem(
         }
     }
 
-    val isTextBased = block !is BookmarkBlock && block !is ImageBlock && block !is DocumentBlock && block !is DatabaseBlock && block !is VoiceBlock && block !is SketchBlock && block !is SolidDividerBlock && block !is ThreeDotDividerBlock && block !is LinkedNoteBlock
+    val isTextBased = block !is BookmarkBlock && block !is ImageBlock && block !is DocumentBlock && block !is DatabaseBlock && block !is TableBlock && block !is VoiceBlock && block !is SketchBlock && block !is SolidDividerBlock && block !is ThreeDotDividerBlock && block !is LinkedNoteBlock
     LaunchedEffect(focusRequest?.nonce) {
         if (focusRequest == null || focusRequest.id != block.id) return@LaunchedEffect
 
@@ -347,14 +349,14 @@ fun NoteBlockItem(
 
     val desktopExtraPadding = if (isDesktopPlatform) 16.dp else 0.dp
     val startPadding = when {
-        isDatabase -> (block.indentationLevel * 28).dp + desktopExtraPadding
+        isDatabase || block is TableBlock -> (block.indentationLevel * 28).dp + desktopExtraPadding
         block is CheckboxBlock -> (18 + (block.indentationLevel * 28)).dp + desktopExtraPadding
         block is BulletedListBlock -> (18 + (block.indentationLevel * 28)).dp + desktopExtraPadding
         block is NumberedListBlock -> (18 + (block.indentationLevel * 28)).dp + desktopExtraPadding
         block is ToggleBlock -> (18 + (block.indentationLevel * 28)).dp + desktopExtraPadding
         else -> (16 + (block.indentationLevel * 28)).dp + desktopExtraPadding
     }
-    val endPadding = (if (isDatabase) 0.dp else 16.dp) + desktopExtraPadding
+    val endPadding = (if (isDatabase || block is TableBlock) 0.dp else 16.dp) + desktopExtraPadding
 
     // INSERT-HOVER LINE (synced with the +above/+below buttons)
     val insertLineZone = if (isDesktopPlatform) gutterZone else 0
@@ -569,7 +571,7 @@ fun NoteBlockItem(
                 Modifier.weight(1f).padding(horizontal = 4.dp).drawBehind {
                     drawLine(color = primaryColor, start = Offset(0f, 0f), end = Offset(0f, size.height), strokeWidth = 4.dp.toPx())
                 }.padding(start = 16.dp, top = 4.dp, bottom = 4.dp)
-            } else if (isDatabase) {
+            } else if (isDatabase || block is TableBlock) {
                 Modifier.weight(1f)
             } else {
                 Modifier.weight(1f).padding(horizontal = 4.dp)
@@ -843,6 +845,14 @@ fun NoteBlockItem(
                                     allLinkableNotes = allLinkableNotes,
                                 )
                             }
+                            is TableBlock -> TableBlockView(
+                                block = block,
+                                inSelectionMode = inSelectionMode,
+                                onUpdateTable = { actions.onUpdateTable(block.id, it) },
+                                onUpdateTableStyle = { cellStyles, rowStyles, columnStyles ->
+                                    actions.onUpdateTableStyle(block.id, cellStyles, rowStyles, columnStyles)
+                                }
+                            )
                             is VoiceBlock -> AudioBlockView(
                                 block = block,
                                 inSelectionMode = inSelectionMode,

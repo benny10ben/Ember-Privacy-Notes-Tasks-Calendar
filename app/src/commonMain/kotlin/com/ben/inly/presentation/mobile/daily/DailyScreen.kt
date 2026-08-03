@@ -88,6 +88,7 @@ private fun Modifier.noRippleClickable(onClick: () -> Unit): Modifier = composed
 fun DailyScreen(
     onSelectionModeChange: (Boolean) -> Unit = {},
     bottomContentPadding: Dp = 0.dp,
+    isCompact: Boolean = false,
     onPickImage: (onPathSelected: (String) -> Unit) -> Unit = {},
     onTakePhoto: (onPathSelected: (String) -> Unit) -> Unit = {},
     onPickDocument: (onPathSelected: (String) -> Unit) -> Unit = {},
@@ -271,6 +272,7 @@ fun DailyScreen(
             override fun onAddDbFilter(blockId: String, colId: String, operator: String, value: String) = viewModel.addDbFilter(blockId, colId, operator, value)
             override fun onRemoveDbFilter(blockId: String, config: FilterConfig) = viewModel.removeDbFilter(blockId, config)
             override fun onReorderDbColumns(blockId: String, from: Int, to: Int) = viewModel.reorderDbColumns(blockId, from, to)
+            override fun onReorderDbRows(blockId: String, from: Int, to: Int) = viewModel.reorderDbRows(blockId, from, to)
             override fun onReorderDatabaseViews(blockId: String, from: Int, to: Int) = viewModel.reorderDatabaseViews(blockId, from, to)
             override fun onUpdateDbFormula(blockId: String, colId: String, expression: String) = viewModel.updateDbFormula(blockId, colId, expression)
             override fun onDeleteDbColumn(blockId: String, colId: String) = viewModel.deleteDbColumn(blockId, colId)
@@ -312,6 +314,14 @@ fun DailyScreen(
             }
             override fun onUpdateSketch(id: String, strokes: List<Stroke>) =
                 viewModel.updateSketchStrokes(id, strokes)
+            override fun onUpdateTable(id: String, rows: List<List<String>>) =
+                viewModel.updateTable(id, rows)
+            override fun onUpdateTableStyle(
+                id: String,
+                cellStyles: Map<String, com.ben.inly.domain.model.TableCellStyle>,
+                rowStyles: Map<String, com.ben.inly.domain.model.TableCellStyle>,
+                columnStyles: Map<String, com.ben.inly.domain.model.TableCellStyle>
+            ) = viewModel.updateTableStyle(id, cellStyles, rowStyles, columnStyles)
             override fun onAddBlockAbove(id: String) = viewModel.addBlockAbove(id)
             override fun onAddBlockBelow(id: String) = viewModel.addBlockBelow(id)
             override fun onUpdateDbAggregation(blockId: String, colId: String, aggregationType: String?) =
@@ -402,19 +412,10 @@ fun DailyScreen(
                             onMobileMenuStateChange = { mobileMenuState = it },
                             slashQuery = slashQuery,
                             onSlashQueryChange = { slashQuery = it },
-                            bottomContentPadding = bottomContentPadding,
+                            bottomContentPadding = bottomContentPadding +
+                                if (bottomContentPadding > 0.dp) 60.dp else 0.dp,
                             isCurrentActivePage = isCurrentActivePage,
-                            topContentPadding = rememberStableStatusBarsPadding().calculateTopPadding() + 72.dp,
-                            headerContent = {
-                                CollapsedWeekStrip(
-                                    selectedDate = selectedDate,
-                                    onDateSelected = { viewModel.selectDate(it) },
-                                    pagerState = pagerState,
-                                    initialPage = initialPage,
-                                    initialDate = initialDate
-                                )
-                                Spacer(Modifier.height(18.dp))
-                            }
+                            topContentPadding = rememberStableStatusBarsPadding().calculateTopPadding() + 72.dp
                         )
                     }
                 }
@@ -561,6 +562,23 @@ fun DailyScreen(
             Box(Modifier.fillMaxSize()) {
                 Box(modifier = Modifier.fillMaxSize()) {
                     rightPanelContent()
+                }
+
+                AnimatedVisibility(
+                    visible = !isSelectionMode && !isKeyboardOpen,
+                    enter = fadeIn(tween(200)),
+                    exit = fadeOut(tween(200)),
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .zIndex(1f)
+                        .padding(bottom = bottomContentPadding + 8.dp)
+                ) {
+                    DailyBottomWeekStrip(
+                        selectedDate = selectedDate,
+                        onDateSelected = { viewModel.selectDate(it) },
+                        hazeState = hazeState,
+                        isCompact = isCompact
+                    )
                 }
 
                 DailyTopBar(

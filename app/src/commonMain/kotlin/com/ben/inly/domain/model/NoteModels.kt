@@ -433,6 +433,46 @@ fun CellData?.displayText(): String = when (this) {
     is CellData.Formula -> result
 }
 
+enum class TableCellContentType { NONE, LINK, PHONE, EMAIL }
+
+/**
+ * Free-form styling for a table cell/row/column. Kept as one flat object (rather than per-field
+ * overrides) since [TableBlock] resolves style by precedence - cell wins over row wins over
+ * column - so a "reset" is just deleting the map entry instead of unwinding partial field merges.
+ */
+@Immutable
+@Serializable
+data class TableCellStyle(
+    val backgroundColorHex: String? = null,
+    val textColorHex: String? = null,
+    val isBold: Boolean = false,
+    val isItalic: Boolean = false,
+    val isUnderlined: Boolean = false,
+    val isStrikeThrough: Boolean = false,
+    val isCode: Boolean = false,
+    val contentType: TableCellContentType = TableCellContentType.NONE,
+    val alignment: TextAlignment? = null
+)
+
+@Immutable
+@Serializable
+@SerialName("table")
+data class TableBlock(
+    override val id: String,
+    val rows: List<List<String>> = listOf(listOf("", ""), listOf("", "")),
+    val cellStyles: Map<String, TableCellStyle> = emptyMap(),
+    val rowStyles: Map<String, TableCellStyle> = emptyMap(),
+    val columnStyles: Map<String, TableCellStyle> = emptyMap(),
+    override val indentationLevel: Int = 0,
+    override val isBold: Boolean = false,
+    override val isItalic: Boolean = false,
+    override val isStrikeThrough: Boolean = false,
+    override val isUnderlined: Boolean = false,
+    override val isDeleted: Boolean = false,
+    override val isPinned: Boolean = false,
+    override val updatedAt: Long = 0L
+) : NoteBlock()
+
 @Immutable
 @Serializable
 @SerialName("voice")
@@ -556,6 +596,7 @@ fun NoteBlock.markDeleted(): NoteBlock = when (this) {
     is ImageBlock -> copy(isDeleted = true, updatedAt = System.currentTimeMillis())
     is DocumentBlock -> copy(isDeleted = true, updatedAt = System.currentTimeMillis())
     is DatabaseBlock -> copy(isDeleted = true, updatedAt = System.currentTimeMillis())
+    is TableBlock -> copy(isDeleted = true, updatedAt = System.currentTimeMillis())
     is VoiceBlock -> copy(isDeleted = true, updatedAt = System.currentTimeMillis())
     is QuoteBlock -> copy(isDeleted = true, updatedAt = System.currentTimeMillis())
     is SketchBlock -> copy(isDeleted = true, updatedAt = System.currentTimeMillis())
@@ -622,6 +663,7 @@ fun NoteBlock.withPin(pinned: Boolean, now: Long): NoteBlock = when (this) {
     is ImageBlock -> copy(isPinned = pinned, updatedAt = now)
     is DocumentBlock -> copy(isPinned = pinned, updatedAt = now)
     is DatabaseBlock -> copy(isPinned = pinned, updatedAt = now)
+    is TableBlock -> copy(isPinned = pinned, updatedAt = now)
     is VoiceBlock -> copy(isPinned = pinned, updatedAt = now)
     is QuoteBlock -> copy(isPinned = pinned, updatedAt = now)
     is SketchBlock -> copy(isPinned = pinned, updatedAt = now)
@@ -642,6 +684,7 @@ fun NoteBlock.withUpdatedAt(now: Long): NoteBlock = when (this) {
     is ImageBlock -> copy(updatedAt = now)
     is DocumentBlock -> copy(updatedAt = now)
     is DatabaseBlock -> copy(updatedAt = now)
+    is TableBlock -> copy(updatedAt = now)
     is VoiceBlock -> copy(updatedAt = now)
     is QuoteBlock -> copy(updatedAt = now)
     is SketchBlock -> copy(updatedAt = now)
@@ -672,6 +715,7 @@ fun NoteBlock.deepCopyWithNewIds(): NoteBlock {
         is LinkedNoteBlock -> copy(id = newId)
         is ImageBlock -> copy(id = newId)
         is DocumentBlock -> copy(id = newId)
+        is TableBlock -> copy(id = newId)
         is VoiceBlock -> copy(id = newId)
         is SketchBlock -> copy(id = newId)
         is SolidDividerBlock -> copy(id = newId)

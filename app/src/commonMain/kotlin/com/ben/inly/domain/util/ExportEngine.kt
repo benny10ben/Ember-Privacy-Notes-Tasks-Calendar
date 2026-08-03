@@ -53,6 +53,11 @@ object ExportEngine {
                         builder.appendLine("$indent  $rowData")
                     }
                 }
+                is TableBlock -> {
+                    block.rows.forEach { row ->
+                        builder.appendLine("$indent  ${row.joinToString(" | ")}")
+                    }
+                }
                 is VoiceBlock, is SketchBlock -> { /* Ignored */ }
                 is LinkedNoteBlock -> { /* Ignored - only linkedNoteId is available here, no title to render */ }
             }
@@ -137,6 +142,14 @@ object ExportEngine {
                             row.cells[col.id].displayText().replace("\n", " ")
                         }
                         builder.appendLine(rowData)
+                    }
+                    builder.appendLine()
+                }
+                is TableBlock -> {
+                    val separator = block.rows.firstOrNull()?.joinToString("|", prefix = "$indent|", postfix = "|") { "---" } ?: ""
+                    block.rows.forEachIndexed { index, row ->
+                        builder.appendLine(row.joinToString(" | ", prefix = "$indent| ", postfix = " |"))
+                        if (index == 0) builder.appendLine(separator)
                     }
                     builder.appendLine()
                 }

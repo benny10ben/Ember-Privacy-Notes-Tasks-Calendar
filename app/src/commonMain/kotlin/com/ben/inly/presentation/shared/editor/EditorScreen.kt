@@ -178,6 +178,7 @@ interface EditorActions {
     fun onAddDbFilter(blockId: String, colId: String, operator: String, value: String)
     fun onRemoveDbFilter(blockId: String, config: FilterConfig)
     fun onReorderDbColumns(blockId: String, from: Int, to: Int)
+    fun onReorderDbRows(blockId: String, from: Int, to: Int)
     fun onReorderDatabaseViews(blockId: String, from: Int, to: Int)
     fun onUpdateDbFormula(blockId: String, colId: String, expression: String)
     fun onDeleteDbColumn(blockId: String, colId: String)
@@ -201,6 +202,13 @@ interface EditorActions {
     fun onTogglePin()
     fun setScrollEnabled(enabled: Boolean) {}
     fun onUpdateSketch(id: String, strokes: List<com.ben.inly.domain.model.Stroke>)
+    fun onUpdateTable(id: String, rows: List<List<String>>)
+    fun onUpdateTableStyle(
+        id: String,
+        cellStyles: Map<String, com.ben.inly.domain.model.TableCellStyle>,
+        rowStyles: Map<String, com.ben.inly.domain.model.TableCellStyle>,
+        columnStyles: Map<String, com.ben.inly.domain.model.TableCellStyle>
+    )
     fun onAddBlockAbove(id: String)
     fun onAddBlockBelow(id: String)
     fun onUpdateDbAggregation(blockId: String, colId: String, aggregationType: String?)
@@ -290,7 +298,7 @@ fun EditorScreen(
             "Text", "Heading 1", "Heading 2", "To-do List", "Bulleted List",
             "Numbered List", "Toggle List", "Quote", "Code Block",
             "Voice Note", "Image", "Document / File", "Web Bookmark",
-            "Database / Table", "Link to Note", "Bold Text", "Italic Text", "Underline Text",
+            "Database / Table", "Simple Table", "Link to Note", "Bold Text", "Italic Text", "Underline Text",
             "Strikethrough Text", "Decrease Indent", "Increase Indent",
             "Solid Line", "Three Dots"
         )
@@ -588,7 +596,7 @@ fun EditorScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = if (isDesktopPlatform) 36.dp else 16.dp)
-                                .padding(bottom = 20.dp),
+                                .padding(bottom = 20.dp, top = 6.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             TaskBadge(
@@ -1022,6 +1030,7 @@ fun DesktopSlashMenuContent(
                 SlashMenuItemData("Document / File", Icons.Default.InsertDriveFile) { onInsertMediaBlock("document") },
                 SlashMenuItemData("Web Bookmark", Icons.Default.BookmarkBorder) { onInsertMediaBlock("bookmark") },
                 SlashMenuItemData("Database / Table", Icons.Default.TableChart) { onInsertMediaBlock("database") },
+                SlashMenuItemData("Simple Table", Icons.Default.GridOn) { onInsertMediaBlock("table") },
                 SlashMenuItemData("Link to Note", Icons.Default.Description) { onInsertMediaBlock("linked_note") }
             )),
             SlashMenuSectionData("Inline Text Formatting", listOf(

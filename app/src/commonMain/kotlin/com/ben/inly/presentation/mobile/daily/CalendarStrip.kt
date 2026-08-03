@@ -1,6 +1,10 @@
 package com.ben.inly.presentation.mobile.daily
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -22,15 +26,25 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.ben.inly.data.local.room.CalendarTaskEntity
 import com.ben.inly.domain.util.isDesktopPlatform
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.hazeEffect
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.datetime.*
 import kotlin.math.abs
@@ -105,6 +119,148 @@ fun CollapsedWeekStrip(
                 onDateClick = { onDateSelected(date) }
             )
         }
+    }
+}
+
+@Composable
+fun DailyBottomWeekStrip(
+    selectedDate: LocalDate,
+    onDateSelected: (LocalDate) -> Unit,
+    hazeState: HazeState,
+    isCompact: Boolean = false,
+    modifier: Modifier = Modifier
+) {
+    var anchorDate by remember { mutableStateOf(selectedDate) }
+    LaunchedEffect(selectedDate) {
+        if (abs(anchorDate.daysUntil(selectedDate)) > 10) anchorDate = selectedDate
+    }
+
+    val dates = remember(anchorDate) { (-20..20).map { anchorDate.plus(it, DateTimeUnit.DAY) } }
+    val listState = rememberLazyListState()
+
+    val sizeSpec = tween<Dp>(durationMillis = 350, easing = FastOutSlowInEasing)
+    val pillWidth = 74.dp
+    val maxPillHeight = 32.dp
+    val pillHeight by animateDpAsState(if (isCompact) 30.dp else maxPillHeight, sizeSpec)
+    val pillSpacing = 8.dp
+    val collapsedWidth = pillWidth * 3 + pillSpacing * 2
+
+    var isExpanded by remember { mutableStateOf(false) }
+    var isProgrammaticScroll by remember { mutableStateOf(false) }
+    val isScrolling by remember { derivedStateOf { listState.isScrollInProgress } }
+    LaunchedEffect(isScrolling) {
+        if (isScrolling && !isProgrammaticScroll) {
+            isExpanded = true
+        } else if (!isScrolling) {
+            delay(3000)
+            if (!listState.isScrollInProgress) isExpanded = false
+        }
+    }
+
+    val selectedIndex = remember(dates, selectedDate) { dates.indexOf(selectedDate) }
+    LaunchedEffect(selectedIndex, isExpanded, anchorDate) {
+        if (!isExpanded && selectedIndex != -1) {
+            isProgrammaticScroll = true
+            listState.animateScrollToItem((selectedIndex - 1).coerceAtLeast(0))
+            isProgrammaticScroll = false
+        }
+    }
+
+    val fadeWidth by animateDpAsState(
+        targetValue = if (isExpanded) 0.dp else 22.dp,
+        animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing)
+    )
+
+    BoxWithConstraints(
+        modifier = modifier.fillMaxWidth().height(maxPillHeight),
+        contentAlignment = Alignment.Center
+    ) {
+        val fullWidth = maxWidth
+        val animatedWidth by animateDpAsState(
+            targetValue = if (isExpanded) fullWidth else collapsedWidth,
+            animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing)
+        )
+
+        LazyRow(
+            state = listState,
+            modifier = Modifier
+                .align(Alignment.Center)
+                .width(animatedWidth)
+                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen },
+//                .drawWithContent {
+//                    drawContent()
+//                    val fw = fadeWidth.toPx()
+//                    if (fw > 0f) {
+//                        drawRect(
+//                            brush = Brush.horizontalGradient(
+//                                0f to Color.Transparent, 1f to Color.Black,
+//                                startX = 0f, endX = fw
+//                            ),
+//                            blendMode = BlendMode.DstIn
+//                        )
+//                        drawRect(
+//                            brush = Brush.horizontalGradient(
+//                                0f to Color.Black, 1f to Color.Transparent,
+//                                startX = size.width - fw, endX = size.width
+//                            ),
+//                            blendMode = BlendMode.DstIn
+//                        )
+//                    }
+//                },
+            horizontalArrangement = Arrangement.spacedBy(pillSpacing, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            items(dates, key = { it.toString() }) { date ->
+                WeekStripChip(
+                    date = date,
+                    width = pillWidth,
+                    height = pillHeight,
+                    hazeState = hazeState,
+                    onClick = { onDateSelected(date) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun WeekStripChip(
+    date: LocalDate,
+    width: Dp,
+    height: Dp,
+    hazeState: HazeState,
+    onClick: () -> Unit
+) {
+    val shape = RoundedCornerShape(12.dp)
+    val shortDayName = date.dayOfWeek.name.take(3).lowercase().replaceFirstChar { it.uppercase() }
+
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .width(width)
+            .height(height)
+            .clip(shape)
+            .hazeEffect(hazeState, HazeStyle.Unspecified, null)
+            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.5f))
+            .border(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), shape)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) { onClick() }
+    ) {
+        Text(
+            text = shortDayName,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Normal,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+        )
+        Text(
+            text = date.dayOfMonth.toString(),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
     }
 }
 

@@ -305,6 +305,7 @@ fun InlyApp(
                         ) { backStackEntry ->
                             DailyScreen(
                                 bottomContentPadding = if (isBottomBarVisible) bottomBarHeightDp else 0.dp,
+                                isCompact = isBottomBarCompact,
                                 onSelectionModeChange = { isActive -> isSelectionActive = isActive },
                                 onPickImage = onPickImage,
                                 onTakePhoto = onTakePhoto,

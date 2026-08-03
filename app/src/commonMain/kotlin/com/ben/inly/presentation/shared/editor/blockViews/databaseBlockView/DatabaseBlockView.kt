@@ -36,6 +36,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DragIndicator
 import androidx.compose.material3.Checkbox
@@ -162,6 +164,8 @@ import inly.app.generated.resources.maximize_2
 import inly.app.generated.resources.microphone
 import inly.app.generated.resources.minimize_2
 import inly.app.generated.resources.minus
+import inly.app.generated.resources.move_left
+import inly.app.generated.resources.move_right
 import inly.app.generated.resources.paperclip
 import inly.app.generated.resources.pause
 import inly.app.generated.resources.pen
@@ -537,6 +541,36 @@ fun DatabaseBlockView(
                             painterResource(Res.drawable.arrow_right),
                             "Insert Column Right"
                         ) { applyAction { actions.onAddDbColumnAt(block.id, colIndex + 1) } }
+
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 12.dp),
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                        )
+
+                        if (rowIndex > 0) {
+                            DbOptionRow(
+                                rememberVectorPainter(Icons.Default.ArrowUpward),
+                                "Move Row Up"
+                            ) { applyAction { actions.onReorderDbRows(block.id, rowIndex, rowIndex - 1) } }
+                        }
+                        if (rowIndex < block.rows.lastIndex) {
+                            DbOptionRow(
+                                rememberVectorPainter(Icons.Default.ArrowDownward),
+                                "Move Row Down"
+                            ) { applyAction { actions.onReorderDbRows(block.id, rowIndex, rowIndex + 1) } }
+                        }
+                        if (colIndex > 0) {
+                            DbOptionRow(
+                                painterResource(Res.drawable.move_left),
+                                "Move Column Left"
+                            ) { applyAction { actions.onReorderDbColumns(block.id, colIndex, colIndex - 1) } }
+                        }
+                        if (colIndex < visibleColumns.lastIndex) {
+                            DbOptionRow(
+                                painterResource(Res.drawable.move_right),
+                                "Move Column Right"
+                            ) { applyAction { actions.onReorderDbColumns(block.id, colIndex, colIndex + 1) } }
+                        }
 
                         HorizontalDivider(
                             modifier = Modifier.padding(vertical = 12.dp),
