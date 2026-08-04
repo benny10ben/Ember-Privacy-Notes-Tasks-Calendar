@@ -29,9 +29,9 @@ import com.ben.inly.presentation.shared.components.InlyButtonPrimary
 import com.ben.inly.presentation.shared.components.TopBarIconButton
 import com.ben.inly.presentation.shared.stableStatusBarsPadding
 import com.ben.inly.presentation.mobile.home.NoteCard
+import com.ben.inly.presentation.shared.components.InlyBlur
+import com.ben.inly.presentation.shared.components.inlyBlur
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import inly.app.generated.resources.Res
 import inly.app.generated.resources.chevron_left
@@ -116,8 +116,8 @@ fun TrashScreen(
                 .then(
                     if (isScrolled) {
                         Modifier
-                            .hazeEffect(state = hazeState, style = HazeStyle.Unspecified, block = null)
-                            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.65f))
+                            .inlyBlur(hazeState, InlyBlur.Regular)
+                            .background(Color.Transparent)
                     } else {
                         Modifier
                     }

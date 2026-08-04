@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.LayoutCoordinates
@@ -41,18 +42,16 @@ import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import com.ben.inly.domain.model.BookmarkBlock
 import com.ben.inly.domain.util.isDesktopPlatform
+import com.ben.inly.presentation.shared.components.InlyBlur
 import com.ben.inly.presentation.shared.stableStatusBarsPadding
 import com.ben.inly.presentation.shared.components.KmpBackHandler
 import com.ben.inly.presentation.shared.components.TopBarIconButton
 import com.ben.inly.presentation.shared.components.customInlyShadow
+import com.ben.inly.presentation.shared.components.inlyBlur
 import com.ben.inly.presentation.shared.editor.BlockSelectionPill
 import com.ben.inly.presentation.shared.editor.FocusRequest
 import com.ben.inly.presentation.shared.editor.blockViews.BookmarkBlockView
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.haze
-import dev.chrisbanes.haze.hazeChild
-import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import inly.app.generated.resources.Res
 import inly.app.generated.resources.chevron_left
@@ -273,11 +272,7 @@ fun BookmarksScreen(
                             .height(barSize)
                             .customInlyShadow(InputContainerShape)
                             .clip(InputContainerShape)
-                            .then(if (isDesktopPlatform) Modifier else Modifier.hazeEffect(
-                                state = hazeState,
-                                style = HazeStyle.Unspecified,
-                                block = null
-                            ))
+                            .inlyBlur(hazeState, InlyBlur.Regular)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -442,7 +437,6 @@ private fun BookmarksTopBar(
     onBackClick: () -> Unit,
     onAddClick: () -> Unit
 ) {
-    val defaultBgColor = if (isDesktopPlatform) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.background.copy(alpha = 0.65f)
     val defaultContentColor = MaterialTheme.colorScheme.onSurface
 
     Row(
@@ -457,9 +451,10 @@ private fun BookmarksTopBar(
         TopBarIconButton(
             icon = painterResource(Res.drawable.chevron_left),
             contentDescription = "Back",
-            bgColor = defaultBgColor,
-            tint = defaultContentColor,
+            bgColor = Color.Transparent,
+            tint = MaterialTheme.colorScheme.primary,
             hazeState = hazeState,
+            hazeStyle = InlyBlur.Regular,
             onClick = onBackClick
         )
 
@@ -490,9 +485,10 @@ private fun BookmarksTopBar(
             TopBarIconButton(
                 icon = painterResource(Res.drawable.circle_plus),
                 contentDescription = "Add Bookmark",
-                bgColor = defaultBgColor,
-                tint = defaultContentColor,
+                bgColor = Color.Transparent,
+                tint = MaterialTheme.colorScheme.primary,
                 hazeState = hazeState,
+                hazeStyle = InlyBlur.Regular,
                 onClick = onAddClick
             )
         } else {

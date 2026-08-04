@@ -27,10 +27,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.ui.graphics.Color
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 import com.ben.inly.domain.model.ImageBlock
 import com.ben.inly.domain.util.isDesktopPlatform
+import com.ben.inly.presentation.shared.components.InlyBlur
 import com.ben.inly.presentation.shared.components.KmpBackHandler
 import com.ben.inly.presentation.shared.stableStatusBarsPadding
 import com.ben.inly.presentation.shared.editor.BlockSelectionPill
@@ -330,9 +332,10 @@ private fun ImagesTopBar(
         TopBarIconButton(
             icon = painterResource(Res.drawable.chevron_left),
             contentDescription = "Back",
-            bgColor = defaultBgColor,
-            tint = defaultContentColor,
+            bgColor = Color.Transparent,
+            tint = MaterialTheme.colorScheme.primary,
             hazeState = hazeState,
+            hazeStyle = InlyBlur.Regular,
             onClick = onBackClick
         )
 
@@ -363,9 +366,10 @@ private fun ImagesTopBar(
             TopBarIconButton(
                 icon = painterResource(Res.drawable.circle_plus),
                 contentDescription = "Add Image",
-                bgColor = defaultBgColor,
-                tint = defaultContentColor,
+                bgColor = Color.Transparent,
+                tint = MaterialTheme.colorScheme.primary,
                 hazeState = hazeState,
+                hazeStyle = InlyBlur.Regular,
                 onClick = onAddClick
             )
         } else {

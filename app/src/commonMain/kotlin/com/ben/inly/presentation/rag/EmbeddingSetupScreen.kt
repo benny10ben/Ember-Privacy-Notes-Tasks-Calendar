@@ -52,6 +52,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.ben.inly.presentation.shared.components.InlyBlur
 import com.ben.inly.presentation.shared.components.TopBarIconButton
 import com.ben.inly.presentation.shared.components.TopBarPillButton
 import dev.chrisbanes.haze.HazeState
@@ -338,9 +339,10 @@ private fun DownloadSlide(
                     Spacer(Modifier.height(12.dp))
                     TopBarPillButton(
                         text = "Pause Download",
-                        bgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.65f),
+                        bgColor = Color.Transparent,
                         tint = MaterialTheme.colorScheme.primary,
                         hazeState = hazeState,
+                        hazeStyle = InlyBlur.Regular,
                         modifier = Modifier.fillMaxWidth(),
                         onClick = onPauseClick
                     )
@@ -362,9 +364,10 @@ private fun DownloadSlide(
                 EmbeddingSetupState.Required -> {
                     TopBarPillButton(
                         text = if (isResumable) "Resume Download" else "Download Model",
-                        bgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.65f),
+                        bgColor = Color.Transparent,
                         tint = MaterialTheme.colorScheme.primary,
                         hazeState = hazeState,
+                        hazeStyle = InlyBlur.Regular,
                         modifier = Modifier.fillMaxWidth(),
                         onClick = onDownloadClick
                     )
@@ -373,9 +376,10 @@ private fun DownloadSlide(
                 is EmbeddingSetupState.DownloadFailed -> {
                     TopBarPillButton(
                         text = if (isResumable) "Resume Download" else "Try Again",
-                        bgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.65f),
+                        bgColor = Color.Transparent,
                         tint = MaterialTheme.colorScheme.primary,
                         hazeState = hazeState,
+                        hazeStyle = InlyBlur.Regular,
                         modifier = Modifier.fillMaxWidth(),
                         onClick = onDownloadClick
                     )
@@ -384,9 +388,10 @@ private fun DownloadSlide(
                 EmbeddingSetupState.DownloadComplete -> {
                     TopBarPillButton(
                         text = "Proceed",
-                        bgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.65f),
+                        bgColor = Color.Transparent,
                         tint = MaterialTheme.colorScheme.primary,
                         hazeState = hazeState,
+                        hazeStyle = InlyBlur.Regular,
                         modifier = Modifier.fillMaxWidth(),
                         onClick = onProceedClick
                     )
@@ -446,9 +451,10 @@ private fun SlideNav(
             TopBarIconButton(
                 icon = Icons.AutoMirrored.Filled.ArrowBack,
                 contentDescription = "Back",
-                bgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.65f),
+                bgColor = Color.Transparent,
                 tint = MaterialTheme.colorScheme.primary,
                 hazeState = hazeState,
+                hazeStyle = InlyBlur.Regular,
                 size = 44.dp,
                 onClick = onBack
             )
@@ -457,9 +463,10 @@ private fun SlideNav(
             TopBarIconButton(
                 icon = Icons.AutoMirrored.Filled.ArrowForward,
                 contentDescription = "Next",
-                bgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.65f),
+                bgColor = Color.Transparent,
                 tint = MaterialTheme.colorScheme.primary,
                 hazeState = hazeState,
+                hazeStyle = InlyBlur.Regular,
                 size = 52.dp,
                 onClick = onNext
             )

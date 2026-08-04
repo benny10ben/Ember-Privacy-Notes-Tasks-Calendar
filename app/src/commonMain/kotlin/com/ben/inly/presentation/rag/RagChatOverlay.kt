@@ -65,15 +65,15 @@ import com.ben.inly.domain.ai.external.ExternalAiProviderConfig
 import com.ben.inly.domain.util.AiEventBus
 import com.ben.inly.domain.util.isDesktopPlatform
 import com.ben.inly.presentation.customInlyShadow
+import com.ben.inly.presentation.shared.components.InlyBlur
 import com.ben.inly.presentation.shared.components.InlyBottomSheet
 import com.ben.inly.presentation.shared.components.InlyButtonPrimary
 import com.ben.inly.presentation.shared.components.InlyButtonSecondary
 import com.ben.inly.presentation.shared.components.InlyTextField
 import com.ben.inly.presentation.shared.components.MarkdownText
 import com.ben.inly.presentation.shared.components.TopBarIconButton
+import com.ben.inly.presentation.shared.components.inlyBlur
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import inly.app.generated.resources.Res
 import inly.app.generated.resources.chevron_left
@@ -310,9 +310,10 @@ private fun RagChatContent(
                 TopBarIconButton(
                     icon = painterResource(Res.drawable.chevron_left),
                     contentDescription = "Back",
-                    bgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.65f),
-                    tint = MaterialTheme.colorScheme.onSurface,
+                    bgColor = Color.Transparent,
+                    tint = MaterialTheme.colorScheme.primary,
                     hazeState = hazeState,
+                    hazeStyle = InlyBlur.Regular,
                     onClick = onDismiss
                 )
             }
@@ -344,9 +345,10 @@ private fun RagChatContent(
                         icon = rememberVectorPainter(Icons.Default.Menu),
                         contentDescription = "Chat history",
                         onClick = { showChatHistorySheet = true },
-                        bgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.65f),
-                        tint = MaterialTheme.colorScheme.onSurface,
-                        hazeState = hazeState
+                        bgColor = Color.Transparent,
+                        tint = MaterialTheme.colorScheme.primary,
+                        hazeState = hazeState,
+                        hazeStyle = InlyBlur.Regular,
                     )
                 }
             }
@@ -752,8 +754,8 @@ private fun ChatInputBar(
             .customInlyShadow(barShape, elevation = shadowElevation)
             .animateContentSize(animationSpec = tween(150))
             .clip(barShape)
-            .hazeEffect(state = hazeState, style = HazeStyle.Unspecified, block = null)
-            .background(defaultBgColor)
+            .inlyBlur(hazeState, InlyBlur.Regular)
+            .background(Color.Transparent)
             .border(
                 width = 0.5.dp,
                 color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),

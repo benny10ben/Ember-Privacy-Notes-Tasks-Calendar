@@ -85,12 +85,12 @@ import androidx.compose.ui.zIndex
 import com.ben.inly.domain.model.RecurrenceEditScope
 import com.ben.inly.domain.util.isDesktopPlatform
 import com.ben.inly.presentation.customInlyShadow
+import com.ben.inly.presentation.shared.components.InlyBlur
 import com.ben.inly.presentation.shared.components.InlyBottomSheet
 import com.ben.inly.presentation.shared.components.InlyDesktopMenu
 import com.ben.inly.presentation.shared.components.TopBarIconButton
+import com.ben.inly.presentation.shared.components.inlyBlur
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import inly.app.generated.resources.Res
 import inly.app.generated.resources.chevron_left
@@ -484,7 +484,6 @@ private fun CalendarTopBar(
     hazeState: HazeState,
     modifier: Modifier = Modifier
 ) {
-    val defaultBgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.65f)
     val defaultContentColor = MaterialTheme.colorScheme.onSurface
 
     Row(
@@ -497,9 +496,10 @@ private fun CalendarTopBar(
         TopBarIconButton(
             icon = painterResource(Res.drawable.chevron_left),
             contentDescription = "Back",
-            bgColor = defaultBgColor,
-            tint = defaultContentColor,
+            bgColor = Color.Transparent,
+            tint = MaterialTheme.colorScheme.primary,
             hazeState = hazeState,
+            hazeStyle = InlyBlur.Regular,
             onClick = onBackClick
         )
 
@@ -552,9 +552,10 @@ private fun CalendarTopBar(
                 TopBarIconButton(
                     icon = Icons.Default.MoreVert,
                     contentDescription = "Options",
-                    bgColor = defaultBgColor,
-                    tint = defaultContentColor,
+                    bgColor = Color.Transparent,
+                    tint = MaterialTheme.colorScheme.primary,
                     hazeState = hazeState,
+                    hazeStyle = InlyBlur.Regular,
                     onClick = { showOptionsMenu = true }
                 )
                 InlyDesktopMenu(
@@ -604,8 +605,8 @@ private fun MultiDayHeaderBar(
             .then(
                 if (isScrolled) {
                     Modifier
-                        .hazeEffect(state = hazeState, style = HazeStyle.Unspecified, block = null)
-                        .background(MaterialTheme.colorScheme.background.copy(alpha = 0.65f))
+                        .inlyBlur(hazeState, InlyBlur.Regular)
+                        .background(Color.Transparent)
                 } else {
                     Modifier.background(MaterialTheme.colorScheme.background)
                 }
@@ -1236,7 +1237,6 @@ private fun CalendarBottomBar(
     onCategoriesClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val defaultBgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.65f)
     val contentColor = MaterialTheme.colorScheme.primary
 
     val barAnimationSpec = tween<Dp>(durationMillis = 350, easing = FastOutSlowInEasing)
@@ -1264,7 +1264,7 @@ private fun CalendarBottomBar(
         )
         Surface(
             shape = CircleShape,
-            color = defaultBgColor,
+            color = Color.Transparent,
             modifier = Modifier
                 .wrapContentWidth()
                 .height(barSize)
@@ -1279,7 +1279,7 @@ private fun CalendarBottomBar(
                 )
                 .customInlyShadow(CircleShape, elevation = shadowElevation)
                 .clip(CircleShape)
-                .hazeEffect(hazeState, HazeStyle.Unspecified, null)
+                .inlyBlur(hazeState, InlyBlur.Regular)
                 .border(
                     width = 0.5.dp,
                     color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),

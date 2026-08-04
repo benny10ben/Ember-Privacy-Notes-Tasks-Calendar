@@ -46,6 +46,7 @@ import com.ben.inly.domain.util.isDesktopPlatform
 import com.ben.inly.presentation.mobile.daily.DailyEditorViewModel
 import com.ben.inly.presentation.mobile.daily.TaskDaySection
 import com.ben.inly.presentation.shared.UserSettings
+import com.ben.inly.presentation.shared.components.InlyBlur
 import com.ben.inly.presentation.shared.components.InlyBottomSheet
 import com.ben.inly.presentation.shared.components.InlyBottomSheetAction
 import com.ben.inly.presentation.shared.components.InlyDesktopMenu
@@ -828,9 +829,10 @@ private fun HomeTopBar(
 
             Box {
                 TopBarIconButtonGroup(
-                    bgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.65f),
-                    tint = MaterialTheme.colorScheme.onSurface,
+                    bgColor = Color.Transparent,
+                    tint = MaterialTheme.colorScheme.primary,
                     hazeState = hazeState,
+                    hazeStyle = InlyBlur.Regular,
                     items = listOf(
                         TopBarIconButtonItem(
                             icon = painterResource(Res.drawable.calendar),

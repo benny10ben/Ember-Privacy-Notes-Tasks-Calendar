@@ -9,6 +9,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -37,6 +38,7 @@ import com.ben.inly.domain.model.GalleryCardSize
 import com.ben.inly.domain.model.NoteBlock
 import com.ben.inly.domain.model.TextAlignment
 import com.ben.inly.domain.util.isDesktopPlatform
+import com.ben.inly.presentation.shared.components.InlyBlur
 import com.ben.inly.presentation.shared.components.KmpBackHandler
 import com.ben.inly.presentation.shared.editor.BlockSelectionPill
 import com.ben.inly.presentation.shared.editor.EditorScreen
@@ -409,9 +411,10 @@ private fun RemindersTopBar(
         TopBarIconButton(
             icon = painterResource(Res.drawable.chevron_left),
             contentDescription = "Back",
-            bgColor = defaultBgColor,
-            tint = defaultContentColor,
+            bgColor = Color.Transparent,
+            tint = MaterialTheme.colorScheme.primary,
             hazeState = hazeState,
+            hazeStyle = InlyBlur.Regular,
             onClick = onBackClick
         )
 
@@ -443,18 +446,20 @@ private fun RemindersTopBar(
                 TopBarIconButton(
                     icon = painterResource(Res.drawable.check_square),
                     contentDescription = "Completed Tasks",
-                    bgColor = defaultBgColor,
                     tint = if (isShowingCompleted) MaterialTheme.colorScheme.primary else defaultContentColor,
+                    bgColor = Color.Transparent,
                     hazeState = hazeState,
+                    hazeStyle = InlyBlur.Regular,
                     onClick = onToggleCompleted
                 )
 
                 TopBarIconButton(
                     icon = painterResource(Res.drawable.circle_plus),
                     contentDescription = "Add Task",
-                    bgColor = defaultBgColor,
-                    tint = defaultContentColor,
+                    bgColor = Color.Transparent,
+                    tint = MaterialTheme.colorScheme.primary,
                     hazeState = hazeState,
+                    hazeStyle = InlyBlur.Regular,
                     onClick = onAddClick
                 )
             }

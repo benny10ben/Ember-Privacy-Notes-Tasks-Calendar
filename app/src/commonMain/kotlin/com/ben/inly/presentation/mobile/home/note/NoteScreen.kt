@@ -101,11 +101,11 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.border
 import androidx.compose.material.icons.Icons
 import androidx.compose.ui.graphics.painter.Painter
+import com.ben.inly.presentation.shared.components.InlyBlur
 import com.ben.inly.presentation.shared.components.InlyButtonPrimary
+import com.ben.inly.presentation.shared.components.inlyBlur
 import com.ben.inly.presentation.shared.editor.BlockStyleBar
 import com.ben.inly.presentation.shared.components.rememberKeyboardHandoff
-import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import inly.app.generated.resources.Res
 import inly.app.generated.resources.chevron_left
@@ -595,15 +595,11 @@ fun NoteScreen(
                 ) {
                     Surface(
                         shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.background.copy(alpha = 0.6f),
+                        color = Color.Transparent,
                         contentColor = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
-                            .hazeEffect(
-                            state = hazeState,
-                            style = HazeStyle.Unspecified,
-                            block = null
-                        )
+                            .inlyBlur(hazeState, InlyBlur.Regular)
                             .border(
                                 width = 0.5.dp,
                                 color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
@@ -1191,7 +1187,6 @@ private fun NoteTopBar(
     onCollapsedTitleClick: () -> Unit = {},
     onPositioned: (androidx.compose.ui.layout.LayoutCoordinates) -> Unit = {}
 ) {
-    val defaultBgColor = topBarBgColor ?: MaterialTheme.colorScheme.background.copy(alpha = 0.65f)
     val defaultContentColor = topBarContentColor ?: MaterialTheme.colorScheme.onSurface
 
     Box(
@@ -1211,9 +1206,10 @@ private fun NoteTopBar(
                 TopBarIconButton(
                     icon = painterResource(Res.drawable.chevron_left),
                     contentDescription = "Back",
-                    bgColor = defaultBgColor,
-                    tint = defaultContentColor,
+                    bgColor = Color.Transparent,
+                    tint = MaterialTheme.colorScheme.primary,
                     hazeState = hazeState,
+                    hazeStyle = InlyBlur.Regular,
                     onClick = onBackClick
                 )
             } else {
@@ -1247,9 +1243,10 @@ private fun NoteTopBar(
                 TopBarIconButton(
                     icon = painterResource(Res.drawable.ellipsis),
                     contentDescription = "Options",
-                    bgColor = defaultBgColor,
-                    tint = defaultContentColor,
+                    bgColor = Color.Transparent,
+                    tint = MaterialTheme.colorScheme.primary,
                     hazeState = hazeState,
+                    hazeStyle = InlyBlur.Regular,
                     onClick = onOptionsClick
                 )
 
@@ -1271,7 +1268,7 @@ private fun NoteTopBar(
                 contentColor = MaterialTheme.colorScheme.primary,
                 modifier = Modifier
                     .clip(RoundedCornerShape(12.dp))
-                    .then(if (hazeState != null) Modifier.hazeEffect(state = hazeState, style = HazeStyle.Unspecified, block = null) else Modifier)
+                    .inlyBlur(hazeState, InlyBlur.Regular)
                     .border(
                         width = 0.5.dp,
                         color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),

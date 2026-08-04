@@ -41,6 +41,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.ben.inly.data.local.room.CalendarTaskEntity
 import com.ben.inly.domain.util.isDesktopPlatform
+import com.ben.inly.presentation.shared.components.InlyBlur
+import com.ben.inly.presentation.shared.components.NoRippleIndicationNodeFactory
+import com.ben.inly.presentation.shared.components.inlyBlur
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.hazeEffect
@@ -50,6 +53,7 @@ import kotlinx.datetime.*
 import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.roundToInt
+import kotlin.time.Duration.Companion.milliseconds
 
 @Composable
 fun CollapsedWeekStrip(
@@ -152,7 +156,7 @@ fun DailyBottomWeekStrip(
         if (isScrolling && !isProgrammaticScroll) {
             isExpanded = true
         } else if (!isScrolling) {
-            delay(3000)
+            delay(3000.milliseconds)
             if (!listState.isScrollInProgress) isExpanded = false
         }
     }
@@ -233,7 +237,6 @@ private fun WeekStripChip(
 ) {
     val shape = RoundedCornerShape(12.dp)
     val shortDayName = date.dayOfWeek.name.take(3).lowercase().replaceFirstChar { it.uppercase() }
-
     Row(
         horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
@@ -241,12 +244,12 @@ private fun WeekStripChip(
             .width(width)
             .height(height)
             .clip(shape)
-            .hazeEffect(hazeState, HazeStyle.Unspecified, null)
-            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.5f))
+            .inlyBlur(hazeState, InlyBlur.Regular)
+            .background(Color.Transparent)
             .border(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), shape)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
-                indication = null
+                indication = NoRippleIndicationNodeFactory
             ) { onClick() }
     ) {
         Text(

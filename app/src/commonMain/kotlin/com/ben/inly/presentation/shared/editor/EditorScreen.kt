@@ -75,8 +75,8 @@ import kotlin.time.Duration.Companion.milliseconds
 import androidx.compose.ui.platform.LocalDensity
 import kotlinx.coroutines.flow.MutableSharedFlow
 import com.ben.inly.data.local.room.NoteMetadataEntity
-import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.hazeEffect
+import com.ben.inly.presentation.shared.components.InlyBlur
+import com.ben.inly.presentation.shared.components.inlyBlur
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableSet
 import kotlin.math.abs
@@ -768,12 +768,12 @@ fun EditorToolbar(
 
     Surface(
         shape = DefaultCornerShape,
-        color = MaterialTheme.colorScheme.background.copy(alpha = 0.75f),
+        color = Color.Transparent,
         modifier = modifier
             .fillMaxWidth()
             .customInlyShadow(DefaultCornerShape)
             .clip(DefaultCornerShape)
-            .hazeEffect(state = hazeState, style = HazeStyle.Unspecified, block = null)
+            .inlyBlur(hazeState, InlyBlur.Regular)
             .border(
                 width = 0.5.dp,
                 color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
@@ -1223,16 +1223,12 @@ fun BlockSelectionPill(
     ) {
         Surface(
             shape = DefaultCornerShape,
-            color = pillColor,
+            color = Color.Transparent,
             modifier = Modifier
                 .padding(bottom = 32.dp)
                 .customInlyShadow(DefaultCornerShape)
                 .clip(DefaultCornerShape)
-                .then(if (isDesktop) Modifier else Modifier.hazeEffect(
-                    state = hazeState,
-                    style = HazeStyle.Unspecified,
-                    block = null
-                ))
+                .inlyBlur(hazeState, InlyBlur.Regular)
         ) {
             val scrollState = rememberScrollState()
             val divider = @Composable {
@@ -1326,8 +1322,6 @@ fun BlockStyleBar(
     onSetAlignment: (TextAlignment) -> Unit,
     hazeState: HazeState
 ) {
-    val isDesktop = isDesktopPlatform
-    val pillColor = if (isDesktop) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.surface.copy(alpha = 0.75f)
     val tint = MaterialTheme.colorScheme.primary
     val iconSize = 19.dp
 
@@ -1339,18 +1333,12 @@ fun BlockStyleBar(
     ) {
         Surface(
             shape = DefaultCornerShape,
-            color = pillColor,
+            color = Color.Transparent,
             modifier = Modifier
                 .padding(bottom = 8.dp)
                 .customInlyShadow(DefaultCornerShape)
                 .clip(DefaultCornerShape)
-                .then(
-                    if (isDesktop) Modifier else Modifier.hazeEffect(
-                        state = hazeState,
-                        style = HazeStyle.Unspecified,
-                        block = null
-                    )
-                )
+                .inlyBlur(hazeState, InlyBlur.Regular)
         ) {
             CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 36.dp) {
                 Row(

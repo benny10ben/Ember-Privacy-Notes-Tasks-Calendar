@@ -53,11 +53,11 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import com.ben.inly.domain.util.isDesktopPlatform
 import com.ben.inly.presentation.navigation.Screen
+import com.ben.inly.presentation.shared.components.InlyBlur
+import com.ben.inly.presentation.shared.components.inlyBlur
 import com.ben.inly.ui.theme.LocalInlyFontStyle
 import com.ben.inly.ui.theme.fontFamilyFor
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.hazeEffect
 import inly.app.generated.resources.Res
 import inly.app.generated.resources.astroid
 import inly.app.generated.resources.daily
@@ -134,7 +134,7 @@ fun InlyBottomBar(
             )
             Surface(
                 shape = CircleShape,
-                color = defaultBgColor,
+                color = Color.Transparent,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = horizontalInset)
@@ -150,7 +150,7 @@ fun InlyBottomBar(
                     )
                     .customInlyShadow(CircleShape, elevation = shadowElevation)
                     .clip(CircleShape)
-                    .hazeEffect(hazeState, HazeStyle.Unspecified, null)
+                    .inlyBlur(hazeState, InlyBlur.Regular)
                     .border(
                         width = 0.5.dp,
                         color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
@@ -257,7 +257,7 @@ fun InlyBottomBar(
                     modifier = Modifier
                         .widthIn(max = 240.dp)
                         .clip(RoundedCornerShape(100f))
-                        .hazeEffect(hazeState, HazeStyle.Unspecified, null)
+                        .inlyBlur(hazeState, InlyBlur.Regular)
                         .border(
                             width = 0.5.dp,
                             color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),

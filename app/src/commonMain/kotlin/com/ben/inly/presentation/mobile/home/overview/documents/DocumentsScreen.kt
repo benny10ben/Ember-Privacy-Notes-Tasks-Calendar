@@ -16,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -33,6 +34,7 @@ import com.ben.inly.domain.util.isDesktopPlatform
 import com.ben.inly.presentation.shared.stableStatusBarsPadding
 import com.ben.inly.presentation.shared.editor.BlockSelectionPill
 import androidx.compose.ui.text.AnnotatedString
+import com.ben.inly.presentation.shared.components.InlyBlur
 import com.ben.inly.presentation.shared.components.KmpBackHandler
 import com.ben.inly.presentation.shared.components.TopBarIconButton
 import com.ben.inly.presentation.shared.editor.blockViews.DocumentBlockView
@@ -306,7 +308,6 @@ private fun DocumentsTopBar(
     onBackClick: () -> Unit,
     onAddClick: () -> Unit
 ) {
-    val defaultBgColor = if (isDesktopPlatform) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.background.copy(alpha = 0.65f)
     val defaultContentColor = MaterialTheme.colorScheme.onSurface
 
     Row(
@@ -321,9 +322,10 @@ private fun DocumentsTopBar(
         TopBarIconButton(
             icon = painterResource(Res.drawable.chevron_left),
             contentDescription = "Back",
-            bgColor = defaultBgColor,
-            tint = defaultContentColor,
+            bgColor = Color.Transparent,
+            tint = MaterialTheme.colorScheme.primary,
             hazeState = hazeState,
+            hazeStyle = InlyBlur.Regular,
             onClick = onBackClick
         )
 
@@ -354,9 +356,10 @@ private fun DocumentsTopBar(
             TopBarIconButton(
                 icon = painterResource(Res.drawable.circle_plus),
                 contentDescription = "Add Document",
-                bgColor = defaultBgColor,
-                tint = defaultContentColor,
+                bgColor = Color.Transparent,
+                tint = MaterialTheme.colorScheme.primary,
                 hazeState = hazeState,
+                hazeStyle = InlyBlur.Regular,
                 onClick = onAddClick
             )
         } else {

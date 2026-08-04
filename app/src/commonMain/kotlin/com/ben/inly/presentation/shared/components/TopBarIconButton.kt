@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -24,8 +25,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.node.DelegatableNode
@@ -35,8 +36,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.hazeEffect
-import androidx.compose.material3.Text
 
 fun Modifier.customInlyShadow(shape: Shape): Modifier = this.shadow(
     elevation = 14.dp,
@@ -68,11 +67,13 @@ fun TopBarPillButton(
     tint: Color,
     modifier: Modifier = Modifier,
     hazeState: HazeState? = null,
+    hazeStyle: HazeStyle? = null,
     shape: Shape = RoundedCornerShape(12.dp),
     height: Dp = 52.dp,
     enabled: Boolean = true,
     onClick: () -> Unit
 ) {
+    val resolvedStyle = hazeStyle ?: InlyBlur.Regular
     Surface(
         shape = shape,
         color = bgColor,
@@ -81,7 +82,7 @@ fun TopBarPillButton(
             .height(height)
             .customInlyShadow(shape)
             .clip(shape)
-            .then(if (hazeState == null) Modifier else Modifier.hazeEffect(hazeState, HazeStyle.Unspecified, null))
+            .inlyBlur(hazeState, resolvedStyle)
             .clickable(
                 enabled = enabled,
                 interactionSource = remember { MutableInteractionSource() },
@@ -118,10 +119,12 @@ fun TopBarIconButton(
     bgColor: Color,
     tint: Color,
     hazeState: HazeState? = null,
+    hazeStyle: HazeStyle? = null,
     size: Dp = 44.dp,
     iconSize: Dp = 22.dp,
     onClick: () -> Unit
 ) {
+    val resolvedStyle = hazeStyle ?: InlyBlur.Regular
     Surface(
         shape = CircleShape,
         color = bgColor,
@@ -130,7 +133,7 @@ fun TopBarIconButton(
             .size(size)
             .customInlyShadow(CircleShape)
             .clip(CircleShape)
-            .then(if (hazeState == null) Modifier else Modifier.hazeEffect(hazeState, HazeStyle.Unspecified, null))
+            .inlyBlur(hazeState, resolvedStyle)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = NoRippleIndicationNodeFactory,
@@ -160,6 +163,7 @@ fun TopBarIconButton(
     bgColor: Color,
     tint: Color,
     hazeState: HazeState? = null,
+    hazeStyle: HazeStyle? = null,
     size: Dp = 44.dp,
     iconSize: Dp = 22.dp,
     onClick: () -> Unit
@@ -170,6 +174,7 @@ fun TopBarIconButton(
         bgColor = bgColor,
         tint = tint,
         hazeState = hazeState,
+        hazeStyle = hazeStyle,
         size = size,
         iconSize = iconSize,
         onClick = onClick
@@ -190,8 +195,10 @@ fun TopBarIconButtonGroup(
     bgColor: Color,
     tint: Color,
     hazeState: HazeState? = null,
+    hazeStyle: HazeStyle? = null,
     horizontalPadding: Dp = 6.dp
 ) {
+    val resolvedStyle = hazeStyle ?: InlyBlur.Regular
     Surface(
         shape = CircleShape,
         color = bgColor,
@@ -200,7 +207,7 @@ fun TopBarIconButtonGroup(
             .height(44.dp)
             .customInlyShadow(CircleShape)
             .clip(CircleShape)
-            .then(if (hazeState == null) Modifier else Modifier.hazeEffect(hazeState, HazeStyle.Unspecified, null))
+            .inlyBlur(hazeState, resolvedStyle)
             .border(
                 width = 0.5.dp,
                 color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),

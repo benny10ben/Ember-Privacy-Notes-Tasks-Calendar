@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
@@ -59,6 +60,7 @@ import com.ben.inly.presentation.calendar.CalendarViewModel
 import com.ben.inly.presentation.calendar.EventEditorSheetHost
 import com.ben.inly.presentation.calendar.RecurrenceScopeChooser
 import com.ben.inly.presentation.shared.UserSettings
+import com.ben.inly.presentation.shared.components.InlyBlur
 import com.ben.inly.presentation.shared.components.InlyBottomSheet
 import com.ben.inly.presentation.shared.components.TopBarIconButtonGroup
 import com.ben.inly.presentation.shared.components.TopBarIconButtonItem
@@ -685,9 +687,10 @@ private fun DailyTopBar(
             {
                 Box {
                     TopBarIconButtonGroup(
-                        bgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.65f),
-                        tint = MaterialTheme.colorScheme.onBackground,
+                        bgColor = Color.Transparent,
+                        tint = MaterialTheme.colorScheme.primary,
                         hazeState = hazeState,
+                        hazeStyle = InlyBlur.Regular,
                         items = listOf(
                             TopBarIconButtonItem(
                                 icon = painterResource(Res.drawable.calendar),

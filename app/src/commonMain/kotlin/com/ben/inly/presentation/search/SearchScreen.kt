@@ -66,15 +66,14 @@ import com.ben.inly.data.local.room.NoteMetadataEntity
 import com.ben.inly.domain.model.NoteSearchResult
 import com.ben.inly.domain.util.isDesktopPlatform
 import com.ben.inly.presentation.customInlyShadow
+import com.ben.inly.presentation.shared.components.InlyBlur
 import com.ben.inly.presentation.shared.components.TopBarIconButton
+import com.ben.inly.presentation.shared.components.inlyBlur
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import inly.app.generated.resources.Res
 import inly.app.generated.resources.chevron_left
 import inly.app.generated.resources.search
-import inly.app.generated.resources.x
 import org.jetbrains.compose.resources.painterResource
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -179,9 +178,10 @@ fun SearchScreen(
                 TopBarIconButton(
                     icon = painterResource(Res.drawable.chevron_left),
                     contentDescription = "Back",
-                    bgColor = if (isDesktopPlatform) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.background.copy(alpha = 0.65f),
-                    tint = MaterialTheme.colorScheme.onSurface,
+                    bgColor = Color.Transparent,
+                    tint = MaterialTheme.colorScheme.primary,
                     hazeState = hazeState,
+                    hazeStyle = InlyBlur.Regular,
                     onClick = onBack
                 )
             }
@@ -210,7 +210,7 @@ fun SearchScreen(
 
             Surface(
                 shape = CircleShape,
-                color = defaultBgColor,
+                color = Color.Transparent,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
@@ -230,7 +230,7 @@ fun SearchScreen(
                     )
                     .customInlyShadow(CircleShape, elevation = shadowElevation)
                     .clip(CircleShape)
-                    .hazeEffect(hazeState, HazeStyle.Unspecified, null)
+                    .inlyBlur(hazeState, InlyBlur.Regular)
                     .border(
                         width = 0.5.dp,
                         color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),

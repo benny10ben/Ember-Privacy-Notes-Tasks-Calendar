@@ -20,8 +20,10 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.ben.inly.presentation.shared.components.InlyBlur
 import com.ben.inly.presentation.shared.components.KmpBackHandler
 import com.ben.inly.presentation.shared.components.TopBarIconButton
+import com.ben.inly.presentation.shared.components.inlyBlur
 import com.ben.inly.presentation.shared.editor.DefaultBlockShape
 import com.ben.inly.presentation.shared.stableStatusBarsPadding
 import dev.chrisbanes.haze.HazeState
@@ -41,14 +43,12 @@ fun FullScreenImageScreen(
     onDownload: () -> Unit,
     onDelete: () -> Unit
 ) {
-    // ✅ 1. Replaced with your native KMP back handler
     KmpBackHandler(enabled = true) { onBack() }
 
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
 
     val hazeState = remember { HazeState() }
-    val pillColor = MaterialTheme.colorScheme.background.copy(alpha = 0.65f)
     val tint = MaterialTheme.colorScheme.primary
 
     Box(
@@ -56,7 +56,6 @@ fun FullScreenImageScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // ✅ 1. Wrap the Image in its own Box and put the .haze modifier HERE
         Box(modifier = Modifier.fillMaxSize().haze(state = hazeState).background(MaterialTheme.colorScheme.background)) {
             AsyncImage(
                 model = request,
@@ -94,9 +93,7 @@ fun FullScreenImageScreen(
                     ),
                 contentScale = ContentScale.Fit
             )
-        } // End of Haze Capture Box
-
-        // ✅ 2. Your Top Bar and Bottom Bar overlays remain exactly the same below this!
+        }
 
         // Top Bar
         Row(
@@ -110,23 +107,23 @@ fun FullScreenImageScreen(
             TopBarIconButton(
                 icon = painterResource(Res.drawable.chevron_left),
                 contentDescription = "Back",
-                bgColor = pillColor,
-                tint = MaterialTheme.colorScheme.onSurface,
+                bgColor = Color.Transparent,
+                tint = MaterialTheme.colorScheme.primary,
                 hazeState = hazeState,
+                hazeStyle = InlyBlur.Regular,
                 onClick = onBack
             )
         }
 
         // Bottom Bar
-        // ✅ 3. Swapped Surface for Box and corrected the modifier chain
         Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
                 .padding(bottom = 32.dp, start = 24.dp, end = 24.dp)
                 .clip(DefaultBlockShape)
-                .hazeChild(state = hazeState)
-                .background(pillColor) // Background MUST come after hazeChild
+                .inlyBlur(hazeState, InlyBlur.Regular)
+                .background(Color.Transparent)
                 .border(
                     width = 0.5.dp,
                     color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),

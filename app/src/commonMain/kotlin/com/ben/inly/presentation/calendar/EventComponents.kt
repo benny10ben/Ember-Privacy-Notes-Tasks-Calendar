@@ -55,6 +55,7 @@ import com.ben.inly.domain.model.RecurrenceEditScope
 import com.ben.inly.domain.model.RecurrenceFrequency
 import com.ben.inly.domain.model.RecurrenceRule
 import com.ben.inly.domain.util.isDesktopPlatform
+import com.ben.inly.presentation.shared.components.InlyBlur
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.isoDayNumber
 import com.ben.inly.presentation.shared.components.InlyBottomSheet
@@ -67,7 +68,7 @@ import com.ben.inly.presentation.shared.components.MinimalTimePickerDialog
 import com.ben.inly.presentation.shared.components.NoRippleIndicationNodeFactory
 import com.ben.inly.presentation.shared.components.TopBarIconButtonGroup
 import com.ben.inly.presentation.shared.components.TopBarIconButtonItem
-import com.ben.inly.ui.theme.LocalAppIsDark
+import dev.chrisbanes.haze.HazeState
 import inly.app.generated.resources.Res
 import inly.app.generated.resources.calendar
 import inly.app.generated.resources.clock_circle
@@ -501,6 +502,7 @@ private fun EventViewFields(
 ) {
     val category = categories.firstOrNull { it.id == state.categoryId }
     val accentColor = category?.colorHex?.toCategoryColor() ?: MaterialTheme.colorScheme.primary
+    val hazeState = remember { HazeState() }
 
     Column(
         modifier = Modifier
@@ -521,8 +523,10 @@ private fun EventViewFields(
         ) {
             Box(modifier = Modifier.clip(CircleShape)) {
                 TopBarIconButtonGroup(
-                    bgColor = if (LocalAppIsDark.current) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.background,
-                    tint = MaterialTheme.colorScheme.onSurface,
+                    bgColor = Color.Transparent,
+                    tint = MaterialTheme.colorScheme.primary,
+                    hazeState = hazeState,
+                    hazeStyle = InlyBlur.Regular,
                     items = buildList {
                         add(
                             TopBarIconButtonItem(

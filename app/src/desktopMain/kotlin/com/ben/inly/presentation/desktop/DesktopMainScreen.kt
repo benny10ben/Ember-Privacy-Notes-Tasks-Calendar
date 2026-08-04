@@ -103,8 +103,6 @@ import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.ben.inly.ui.theme.LocalAppIsDark
-import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import inly.app.generated.resources.Res
 import inly.app.generated.resources.arrow_up_down
@@ -115,7 +113,6 @@ import inly.app.generated.resources.sidebar
 import inly.app.generated.resources.check_square
 import inly.app.generated.resources.ellipsis
 import inly.app.generated.resources.pen_square
-import inly.app.generated.resources.files
 import inly.app.generated.resources.folder_plus
 import inly.app.generated.resources.images
 import inly.app.generated.resources.inbox
