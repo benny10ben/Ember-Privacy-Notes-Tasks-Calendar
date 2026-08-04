@@ -29,6 +29,13 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -203,6 +210,7 @@ interface EditorActions {
     fun setScrollEnabled(enabled: Boolean) {}
     fun onUpdateSketch(id: String, strokes: List<com.ben.inly.domain.model.Stroke>)
     fun onUpdateTable(id: String, rows: List<List<String>>)
+    fun onUpdateTableColumnWidth(id: String, columnIndex: Int, width: Int)
     fun onUpdateTableStyle(
         id: String,
         cellStyles: Map<String, com.ben.inly.domain.model.TableCellStyle>,
@@ -251,7 +259,9 @@ fun EditorScreen(
     isCurrentActivePage: Boolean = true,
     onScrollStateChange: (Boolean) -> Unit = {},
     listState: LazyListState = rememberLazyListState(),
-    topBarClearancePx: Float = 0f
+    topBarClearancePx: Float = 0f,
+    onUndo: () -> Unit = {},
+    onRedo: () -> Unit = {}
 ) {
     val isSelectionMode = selectedBlockIds.isNotEmpty()
     val focusManager = LocalFocusManager.current
@@ -319,6 +329,8 @@ fun EditorScreen(
     val latestMobileMenuState by rememberUpdatedState(mobileMenuState)
     val latestOnMobileMenuStateChange by rememberUpdatedState(onMobileMenuStateChange)
     val latestOnSlashQueryChange by rememberUpdatedState(onSlashQueryChange)
+    val latestOnUndo by rememberUpdatedState(onUndo)
+    val latestOnRedo by rememberUpdatedState(onRedo)
 
     val clearSlashAndExecute: (() -> Unit) -> Unit = { executionBlock ->
         actions.onClearSlashQuery()
@@ -539,6 +551,26 @@ fun EditorScreen(
         modifier = modifier
             .fillMaxSize()
             .imePadding()
+            .then(
+                if (isDesktopPlatform) {
+                    Modifier.onPreviewKeyEvent { keyEvent ->
+                        if (keyEvent.type != KeyEventType.KeyDown || !keyEvent.isCtrlPressed) return@onPreviewKeyEvent false
+                        when (keyEvent.key) {
+                            Key.Z -> {
+                                if (keyEvent.isShiftPressed) latestOnRedo() else latestOnUndo()
+                                true
+                            }
+                            Key.Y -> {
+                                latestOnRedo()
+                                true
+                            }
+                            else -> false
+                        }
+                    }
+                } else {
+                    Modifier
+                }
+            )
     ) {
         CompositionLocalProvider(LocalBringIntoViewSpec provides bringIntoViewSpec) {
         LazyColumn(
