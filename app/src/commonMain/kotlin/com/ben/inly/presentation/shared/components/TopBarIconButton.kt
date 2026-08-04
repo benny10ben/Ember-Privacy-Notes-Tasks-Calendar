@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -29,11 +30,13 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.node.DelegatableNode
 import androidx.compose.ui.node.DrawModifierNode
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.hazeEffect
+import androidx.compose.material3.Text
 
 fun Modifier.customInlyShadow(shape: Shape): Modifier = this.shadow(
     elevation = 14.dp,
@@ -59,12 +62,64 @@ object NoRippleIndicationNodeFactory : IndicationNodeFactory {
 }
 
 @Composable
+fun TopBarPillButton(
+    text: String,
+    bgColor: Color,
+    tint: Color,
+    modifier: Modifier = Modifier,
+    hazeState: HazeState? = null,
+    shape: Shape = RoundedCornerShape(12.dp),
+    height: Dp = 52.dp,
+    enabled: Boolean = true,
+    onClick: () -> Unit
+) {
+    Surface(
+        shape = shape,
+        color = bgColor,
+        contentColor = tint,
+        modifier = modifier
+            .height(height)
+            .customInlyShadow(shape)
+            .clip(shape)
+            .then(if (hazeState == null) Modifier else Modifier.hazeEffect(hazeState, HazeStyle.Unspecified, null))
+            .clickable(
+                enabled = enabled,
+                interactionSource = remember { MutableInteractionSource() },
+                indication = NoRippleIndicationNodeFactory,
+                onClick = onClick
+            )
+            .border(
+                width = 0.5.dp,
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                shape = shape
+            )
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 24.dp)
+        ) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = tint,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+@Composable
 fun TopBarIconButton(
     icon: Painter,
     contentDescription: String,
     bgColor: Color,
     tint: Color,
     hazeState: HazeState? = null,
+    size: Dp = 44.dp,
+    iconSize: Dp = 22.dp,
     onClick: () -> Unit
 ) {
     Surface(
@@ -72,7 +127,7 @@ fun TopBarIconButton(
         color = bgColor,
         contentColor = tint,
         modifier = Modifier
-            .size(44.dp)
+            .size(size)
             .customInlyShadow(CircleShape)
             .clip(CircleShape)
             .then(if (hazeState == null) Modifier else Modifier.hazeEffect(hazeState, HazeStyle.Unspecified, null))
@@ -92,7 +147,7 @@ fun TopBarIconButton(
                 painter = icon,
                 contentDescription = contentDescription,
                 tint = tint,
-                modifier = Modifier.size(22.dp)
+                modifier = Modifier.size(iconSize)
             )
         }
     }
@@ -105,6 +160,8 @@ fun TopBarIconButton(
     bgColor: Color,
     tint: Color,
     hazeState: HazeState? = null,
+    size: Dp = 44.dp,
+    iconSize: Dp = 22.dp,
     onClick: () -> Unit
 ) {
     TopBarIconButton(
@@ -113,6 +170,8 @@ fun TopBarIconButton(
         bgColor = bgColor,
         tint = tint,
         hazeState = hazeState,
+        size = size,
+        iconSize = iconSize,
         onClick = onClick
     )
 }
