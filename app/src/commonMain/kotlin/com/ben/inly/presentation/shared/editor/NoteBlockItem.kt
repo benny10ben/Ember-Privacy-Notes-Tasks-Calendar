@@ -851,6 +851,9 @@ fun NoteBlockItem(
                                 onUpdateTable = { actions.onUpdateTable(block.id, it) },
                                 onUpdateTableStyle = { cellStyles, rowStyles, columnStyles ->
                                     actions.onUpdateTableStyle(block.id, cellStyles, rowStyles, columnStyles)
+                                },
+                                onUpdateColumnWidth = { columnIndex, width ->
+                                    actions.onUpdateTableColumnWidth(block.id, columnIndex, width)
                                 }
                             )
                             is VoiceBlock -> AudioBlockView(

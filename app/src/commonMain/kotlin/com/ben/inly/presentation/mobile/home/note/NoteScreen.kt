@@ -444,6 +444,8 @@ fun NoteScreen(
                 viewModel.updateSketchStrokes(id, strokes)
             override fun onUpdateTable(id: String, rows: List<List<String>>) =
                 viewModel.updateTable(id, rows)
+            override fun onUpdateTableColumnWidth(id: String, columnIndex: Int, width: Int) =
+                viewModel.updateTableColumnWidth(id, columnIndex, width)
             override fun onUpdateTableStyle(
                 id: String,
                 cellStyles: Map<String, com.ben.inly.domain.model.TableCellStyle>,
@@ -532,7 +534,9 @@ fun NoteScreen(
                     },
                     globalTags = globalTags,
                     modifier = Modifier.fillMaxSize().hazeSource(state = hazeState),
-                    listState = editorListState
+                    listState = editorListState,
+                    onUndo = { viewModel.undo() },
+                    onRedo = { viewModel.redo() }
                 )
 
                 AnimatedVisibility(

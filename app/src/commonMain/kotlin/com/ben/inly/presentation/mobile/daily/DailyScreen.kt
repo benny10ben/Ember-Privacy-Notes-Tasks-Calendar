@@ -316,6 +316,8 @@ fun DailyScreen(
                 viewModel.updateSketchStrokes(id, strokes)
             override fun onUpdateTable(id: String, rows: List<List<String>>) =
                 viewModel.updateTable(id, rows)
+            override fun onUpdateTableColumnWidth(id: String, columnIndex: Int, width: Int) =
+                viewModel.updateTableColumnWidth(id, columnIndex, width)
             override fun onUpdateTableStyle(
                 id: String,
                 cellStyles: Map<String, com.ben.inly.domain.model.TableCellStyle>,
@@ -415,7 +417,9 @@ fun DailyScreen(
                             bottomContentPadding = bottomContentPadding +
                                 if (bottomContentPadding > 0.dp) 60.dp else 0.dp,
                             isCurrentActivePage = isCurrentActivePage,
-                            topContentPadding = rememberStableStatusBarsPadding().calculateTopPadding() + 72.dp
+                            topContentPadding = rememberStableStatusBarsPadding().calculateTopPadding() + 72.dp,
+                            onUndo = { viewModel.undo() },
+                            onRedo = { viewModel.redo() }
                         )
                     }
                 }

@@ -248,6 +248,7 @@ fun RemindersScreen(
                         override fun setScrollEnabled(enabled: Boolean) {}
                         override fun onUpdateSketch(id: String, strokes: List<com.ben.inly.domain.model.Stroke>) {}
                         override fun onUpdateTable(id: String, rows: List<List<String>>) {}
+                        override fun onUpdateTableColumnWidth(id: String, columnIndex: Int, width: Int) {}
                         override fun onUpdateTableStyle(
                             id: String,
                             cellStyles: Map<String, com.ben.inly.domain.model.TableCellStyle>,

@@ -463,6 +463,7 @@ data class TableBlock(
     val cellStyles: Map<String, TableCellStyle> = emptyMap(),
     val rowStyles: Map<String, TableCellStyle> = emptyMap(),
     val columnStyles: Map<String, TableCellStyle> = emptyMap(),
+    val columnWidths: Map<String, Int> = emptyMap(),
     override val indentationLevel: Int = 0,
     override val isBold: Boolean = false,
     override val isItalic: Boolean = false,

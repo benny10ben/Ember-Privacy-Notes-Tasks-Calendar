@@ -225,6 +225,8 @@ fun DailyEditorPane(
                 viewModel.updateSketchStrokes(id, strokes)
             override fun onUpdateTable(id: String, rows: List<List<String>>) =
                 viewModel.updateTable(id, rows)
+            override fun onUpdateTableColumnWidth(id: String, columnIndex: Int, width: Int) =
+                viewModel.updateTableColumnWidth(id, columnIndex, width)
             override fun onUpdateTableStyle(
                 id: String,
                 cellStyles: Map<String, com.ben.inly.domain.model.TableCellStyle>,
@@ -294,7 +296,9 @@ fun DailyEditorPane(
             } else {
                 rememberStableStatusBarsPadding().calculateTopPadding() + 150.dp
             },
-            modifier = Modifier.fillMaxSize().hazeSource(state = hazeState)
+            modifier = Modifier.fillMaxSize().hazeSource(state = hazeState),
+            onUndo = { viewModel.undo() },
+            onRedo = { viewModel.redo() }
         )
 
         AnimatedVisibility(

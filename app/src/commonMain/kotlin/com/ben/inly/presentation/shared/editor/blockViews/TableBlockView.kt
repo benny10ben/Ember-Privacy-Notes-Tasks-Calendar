@@ -5,9 +5,12 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -51,6 +54,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -69,12 +73,14 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.input.pointer.PointerEventTimeoutCancellationException
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.ben.inly.domain.model.TableBlock
 import com.ben.inly.domain.model.TableCellContentType
@@ -85,22 +91,26 @@ import com.ben.inly.presentation.shared.components.InlyBottomSheet
 import com.ben.inly.presentation.shared.components.InlyDesktopMenu
 import com.ben.inly.presentation.shared.components.rememberKeyboardHandoff
 import com.ben.inly.presentation.shared.editor.blockViews.databaseBlockView.DbOptionRow
+import com.ben.inly.presentation.shared.editor.components.DesktopCursor
+import com.ben.inly.presentation.shared.editor.components.desktopPointerCursor
 import com.ben.inly.presentation.shared.editor.mouseScrollable
 import inly.app.generated.resources.Res
 import inly.app.generated.resources.arrow_down
 import inly.app.generated.resources.arrow_left
 import inly.app.generated.resources.arrow_right
 import inly.app.generated.resources.arrow_up
+import inly.app.generated.resources.minus
 import inly.app.generated.resources.move_left
 import inly.app.generated.resources.move_right
 import inly.app.generated.resources.plus
 import inly.app.generated.resources.trash
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 import org.jetbrains.compose.resources.painterResource
 import kotlin.time.Duration.Companion.milliseconds
 
-private val CellWidth = 140.dp
+private const val DefaultColumnWidth = 140
 private val CellMinHeight = 44.dp
 private val GutterSize = 44.dp
 private val SidePadding = 18.dp
@@ -128,7 +138,8 @@ fun TableBlockView(
         cellStyles: Map<String, TableCellStyle>,
         rowStyles: Map<String, TableCellStyle>,
         columnStyles: Map<String, TableCellStyle>
-    ) -> Unit
+    ) -> Unit,
+    onUpdateColumnWidth: (columnIndex: Int, width: Int) -> Unit
 ) {
     val rows = block.rows
     val columnCount = rows.firstOrNull()?.size ?: 0
@@ -191,6 +202,19 @@ fun TableBlockView(
     fun deleteColumnAt(index: Int) {
         if (columnCount <= 1) return
         onUpdateTable(rows.map { row -> row.filterIndexed { i, _ -> i != index } })
+    }
+
+    // Overrides block.columnWidths while a drag is in progress, so the column resizes instantly
+    // on every pointer delta instead of waiting on a full modifyBlocks -> StateFlow -> recompose
+    // round trip per pixel. Re-keyed (and thus cleared) whenever the persisted widths change -
+    // i.e. once this same drag's own onDragStopped commit lands, or a sync update arrives.
+    val liveColumnWidths = remember(block.columnWidths) { mutableStateMapOf<Int, Int>() }
+
+    fun columnWidthFor(colIndex: Int): Int =
+        liveColumnWidths[colIndex] ?: block.columnWidths["$colIndex"] ?: DefaultColumnWidth
+
+    fun updateColumnWidthBy(colIndex: Int, delta: Int) {
+        onUpdateColumnWidth(colIndex, (columnWidthFor(colIndex) + delta).coerceIn(40, 600))
     }
 
     fun moveRow(index: Int, targetIndex: Int) {
@@ -341,6 +365,56 @@ fun TableBlockView(
                 }
             }
 
+            if (!isDesktopPlatform) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 12.dp),
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                )
+
+                StyleSectionLabel("Column Width")
+                Row(
+                    modifier = Modifier.padding(bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
+                        modifier = Modifier.clickable { updateColumnWidthBy(colIndex, -20) }
+                    ) {
+                        Icon(
+                            painterResource(Res.drawable.minus),
+                            contentDescription = "Decrease column width",
+                            modifier = Modifier.padding(8.dp).size(18.dp),
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    Text(
+                        text = "${columnWidthFor(colIndex)} px",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.widthIn(min = 50.dp),
+                        textAlign = TextAlign.Center
+                    )
+
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
+                        modifier = Modifier.clickable { updateColumnWidthBy(colIndex, 20) }
+                    ) {
+                        Icon(
+                            painterResource(Res.drawable.plus),
+                            contentDescription = "Increase column width",
+                            modifier = Modifier.padding(8.dp).size(18.dp),
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            }
+
             HorizontalDivider(
                 modifier = Modifier.padding(vertical = 12.dp),
                 color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
@@ -401,6 +475,7 @@ fun TableBlockView(
                                         TableGridCell(
                                             value = cellValue,
                                             style = cellStyle,
+                                            width = columnWidthFor(columnIndex).dp,
                                             inSelectionMode = inSelectionMode,
                                             isHighlighted = isHighlighted,
                                             borderColor = borderColor,
@@ -420,6 +495,33 @@ fun TableBlockView(
                                                 onDismissRequest = { closeMenu() }
                                             ) {
                                                 TableMenuPopupContent(title = styleSheetTitle) { styleSheetBody() }
+                                            }
+
+                                            if (rowIndex == 0) {
+                                                val density = LocalDensity.current
+                                                var widthDragAccumulator by remember(columnIndex) { mutableStateOf(0f) }
+                                                Box(
+                                                    modifier = Modifier
+                                                        .align(Alignment.CenterEnd)
+                                                        .fillMaxHeight()
+                                                        .width(8.dp)
+                                                        .desktopPointerCursor(DesktopCursor.RESIZE_HORIZONTAL)
+                                                        .draggable(
+                                                            orientation = Orientation.Horizontal,
+                                                            state = rememberDraggableState { delta ->
+                                                                widthDragAccumulator += with(density) { delta.toDp().value }
+                                                                val wholePixels = widthDragAccumulator.toInt()
+                                                                if (wholePixels != 0) {
+                                                                    widthDragAccumulator -= wholePixels
+                                                                    val newWidth = (columnWidthFor(columnIndex) + wholePixels).coerceIn(40, 600)
+                                                                    liveColumnWidths[columnIndex] = newWidth
+                                                                }
+                                                            },
+                                                            onDragStopped = {
+                                                                liveColumnWidths[columnIndex]?.let { onUpdateColumnWidth(columnIndex, it) }
+                                                            }
+                                                        )
+                                                )
                                             }
                                         }
                                     }
@@ -509,6 +611,7 @@ private fun TableMenuPopupContent(title: String, content: @Composable () -> Unit
 private fun TableGridCell(
     value: String,
     style: TableCellStyle,
+    width: Dp,
     inSelectionMode: Boolean,
     isHighlighted: Boolean,
     borderColor: Color,
@@ -535,7 +638,7 @@ private fun TableGridCell(
 
     Box(
         modifier = Modifier
-            .width(CellWidth)
+            .width(width)
             .fillMaxHeight()
             .defaultMinSize(minHeight = CellMinHeight)
             .background(backgroundColor)

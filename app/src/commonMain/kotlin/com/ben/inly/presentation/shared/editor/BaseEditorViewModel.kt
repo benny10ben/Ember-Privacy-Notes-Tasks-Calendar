@@ -1656,6 +1656,19 @@ abstract class BaseEditorViewModel(
         scheduleAutosave()
     }
 
+    fun updateTableColumnWidth(blockId: String, columnIndex: Int, width: Int) {
+        val now = System.currentTimeMillis()
+        modifyBlocks { list ->
+            mapBlockById(list, blockId) {
+                if (it is TableBlock) it.copy(
+                    columnWidths = it.columnWidths + (columnIndex.toString() to width.coerceIn(40, 600)),
+                    updatedAt = now
+                ) else it
+            }
+        }
+        scheduleAutosave()
+    }
+
     fun updateTableStyle(
         blockId: String,
         cellStyles: Map<String, TableCellStyle>,
