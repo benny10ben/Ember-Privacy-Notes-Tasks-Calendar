@@ -828,7 +828,7 @@ private fun HomeTopBar(
 
             Box {
                 TopBarIconButtonGroup(
-                    bgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.45f),
+                    bgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.65f),
                     tint = MaterialTheme.colorScheme.onSurface,
                     hazeState = hazeState,
                     items = listOf(
@@ -1317,14 +1317,14 @@ private fun TemplateRow(
         Icon(
             painter = painterResource(Res.drawable.pen),
             contentDescription = "Edit template",
-            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
             modifier = Modifier.size(15.dp).noRippleClickable(onEdit)
         )
         Spacer(Modifier.width(14.dp))
         Icon(
             painter = painterResource(Res.drawable.trash),
             contentDescription = "Delete template",
-            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
             modifier = Modifier.size(16.dp).noRippleClickable(onDelete)
         )
     }

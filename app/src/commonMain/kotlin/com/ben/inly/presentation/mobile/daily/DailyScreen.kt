@@ -685,7 +685,7 @@ private fun DailyTopBar(
             {
                 Box {
                     TopBarIconButtonGroup(
-                        bgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.45f),
+                        bgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.65f),
                         tint = MaterialTheme.colorScheme.onBackground,
                         hazeState = hazeState,
                         items = listOf(

@@ -778,21 +778,21 @@ fun InlyApp(
                         }
                     }
                     // top progressive fade
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .fillMaxWidth()
-                            .height(rememberStableStatusBarsPadding().calculateTopPadding() + 46.dp)
-                            .background(
-                                brush = Brush.verticalGradient(
-                                    colors = listOf(
-                                        MaterialTheme.colorScheme.background.copy(alpha = 1f),
-                                        MaterialTheme.colorScheme.background.copy(alpha = 0.5f),
-                                        MaterialTheme.colorScheme.background.copy(alpha = 0f)
-                                    )
-                                )
-                            )
-                    )
+//                    Box(
+//                        modifier = Modifier
+//                            .align(Alignment.TopCenter)
+//                            .fillMaxWidth()
+//                            .height(rememberStableStatusBarsPadding().calculateTopPadding() + 36.dp)
+//                            .background(
+//                                brush = Brush.verticalGradient(
+//                                    colors = listOf(
+//                                        MaterialTheme.colorScheme.background.copy(alpha = 1f),
+//                                        MaterialTheme.colorScheme.background.copy(alpha = 0.5f),
+//                                        MaterialTheme.colorScheme.background.copy(alpha = 0f)
+//                                    )
+//                                )
+//                            )
+//                    )
 
                     if (!isDesktopPlatform) {
                         AnimatedVisibility(

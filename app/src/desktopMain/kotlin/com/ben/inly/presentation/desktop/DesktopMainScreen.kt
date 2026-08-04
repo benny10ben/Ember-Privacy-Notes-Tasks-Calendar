@@ -425,7 +425,7 @@ fun DesktopMainScreen(
                     Spacer(Modifier.weight(1f))
                     Box {
                         TopBarIconButtonGroup(
-                            bgColor = if (LocalAppIsDark.current) MaterialTheme.colorScheme.surface.copy(alpha = 0.45f) else MaterialTheme.colorScheme.background.copy(alpha = 0.45f),
+                            bgColor = if (LocalAppIsDark.current) MaterialTheme.colorScheme.surface.copy(alpha = 0.65f) else MaterialTheme.colorScheme.background.copy(alpha = 0.65f),
                             tint = MaterialTheme.colorScheme.onBackground,
                             items = listOf(
                                 TopBarIconButtonItem(
@@ -844,7 +844,7 @@ fun DesktopMainScreen(
                 TopBarIconButton(
                     icon = painterResource(Res.drawable.search),
                     contentDescription = "Search",
-                    bgColor = if (LocalAppIsDark.current) MaterialTheme.colorScheme.surface.copy(alpha = 0.45f) else MaterialTheme.colorScheme.background.copy(alpha = 0.45f),
+                    bgColor = if (LocalAppIsDark.current) MaterialTheme.colorScheme.surface.copy(alpha = 0.65f) else MaterialTheme.colorScheme.background.copy(alpha = 0.65f),
                     tint = MaterialTheme.colorScheme.onSurface,
                     hazeState = sidebarHazeState,
                     onClick = { showSearchDialog = true }
@@ -852,7 +852,7 @@ fun DesktopMainScreen(
                 TopBarIconButton(
                     icon = painterResource(Res.drawable.astroid),
                     contentDescription = "Ask AI",
-                    bgColor = if (LocalAppIsDark.current) MaterialTheme.colorScheme.surface.copy(alpha = 0.45f) else MaterialTheme.colorScheme.background.copy(alpha = 0.45f),
+                    bgColor = if (LocalAppIsDark.current) MaterialTheme.colorScheme.surface.copy(alpha = 0.65f) else MaterialTheme.colorScheme.background.copy(alpha = 0.65f),
                     tint = MaterialTheme.colorScheme.onSurface,
                     hazeState = sidebarHazeState,
                     onClick = onAiIconTap
@@ -969,7 +969,7 @@ fun DesktopMainScreen(
                             TopBarIconButton(
                                 icon = painterResource(Res.drawable.sidebar),
                                 contentDescription = "Expand sidebar",
-                                bgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.45f),
+                                bgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.65f),
                                 tint = MaterialTheme.colorScheme.onSurface,
                                 hazeState = rightPanelHazeState,
                                 onClick = onToggleSidebar

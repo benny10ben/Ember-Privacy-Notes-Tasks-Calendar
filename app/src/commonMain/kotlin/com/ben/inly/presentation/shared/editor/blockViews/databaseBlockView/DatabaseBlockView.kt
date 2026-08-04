@@ -2816,7 +2816,7 @@ fun TableCell(
             val value = cell.displayText()
             Text(
                 text = value.ifEmpty { "—" }, style = MaterialTheme.typography.bodyLarge,
-                color = if (value.isEmpty()) MaterialTheme.colorScheme.outline.copy(alpha = 0.45f) else MaterialTheme.colorScheme.onSurface,
+                color = if (value.isEmpty()) MaterialTheme.colorScheme.outline.copy(alpha = 0.65f) else MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.fillMaxWidth().clickable(enabled = !inSelectionMode) { onDateClick() }
             )
         }
@@ -2910,7 +2910,7 @@ fun TableCell(
             val value = (cell as? CellData.Text)?.value ?: ""
             Box(modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 24.dp).combinedClickable(onClick = { if (!inSelectionMode) onPriorityClick() }, onLongClick = { if (!inSelectionMode) onLongPress() })) {
                 if (value.isBlank()) {
-                    Text("—", color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f), style = MaterialTheme.typography.labelSmall)
+                    Text("—", color = MaterialTheme.colorScheme.outline.copy(alpha = 0.65f), style = MaterialTheme.typography.labelSmall)
                 } else {
                     val chipColor = priorityAccentColor(value) ?: MaterialTheme.colorScheme.outline
                     Surface(shape = RoundedCornerShape(4.dp), color = chipColor.copy(alpha = 0.15f)) {
@@ -2924,7 +2924,7 @@ fun TableCell(
             val value = (cell as? CellData.Text)?.value ?: ""
             Box(modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 24.dp).combinedClickable(onClick = { if (!inSelectionMode) onStatusClick() }, onLongClick = { if (!inSelectionMode) onLongPress() })) {
                 if (value.isBlank()) {
-                    Text("—", color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f), style = MaterialTheme.typography.labelSmall)
+                    Text("—", color = MaterialTheme.colorScheme.outline.copy(alpha = 0.65f), style = MaterialTheme.typography.labelSmall)
                 } else {
                     val chipColor = statusAccentColor(
                         value

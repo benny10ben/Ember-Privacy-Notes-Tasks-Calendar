@@ -170,7 +170,7 @@ private fun TrashTopBar(
     showEmptyAction: Boolean,
     onEmptyTrashClick: () -> Unit
 ) {
-    val defaultBgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.45f)
+    val defaultBgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.65f)
     val defaultContentColor = MaterialTheme.colorScheme.onSurface
 
     Box(

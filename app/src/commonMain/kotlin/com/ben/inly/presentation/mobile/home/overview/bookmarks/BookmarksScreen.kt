@@ -253,7 +253,7 @@ fun BookmarksScreen(
                 exit = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(300, easing = FastOutSlowInEasing)) + fadeOut(tween(300)),
                 modifier = Modifier.align(Alignment.BottomCenter)
             ) {
-                val defaultBgColor = if (isDesktopPlatform) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.background.copy(alpha = 0.45f)
+                val defaultBgColor = if (isDesktopPlatform) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.background.copy(alpha = 0.65f)
                 val defaultContentColor = MaterialTheme.colorScheme.onSurface
                 val barSize = if (isDesktopPlatform) 46.dp else 52.dp
 
@@ -442,7 +442,7 @@ private fun BookmarksTopBar(
     onBackClick: () -> Unit,
     onAddClick: () -> Unit
 ) {
-    val defaultBgColor = if (isDesktopPlatform) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.background.copy(alpha = 0.45f)
+    val defaultBgColor = if (isDesktopPlatform) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.background.copy(alpha = 0.65f)
     val defaultContentColor = MaterialTheme.colorScheme.onSurface
 
     Row(

@@ -484,7 +484,7 @@ private fun CalendarTopBar(
     hazeState: HazeState,
     modifier: Modifier = Modifier
 ) {
-    val defaultBgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.45f)
+    val defaultBgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.65f)
     val defaultContentColor = MaterialTheme.colorScheme.onSurface
 
     Row(

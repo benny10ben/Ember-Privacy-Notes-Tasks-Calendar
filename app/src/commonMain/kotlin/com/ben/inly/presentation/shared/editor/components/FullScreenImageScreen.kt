@@ -48,7 +48,7 @@ fun FullScreenImageScreen(
     var offset by remember { mutableStateOf(Offset.Zero) }
 
     val hazeState = remember { HazeState() }
-    val pillColor = MaterialTheme.colorScheme.background.copy(alpha = 0.45f)
+    val pillColor = MaterialTheme.colorScheme.background.copy(alpha = 0.65f)
     val tint = MaterialTheme.colorScheme.primary
 
     Box(

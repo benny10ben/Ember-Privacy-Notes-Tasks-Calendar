@@ -179,7 +179,7 @@ fun SearchScreen(
                 TopBarIconButton(
                     icon = painterResource(Res.drawable.chevron_left),
                     contentDescription = "Back",
-                    bgColor = if (isDesktopPlatform) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.background.copy(alpha = 0.45f),
+                    bgColor = if (isDesktopPlatform) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.background.copy(alpha = 0.65f),
                     tint = MaterialTheme.colorScheme.onSurface,
                     hazeState = hazeState,
                     onClick = onBack

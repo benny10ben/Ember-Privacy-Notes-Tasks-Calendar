@@ -726,7 +726,7 @@ fun SettingsSelectionRow(
 
 @Composable
 private fun SettingsTopBar(onNavigateBack: () -> Unit, hazeState: HazeState) {
-    val defaultBgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.45f)
+    val defaultBgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.65f)
     val defaultContentColor = MaterialTheme.colorScheme.onSurface
 
     Box(
@@ -784,7 +784,7 @@ fun SettingsGroup(
             text = title,
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.45f),
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f),
             modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
         )
 

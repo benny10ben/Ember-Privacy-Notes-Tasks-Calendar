@@ -1191,7 +1191,7 @@ private fun NoteTopBar(
     onCollapsedTitleClick: () -> Unit = {},
     onPositioned: (androidx.compose.ui.layout.LayoutCoordinates) -> Unit = {}
 ) {
-    val defaultBgColor = topBarBgColor ?: MaterialTheme.colorScheme.background.copy(alpha = 0.45f)
+    val defaultBgColor = topBarBgColor ?: MaterialTheme.colorScheme.background.copy(alpha = 0.65f)
     val defaultContentColor = topBarContentColor ?: MaterialTheme.colorScheme.onSurface
 
     Box(
@@ -1267,7 +1267,7 @@ private fun NoteTopBar(
         if (isEditingTemplate) {
             Surface(
                 shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.background.copy(alpha = 0.45f),
+                color = MaterialTheme.colorScheme.background.copy(alpha = 0.65f),
                 contentColor = MaterialTheme.colorScheme.primary,
                 modifier = Modifier
                     .clip(RoundedCornerShape(12.dp))

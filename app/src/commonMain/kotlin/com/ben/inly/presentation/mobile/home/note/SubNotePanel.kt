@@ -154,7 +154,7 @@ fun SubNotePanel(
             var innerPanelNoteId by remember { mutableStateOf<String?>(null) }
             val hazeState = remember { HazeState() }
 
-            val topBarBgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.45f)
+            val topBarBgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.65f)
             val topBarContentColor = MaterialTheme.colorScheme.onSurface
 
             val panelColorScheme = MaterialTheme.colorScheme.copy(
@@ -203,7 +203,7 @@ fun SubNotePanel(
                 TopBarIconButton(
                     icon = (if (isExpanded) painterResource(Res.drawable.minimize_2) else painterResource(Res.drawable.maximize_2)).scaledDown(0.8f),
                     contentDescription = if (isExpanded) "Collapse panel" else "Expand panel",
-                    bgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.45f),
+                    bgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.65f),
                     tint = MaterialTheme.colorScheme.onSurface,
                     hazeState = hazeState,
                     onClick = { isExpanded = !isExpanded }

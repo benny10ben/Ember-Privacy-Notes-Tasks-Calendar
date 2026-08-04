@@ -693,7 +693,7 @@ fun SidebarSectionHeader(
             Icon(
                 imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                 contentDescription = "Toggle $title",
-                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
                 modifier = Modifier.padding(start = 2.dp).size(22.dp)
             )
         }

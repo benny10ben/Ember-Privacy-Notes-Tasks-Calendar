@@ -639,7 +639,7 @@ private fun ErrorMessageCard(message: String) {
 
 @Composable
 private fun SelfHostSetupTopBar(onNavigateBack: () -> Unit, hazeState: HazeState) {
-    val defaultBgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.45f)
+    val defaultBgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.65f)
     val defaultContentColor = MaterialTheme.colorScheme.onSurface
 
     Box(
