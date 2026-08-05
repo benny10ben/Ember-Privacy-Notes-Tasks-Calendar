@@ -102,6 +102,7 @@ import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.ben.inly.presentation.shared.components.InlyBlur
 import com.ben.inly.ui.theme.LocalAppIsDark
 import dev.chrisbanes.haze.hazeSource
 import inly.app.generated.resources.Res
@@ -240,8 +241,7 @@ fun DesktopMainScreen(
     ragViewModel: com.ben.inly.presentation.rag.RagViewModel? = null,
     onDismissRagChat: () -> Unit = {},
 ) {
-    val sidebarHazeState = remember { HazeState() }
-    val rightPanelHazeState = remember { HazeState() }
+    val hazeState = remember { HazeState() }
     val savedWidth by settingsManager.desktopSidebarWidthFlow.collectAsState(initial = sidebarWidth.value)
     var panelWidth by remember { mutableStateOf(sidebarWidth) }
     var hasLoadedWidth by remember { mutableStateOf(false) }
@@ -422,8 +422,10 @@ fun DesktopMainScreen(
                     Spacer(Modifier.weight(1f))
                     Box {
                         TopBarIconButtonGroup(
-                            bgColor = if (LocalAppIsDark.current) MaterialTheme.colorScheme.surface.copy(alpha = 0.65f) else MaterialTheme.colorScheme.background.copy(alpha = 0.65f),
-                            tint = MaterialTheme.colorScheme.onBackground,
+                            bgColor = Color.Transparent,
+                            tint = MaterialTheme.colorScheme.primary,
+                            hazeState = hazeState,
+                            hazeStyle = InlyBlur.Regular,
                             items = listOf(
                                 TopBarIconButtonItem(
                                     icon = painterResource(Res.drawable.calendar),
@@ -458,7 +460,7 @@ fun DesktopMainScreen(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                        .hazeSource(sidebarHazeState)
+                        .hazeSource(hazeState)
                         .background(if (isSidebarVisible) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.surface)
                         .sidebarDragTracker(
                             dragState = dragState,
@@ -841,17 +843,19 @@ fun DesktopMainScreen(
                 TopBarIconButton(
                     icon = painterResource(Res.drawable.search),
                     contentDescription = "Search",
-                    bgColor = if (LocalAppIsDark.current) MaterialTheme.colorScheme.surface.copy(alpha = 0.65f) else MaterialTheme.colorScheme.background.copy(alpha = 0.65f),
-                    tint = MaterialTheme.colorScheme.onSurface,
-                    hazeState = sidebarHazeState,
+                    bgColor = Color.Transparent,
+                    tint = MaterialTheme.colorScheme.primary,
+                    hazeState = hazeState,
+                    hazeStyle = InlyBlur.Regular,
                     onClick = { showSearchDialog = true }
                 )
                 TopBarIconButton(
                     icon = painterResource(Res.drawable.astroid),
                     contentDescription = "Ask AI",
-                    bgColor = if (LocalAppIsDark.current) MaterialTheme.colorScheme.surface.copy(alpha = 0.65f) else MaterialTheme.colorScheme.background.copy(alpha = 0.65f),
-                    tint = MaterialTheme.colorScheme.onSurface,
-                    hazeState = sidebarHazeState,
+                    bgColor = Color.Transparent,
+                    tint = MaterialTheme.colorScheme.primary,
+                    hazeState = hazeState,
+                    hazeStyle = InlyBlur.Regular,
                     onClick = onAiIconTap
                 )
             }
@@ -860,12 +864,12 @@ fun DesktopMainScreen(
 
     // RIGHT PANEL
     val rightPanel = @Composable {
-        Box(Modifier.fillMaxSize().hazeSource(state = rightPanelHazeState)) {
+        Box(Modifier.fillMaxSize().hazeSource(state = hazeState)) {
             when (val d = detail) {
                 null -> Box(Modifier.fillMaxSize())
                 is DetailPane.Daily -> DailyEditorPane(
                     viewModel = dailyViewModel,
-                    hazeState = rightPanelHazeState,
+                    hazeState = hazeState,
                     isSidebarVisible = isSidebarVisible,
                     onPickImage = onPickImage,
                     onTakePhoto = onTakePhoto,
@@ -966,9 +970,10 @@ fun DesktopMainScreen(
                             TopBarIconButton(
                                 icon = painterResource(Res.drawable.sidebar),
                                 contentDescription = "Expand sidebar",
-                                bgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.65f),
-                                tint = MaterialTheme.colorScheme.onSurface,
-                                hazeState = rightPanelHazeState,
+                                bgColor = Color.Transparent,
+                                tint = MaterialTheme.colorScheme.primary,
+                                hazeState = hazeState,
+                                hazeStyle = InlyBlur.Regular,
                                 onClick = onToggleSidebar
                             )
                         }
