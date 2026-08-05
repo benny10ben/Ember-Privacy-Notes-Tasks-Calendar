@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -50,26 +51,28 @@ class LocalAiEngine(
         contextBlock: String,
         conversationHistory: List<ChatTurn>
     ): Flow<String> = callbackFlow {
-        nativeMutex.withLock {
-            ensureGeneratorLoaded()
+        launch(Dispatchers.IO) {
+            nativeMutex.withLock {
+                ensureGeneratorLoaded()
 
-            val historyMessages = conversationHistory.flatMap { turn ->
-                listOf("user" to turn.userMessage, "assistant" to turn.assistantMessage)
-            }
-
-            val formattedPrompt = LlamaBridge.applyChatTemplate(
-                messages = listOf("system" to "$systemPrompt\n\n$contextBlock") + historyMessages + listOf("user" to userQuestion),
-                addAssistantPrefix = true
-            ) ?: "$systemPrompt\n\n$contextBlock\n\nUser: $userQuestion\n\nAssistant:"
-
-            LlamaBridge.generateStream(
-                prompt = formattedPrompt,
-                callback = object : GenStream {
-                    override fun onDelta(text: String) { trySend(text) }
-                    override fun onComplete()           { close() }
-                    override fun onError(message: String) { close(Exception(message)) }
+                val historyMessages = conversationHistory.flatMap { turn ->
+                    listOf("user" to turn.userMessage, "assistant" to turn.assistantMessage)
                 }
-            )
+
+                val formattedPrompt = LlamaBridge.applyChatTemplate(
+                    messages = listOf("system" to "$systemPrompt\n\n$contextBlock") + historyMessages + listOf("user" to userQuestion),
+                    addAssistantPrefix = true
+                ) ?: "$systemPrompt\n\n$contextBlock\n\nUser: $userQuestion\n\nAssistant:"
+
+                LlamaBridge.generateStream(
+                    prompt = formattedPrompt,
+                    callback = object : GenStream {
+                        override fun onDelta(text: String) { trySend(text) }
+                        override fun onComplete()           { close() }
+                        override fun onError(message: String) { close(Exception(message)) }
+                    }
+                )
+            }
         }
 
         awaitClose { LlamaBridge.nativeCancelGenerate() }

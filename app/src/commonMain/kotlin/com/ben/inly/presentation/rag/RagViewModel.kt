@@ -36,6 +36,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
+import kotlin.coroutines.coroutineContext
 
 sealed interface EmbeddingSetupState {
     data object Checking : EmbeddingSetupState
@@ -449,8 +450,10 @@ class RagViewModel(
         viewModelScope.launch { persistCurrentSession() }
 
         activeGenerationJob = viewModelScope.launch {
+            val thisJob = coroutineContext[Job]
             try {
                 ragRepository.queryAiStream(query, conversationHistory).collect { token ->
+                    if (activeGenerationJob !== thisJob) return@collect
                     val list = _messages.value.toMutableList()
                     val last = list.last()
                     list[list.lastIndex] = last.copy(text = last.text + token)
@@ -459,16 +462,20 @@ class RagViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                val friendlyMessage = when (e) {
-                    is ExternalAiException -> e.message ?: "Sorry, an error occurred."
-                    else -> "Sorry, an error occurred: ${e.message}"
+                if (activeGenerationJob === thisJob) {
+                    val friendlyMessage = when (e) {
+                        is ExternalAiException -> e.message ?: "Sorry, an error occurred."
+                        else -> "Sorry, an error occurred: ${e.message}"
+                    }
+                    val list = _messages.value.toMutableList()
+                    val last = list.last()
+                    list[list.lastIndex] = last.copy(text = friendlyMessage)
+                    _messages.value = list
                 }
-                val list = _messages.value.toMutableList()
-                val last = list.last()
-                list[list.lastIndex] = last.copy(text = friendlyMessage)
-                _messages.value = list
             } finally {
-                _isLoading.value = false
+                if (activeGenerationJob === thisJob) {
+                    _isLoading.value = false
+                }
                 persistCurrentSession()
             }
         }
@@ -476,6 +483,16 @@ class RagViewModel(
 
     fun stopGeneration() {
         activeGenerationJob?.cancel()
+        _isLoading.value = false
+
+        val list = _messages.value.toMutableList()
+        val last = list.lastOrNull()
+        if (last != null && !last.isUser && last.text.isEmpty()) {
+            list.removeAt(list.lastIndex)
+            _messages.value = list
+        }
+
+        viewModelScope.launch { persistCurrentSession() }
     }
 
     fun beginEditingMessage(messageId: String) {

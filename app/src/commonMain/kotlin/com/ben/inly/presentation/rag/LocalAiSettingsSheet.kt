@@ -1,7 +1,9 @@
 package com.ben.inly.presentation.rag
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -33,7 +35,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import com.ben.inly.domain.ai.models.ModelDownloadProgress
 import com.ben.inly.domain.ai.models.ModelFileNames
+import com.ben.inly.presentation.shared.components.InlyAlertDialog
 import com.ben.inly.presentation.shared.components.InlyBottomSheet
+import com.ben.inly.presentation.shared.components.InlyButtonPrimary
+import com.ben.inly.presentation.shared.components.InlyButtonSecondary
 import com.ben.inly.presentation.shared.components.InlyTextField
 
 @Composable
@@ -229,31 +234,35 @@ internal fun LocalAiSettingsSheet(
     }
 
     if (showUploadWarning) {
-        AlertDialog(
+        InlyAlertDialog(
             onDismissRequest = { showUploadWarning = false },
-            title = {
-                Text("Uploading a custom model", style = MaterialTheme.typography.titleLarge)
-            },
-            text = {
-                Text(
-                    "Heavy or high-parameter models can use a lot of RAM and may freeze or crash your device. Only upload a model you know your device can handle.",
-                    style = MaterialTheme.typography.labelSmall
+            title = "Uploading a custom model"
+        ) {
+            Text(
+                text = "Heavy or high-parameter models can use a lot of RAM and may freeze or crash your device. Only upload a model you know your device can handle.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+            )
+            Spacer(Modifier.height(20.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                InlyButtonSecondary(
+                    text = "Cancel",
+                    onClick = { showUploadWarning = false },
+                    modifier = Modifier.weight(1f)
                 )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    showUploadWarning = false
-                    onPickDocument { path -> viewModel.uploadGeneratorModel(path) }
-                }) {
-                    Text("Proceed", style = MaterialTheme.typography.bodyLarge)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showUploadWarning = false }) {
-                    Text("Cancel", style = MaterialTheme.typography.bodyLarge)
-                }
+                InlyButtonPrimary(
+                    text = "Proceed",
+                    onClick = {
+                        showUploadWarning = false
+                        onPickDocument { path -> viewModel.uploadGeneratorModel(path) }
+                    },
+                    modifier = Modifier.weight(1f)
+                )
             }
-        )
+        }
     }
 
     if (finetuneWarning != null) {

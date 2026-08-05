@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Key
@@ -65,8 +66,10 @@ import com.ben.inly.domain.ai.external.ExternalAiProviderConfig
 import com.ben.inly.domain.util.AiEventBus
 import com.ben.inly.domain.util.isDesktopPlatform
 import com.ben.inly.presentation.customInlyShadow
+import com.ben.inly.presentation.shared.components.InlyAlertDialog
 import com.ben.inly.presentation.shared.components.InlyBlur
 import com.ben.inly.presentation.shared.components.InlyBottomSheet
+import com.ben.inly.presentation.shared.components.InlyDesktopMenu
 import com.ben.inly.presentation.shared.components.InlyButtonPrimary
 import com.ben.inly.presentation.shared.components.InlyButtonSecondary
 import com.ben.inly.presentation.shared.components.InlyTextField
@@ -350,6 +353,20 @@ private fun RagChatContent(
                         hazeState = hazeState,
                         hazeStyle = InlyBlur.Regular,
                     )
+
+                    if (isDesktopPlatform) {
+                        InlyDesktopMenu(
+                            expanded = showChatHistorySheet,
+                            onDismissRequest = { showChatHistorySheet = false }
+                        ) {
+                            Column(modifier = Modifier.width(320.dp).padding(vertical = 8.dp)) {
+                                ChatHistoryMenuContent(
+                                    viewModel = viewModel,
+                                    closeAnd = { action -> action(); showChatHistorySheet = false }
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -368,19 +385,25 @@ private fun RagChatContent(
                 sharedTransitionScope = sharedTransitionScope,
                 chatAnimatedVisibilityScope = chatAnimatedVisibilityScope,
                 onSettingsClick = { showAiSettingsSheet = true },
+                showAiSettingsMenu = showAiSettingsSheet,
+                onAiSettingsMenuDismiss = { showAiSettingsSheet = false },
+                onLocalAiClick = { showLocalAiSheet = true },
+                onExternalAiClick = { showExternalAiSheet = true },
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
         }
     }
 
-    AiSettingsSheet(
-        expanded = showAiSettingsSheet,
-        onDismiss = { showAiSettingsSheet = false },
-        viewModel = viewModel,
-        onLocalAiClick = { showLocalAiSheet = true },
-        onExternalAiClick = { showExternalAiSheet = true },
-        onFineTuningClick = { showFineTuningSheet = true }
-    )
+    if (!isDesktopPlatform) {
+        AiSettingsSheet(
+            expanded = showAiSettingsSheet,
+            onDismiss = { showAiSettingsSheet = false },
+            viewModel = viewModel,
+            onLocalAiClick = { showLocalAiSheet = true },
+            onExternalAiClick = { showExternalAiSheet = true },
+            onFineTuningClick = { showFineTuningSheet = true }
+        )
+    }
 
     LocalAiSettingsSheet(
         expanded = showLocalAiSheet,
@@ -401,11 +424,13 @@ private fun RagChatContent(
         viewModel = viewModel
     )
 
-    ChatHistorySheet(
-        expanded = showChatHistorySheet,
-        onDismiss = { showChatHistorySheet = false },
-        viewModel = viewModel
-    )
+    if (!isDesktopPlatform) {
+        ChatHistorySheet(
+            expanded = showChatHistorySheet,
+            onDismiss = { showChatHistorySheet = false },
+            viewModel = viewModel
+        )
+    }
 }
 
 // Model unavailable
@@ -508,6 +533,40 @@ internal fun ModelOptionCard(
                 trailing()
             }
         }
+    }
+}
+
+@Composable
+private fun RagDesktopMenuItem(
+    icon: (@Composable () -> Unit)? = null,
+    text: String,
+    isDestructive: Boolean = false,
+    trailing: (@Composable () -> Unit)? = null,
+    onClick: () -> Unit
+) {
+    val textColor = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 2.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (icon != null) {
+            icon()
+            Spacer(modifier = Modifier.width(12.dp))
+        }
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyLarge,
+            color = textColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        if (trailing != null) trailing()
     }
 }
 
@@ -680,6 +739,10 @@ private fun ChatInputBar(
     sharedTransitionScope: SharedTransitionScope?,
     chatAnimatedVisibilityScope: AnimatedVisibilityScope?,
     onSettingsClick: () -> Unit,
+    showAiSettingsMenu: Boolean,
+    onAiSettingsMenuDismiss: () -> Unit,
+    onLocalAiClick: () -> Unit,
+    onExternalAiClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val canSend = value.isNotBlank() && enabled
@@ -791,22 +854,38 @@ private fun ChatInputBar(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surface)
-                            .clickable(enabled = true, onClick = onSettingsClick),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Default.Settings,
-                            contentDescription = "AI settings",
-                            tint = MaterialTheme.colorScheme.onSurface,
+                    Box {
+                        Box(
                             modifier = Modifier
-                                .size(18.dp)
-                                .then(aiIconModifier)
-                        )
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surface)
+                                .clickable(enabled = true, onClick = onSettingsClick),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.Settings,
+                                contentDescription = "AI settings",
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier
+                                    .size(18.dp)
+                                    .then(aiIconModifier)
+                            )
+                        }
+
+                        if (isDesktopPlatform) {
+                            InlyDesktopMenu(
+                                expanded = showAiSettingsMenu,
+                                onDismissRequest = onAiSettingsMenuDismiss
+                            ) {
+                                AiSettingsMenuContent(
+                                    viewModel = viewModel,
+                                    onLocalAiClick = { onAiSettingsMenuDismiss(); onLocalAiClick() },
+                                    onExternalAiClick = { onAiSettingsMenuDismiss(); onExternalAiClick() },
+                                    onDismiss = onAiSettingsMenuDismiss
+                                )
+                            }
+                        }
                     }
                     ModelPickerPill(viewModel = viewModel)
                 }
@@ -854,87 +933,129 @@ private fun ModelPickerPill(viewModel: RagViewModel) {
         selectedExternalModelName?.takeIf { it.isNotBlank() } ?: selectedExternalAiProvider.displayName
     }
 
-    Surface(
-        shape = RoundedCornerShape(50),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
-        modifier = Modifier
-            .clip(RoundedCornerShape(50))
-            .clickable { showPicker = true }
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+    val externalConfigs = remember { mutableStateMapOf<ExternalAiProvider, ExternalAiProviderConfig?>() }
+    var configsLoaded by remember { mutableStateOf(false) }
+
+    LaunchedEffect(showPicker) {
+        if (!showPicker) return@LaunchedEffect
+        viewModel.refreshInstalledLocalModels()
+        ExternalAiProvider.entries.forEach { provider ->
+            externalConfigs[provider] = viewModel.getExternalAiConfig(provider)
+        }
+        configsLoaded = true
+    }
+
+    Box {
+        Surface(
+            shape = RoundedCornerShape(50),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp,
+            modifier = Modifier
+                .clip(RoundedCornerShape(50))
+                .clickable { showPicker = true }
         ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.widthIn(max = 110.dp)
-            )
-            Icon(
-                Icons.Default.ArrowDropDown,
-                contentDescription = "Choose AI model",
-                tint = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.size(16.dp)
-            )
+            Row(
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = 110.dp)
+                )
+                Icon(
+                    Icons.Default.ArrowDropDown,
+                    contentDescription = "Choose AI model",
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+
+        if (isDesktopPlatform) {
+            InlyDesktopMenu(
+                expanded = showPicker,
+                onDismissRequest = { showPicker = false }
+            ) {
+                Column(modifier = Modifier.width(240.dp).padding(vertical = 4.dp)) {
+                    installedLocalModels.forEach { model ->
+                        RagDesktopMenuItem(
+                            text = model.displayName,
+                            trailing = {
+                                if (aiGenerationMode == AiGenerationMode.LOCAL && selectedLocalModelFileName == model.fileName) {
+                                    ActiveIndicator()
+                                }
+                            },
+                            onClick = { showPicker = false; viewModel.selectLocalModel(model.fileName) }
+                        )
+                    }
+                    if (configsLoaded) {
+                        ExternalAiProvider.entries.forEach { provider ->
+                            val config = externalConfigs[provider]
+                            val isConfigured = !config?.apiKey.isNullOrBlank()
+                            if (isConfigured) {
+                                RagDesktopMenuItem(
+                                    text = config?.model?.takeIf { it.isNotBlank() } ?: provider.displayName,
+                                    trailing = {
+                                        if (aiGenerationMode == AiGenerationMode.EXTERNAL && selectedExternalAiProvider == provider) {
+                                            ActiveIndicator()
+                                        }
+                                    },
+                                    onClick = { showPicker = false; viewModel.selectExternalProvider(provider) }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
-    InlyBottomSheet(
-        expanded = showPicker,
-        onDismiss = { showPicker = false },
-        title = "Choose AI Model",
-    ) { closeAnd ->
-        val externalConfigs = remember { mutableStateMapOf<ExternalAiProvider, ExternalAiProviderConfig?>() }
-        var configsLoaded by remember { mutableStateOf(false) }
-
-        LaunchedEffect(showPicker) {
-            if (!showPicker) return@LaunchedEffect
-            viewModel.refreshInstalledLocalModels()
-            ExternalAiProvider.entries.forEach { provider ->
-                externalConfigs[provider] = viewModel.getExternalAiConfig(provider)
-            }
-            configsLoaded = true
-        }
-
-        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
-            installedLocalModels.forEach { model ->
-                ModelOptionCard(
-                    icon = null,
-                    title = model.displayName,
-                    subtitle = null,
-                    onClick = { closeAnd { viewModel.selectLocalModel(model.fileName) } },
-                    trailing = {
-                        if (aiGenerationMode == AiGenerationMode.LOCAL && selectedLocalModelFileName == model.fileName) {
-                            ActiveIndicator()
-                        }
-                    }
-                )
-                Spacer(Modifier.height(10.dp))
-            }
-
-            if (configsLoaded) {
-                ExternalAiProvider.entries.forEach { provider ->
-                    val config = externalConfigs[provider]
-                    val isConfigured = !config?.apiKey.isNullOrBlank()
-                    if (isConfigured) {
-                        ModelOptionCard(
-                            icon = null,
-                            title = config?.model?.takeIf { it.isNotBlank() } ?: provider.displayName,
-                            subtitle = null,
-                            onClick = { closeAnd { viewModel.selectExternalProvider(provider) } },
-                            trailing = {
-                                if (aiGenerationMode == AiGenerationMode.EXTERNAL && selectedExternalAiProvider == provider) {
-                                    ActiveIndicator()
-                                }
+    if (!isDesktopPlatform) {
+        InlyBottomSheet(
+            expanded = showPicker,
+            onDismiss = { showPicker = false },
+            title = "Choose AI Model",
+        ) { closeAnd ->
+            Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+                installedLocalModels.forEach { model ->
+                    ModelOptionCard(
+                        icon = null,
+                        title = model.displayName,
+                        subtitle = null,
+                        onClick = { closeAnd { viewModel.selectLocalModel(model.fileName) } },
+                        trailing = {
+                            if (aiGenerationMode == AiGenerationMode.LOCAL && selectedLocalModelFileName == model.fileName) {
+                                ActiveIndicator()
                             }
-                        )
-                        Spacer(Modifier.height(10.dp))
+                        }
+                    )
+                    Spacer(Modifier.height(10.dp))
+                }
+
+                if (configsLoaded) {
+                    ExternalAiProvider.entries.forEach { provider ->
+                        val config = externalConfigs[provider]
+                        val isConfigured = !config?.apiKey.isNullOrBlank()
+                        if (isConfigured) {
+                            ModelOptionCard(
+                                icon = null,
+                                title = config?.model?.takeIf { it.isNotBlank() } ?: provider.displayName,
+                                subtitle = null,
+                                onClick = { closeAnd { viewModel.selectExternalProvider(provider) } },
+                                trailing = {
+                                    if (aiGenerationMode == AiGenerationMode.EXTERNAL && selectedExternalAiProvider == provider) {
+                                        ActiveIndicator()
+                                    }
+                                }
+                            )
+                            Spacer(Modifier.height(10.dp))
+                        }
                     }
                 }
             }
@@ -1016,6 +1137,91 @@ private fun AiSettingsSheet(
                 subtitle = knowledgeMode.displayName,
                 onClick = onFineTuningClick
             )
+        }
+    }
+}
+
+private enum class AiSettingsMenuLevel { MAIN, FINE_TUNING }
+
+@Composable
+private fun AiSettingsMenuContent(
+    viewModel: RagViewModel,
+    onLocalAiClick: () -> Unit,
+    onExternalAiClick: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val aiGenerationMode by viewModel.aiGenerationMode.collectAsState()
+    val selectedExternalAiProvider by viewModel.selectedExternalAiProvider.collectAsState()
+    val knowledgeMode by viewModel.knowledgeMode.collectAsState()
+    val selectedMaxOutputTokens by viewModel.maxOutputTokens.collectAsState()
+    var currentMenu by remember { mutableStateOf(AiSettingsMenuLevel.MAIN) }
+
+    Column(modifier = Modifier.width(260.dp).padding(vertical = 4.dp)) {
+        when (currentMenu) {
+            AiSettingsMenuLevel.MAIN -> {
+                RagDesktopMenuItem(text = "Local AI", onClick = onLocalAiClick)
+                RagDesktopMenuItem(
+                    text = if (aiGenerationMode == AiGenerationMode.EXTERNAL)
+                        "External AI — ${selectedExternalAiProvider.displayName}"
+                    else
+                        "External AI",
+                    onClick = onExternalAiClick
+                )
+                RagDesktopMenuItem(
+                    text = "Fine-tuning",
+                    onClick = { currentMenu = AiSettingsMenuLevel.FINE_TUNING }
+                )
+            }
+
+            AiSettingsMenuLevel.FINE_TUNING -> {
+                RagDesktopMenuItem(
+                    icon = { Icon(painterResource(Res.drawable.chevron_left), contentDescription = null, modifier = Modifier.size(20.dp)) },
+                    text = "Back to Options",
+                    onClick = { currentMenu = AiSettingsMenuLevel.MAIN }
+                )
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 4.dp, horizontal = 16.dp),
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                )
+                Text(
+                    text = "Knowledge Source",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                )
+                RagDesktopMenuItem(
+                    text = "Default",
+                    trailing = { if (knowledgeMode == KnowledgeMode.DEFAULT) ActiveIndicator() },
+                    onClick = { onDismiss(); viewModel.selectKnowledgeMode(KnowledgeMode.DEFAULT) }
+                )
+                RagDesktopMenuItem(
+                    text = "Only notes knowledge",
+                    trailing = { if (knowledgeMode == KnowledgeMode.NOTES_ONLY) ActiveIndicator() },
+                    onClick = { onDismiss(); viewModel.selectKnowledgeMode(KnowledgeMode.NOTES_ONLY) }
+                )
+                RagDesktopMenuItem(
+                    text = "Only real-world knowledge",
+                    trailing = { if (knowledgeMode == KnowledgeMode.WORLD_ONLY) ActiveIndicator() },
+                    onClick = { onDismiss(); viewModel.selectKnowledgeMode(KnowledgeMode.WORLD_ONLY) }
+                )
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 4.dp, horizontal = 16.dp),
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                )
+                Text(
+                    text = "Response Length",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                )
+                responseLengthOptions.forEach { option ->
+                    RagDesktopMenuItem(
+                        text = option.label,
+                        trailing = { if (selectedMaxOutputTokens == option.tokens) ActiveIndicator() },
+                        onClick = { onDismiss(); viewModel.selectMaxOutputTokens(option.tokens) }
+                    )
+                }
+            }
         }
     }
 }
@@ -1357,27 +1563,50 @@ private fun ChatHistorySheet(
     onDismiss: () -> Unit,
     viewModel: RagViewModel
 ) {
-    val sessions by viewModel.sessions.collectAsState()
-    val currentSessionId by viewModel.currentSessionId.collectAsState()
-
     InlyBottomSheet(
         expanded = expanded,
         onDismiss = onDismiss,
         title = "Chat History",
     ) { closeAnd ->
-        var searchQuery by remember { mutableStateOf("") }
+        ChatHistoryMenuContent(viewModel = viewModel, closeAnd = closeAnd)
+    }
+}
 
-        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
-            Spacer(Modifier.height(10.dp))
-            InlyTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                placeholder = "Search chats",
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+@Composable
+private fun ChatHistoryMenuContent(
+    viewModel: RagViewModel,
+    closeAnd: (() -> Unit) -> Unit
+) {
+    val sessions by viewModel.sessions.collectAsState()
+    val currentSessionId by viewModel.currentSessionId.collectAsState()
+    var searchQuery by remember { mutableStateOf("") }
+    val rowHorizontalPadding = if (isDesktopPlatform) 12.dp else 0.dp
+
+    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+        Spacer(Modifier.height(10.dp))
+        InlyTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            placeholder = "Search chats",
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = rowHorizontalPadding)
+        )
+        Spacer(Modifier.height(10.dp))
+
+        if (isDesktopPlatform) {
+            RagDesktopMenuItem(
+                icon = {
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                },
+                text = "New Chat",
+                onClick = { closeAnd { viewModel.clearChat() } }
             )
-            Spacer(Modifier.height(10.dp))
-
+        } else {
             Surface(
                 shape = RoundedCornerShape(12.dp),
                 color = Color.Transparent,
@@ -1406,44 +1635,78 @@ private fun ChatHistorySheet(
                     )
                 }
             }
-            HorizontalDivider(
-                modifier = Modifier.padding(vertical = 10.dp),
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
-            )
-            Spacer(Modifier.height(10.dp))
+        }
+        HorizontalDivider(
+            modifier = Modifier.padding(
+                vertical = 10.dp,
+                horizontal = if (isDesktopPlatform) 16.dp else 0.dp
+            ),
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+        )
+        Spacer(Modifier.height(10.dp))
 
-            val filteredSessions = remember(sessions, searchQuery) {
-                if (searchQuery.isBlank()) sessions
-                else sessions.filter { it.title.contains(searchQuery, ignoreCase = true) }
-            }
+        val filteredSessions = remember(sessions, searchQuery) {
+            if (searchQuery.isBlank()) sessions
+            else sessions.filter { it.title.contains(searchQuery, ignoreCase = true) }
+        }
 
+        Text(
+            text = "Recent Chats",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            modifier = Modifier.padding(horizontal = rowHorizontalPadding + 6.dp)
+        )
+        Spacer(Modifier.height(8.dp))
+
+        if (filteredSessions.isEmpty()) {
             Text(
-                text = "Recent Chats",
+                text = if (searchQuery.isBlank()) "No chats yet." else "No chats match your search.",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                modifier = Modifier.padding(vertical = 12.dp, horizontal = rowHorizontalPadding)
             )
-            Spacer(Modifier.height(8.dp))
-
-            if (filteredSessions.isEmpty()) {
-                Text(
-                    text = if (searchQuery.isBlank()) "No chats yet." else "No chats match your search.",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                    modifier = Modifier.padding(vertical = 12.dp)
-                )
-            } else {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    filteredSessions.forEach { session ->
-                        ChatSessionRow(
-                            session = session,
-                            isActive = session.id == currentSessionId,
-                            onClick = { closeAnd { viewModel.loadSession(session.id) } },
-                            onRename = { newTitle -> viewModel.renameSession(session.id, newTitle) },
-                            onDelete = { viewModel.deleteSession(session.id) }
-                        )
-                    }
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                filteredSessions.forEach { session ->
+                    ChatSessionRow(
+                        session = session,
+                        isActive = session.id == currentSessionId,
+                        onClick = { closeAnd { viewModel.loadSession(session.id) } },
+                        onRename = { newTitle -> viewModel.renameSession(session.id, newTitle) },
+                        onDelete = { viewModel.deleteSession(session.id) }
+                    )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun ChatSessionOptionsBottomSheet(
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    onRenameClick: () -> Unit,
+    onDeleteClick: () -> Unit
+) {
+    InlyBottomSheet(
+        expanded = expanded,
+        onDismiss = onDismiss,
+        title = "Chat Options",
+    ) { closeAnd ->
+        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+            ModelOptionCard(
+                icon = { Icon(Icons.Default.Edit, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp)) },
+                title = "Rename",
+                subtitle = null,
+                onClick = { closeAnd { onRenameClick() } }
+            )
+            Spacer(Modifier.height(10.dp))
+            ModelOptionCard(
+                icon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp)) },
+                title = "Delete",
+                subtitle = null,
+                onClick = { closeAnd { onDeleteClick() } }
+            )
         }
     }
 }
@@ -1467,11 +1730,15 @@ private fun ChatSessionRow(
         shadowElevation = 0.dp,
         modifier = Modifier
             .fillMaxWidth()
+            .then(if (isDesktopPlatform) Modifier.padding(horizontal = 8.dp, vertical = 2.dp) else Modifier)
             .clip(RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
     ) {
         Row(
-            modifier = Modifier.padding(vertical = 12.dp),
+            modifier = Modifier.padding(
+                horizontal = if (isDesktopPlatform) 12.dp else 0.dp,
+                vertical = if (isDesktopPlatform) 10.dp else 12.dp
+            ),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
@@ -1501,79 +1768,106 @@ private fun ChatSessionRow(
                         .size(20.dp)
                         .clickable { showMenu = true }
                 )
-                DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                    DropdownMenuItem(
-                        text = { Text("Rename") },
-                        onClick = {
-                            showMenu = false
-                            showRenameDialog = true
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Delete") },
-                        onClick = {
-                            showMenu = false
-                            showDeleteConfirm = true
-                        }
-                    )
+
+                if (isDesktopPlatform) {
+                    InlyDesktopMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Rename") },
+                            onClick = {
+                                showMenu = false
+                                showRenameDialog = true
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Delete") },
+                            onClick = {
+                                showMenu = false
+                                showDeleteConfirm = true
+                            }
+                        )
+                    }
                 }
             }
         }
     }
 
-    if (showRenameDialog) {
-        var titleInput by remember { mutableStateOf(session.title) }
-        AlertDialog(
-            onDismissRequest = { showRenameDialog = false },
-            title = { Text("Rename chat", style = MaterialTheme.typography.titleLarge) },
-            text = {
-                InlyTextField(
-                    value = titleInput,
-                    onValueChange = { titleInput = it },
-                    placeholder = "Chat name",
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    onRename(titleInput)
-                    showRenameDialog = false
-                }) {
-                    Text("Save", style = MaterialTheme.typography.bodyLarge)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showRenameDialog = false }) {
-                    Text("Cancel", style = MaterialTheme.typography.bodyLarge)
-                }
-            }
+    if (!isDesktopPlatform) {
+        ChatSessionOptionsBottomSheet(
+            expanded = showMenu,
+            onDismiss = { showMenu = false },
+            onRenameClick = { showRenameDialog = true },
+            onDeleteClick = { showDeleteConfirm = true }
         )
     }
 
-    if (showDeleteConfirm) {
-        AlertDialog(
-            onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("Delete this chat?", style = MaterialTheme.typography.titleLarge) },
-            text = {
-                Text(
-                    "This chat and its history will be permanently deleted.",
-                    style = MaterialTheme.typography.labelSmall
+    if (showRenameDialog) {
+        var titleInput by remember { mutableStateOf(session.title) }
+        InlyAlertDialog(
+            onDismissRequest = { showRenameDialog = false },
+            title = "Rename chat"
+        ) {
+            InlyTextField(
+                value = titleInput,
+                onValueChange = { titleInput = it },
+                placeholder = "Chat name",
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(20.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                InlyButtonSecondary(
+                    text = "Cancel",
+                    onClick = { showRenameDialog = false },
+                    modifier = Modifier.weight(1f)
                 )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    onDelete()
-                    showDeleteConfirm = false
-                }) {
-                    Text("Delete", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = false }) {
-                    Text("Cancel", style = MaterialTheme.typography.bodyLarge)
+                InlyButtonPrimary(
+                    text = "Save",
+                    onClick = { onRename(titleInput); showRenameDialog = false },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+    }
+
+    if (showDeleteConfirm) {
+        InlyAlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = "Delete this chat?"
+        ) {
+            Text(
+                text = "This chat and its history will be permanently deleted.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+            )
+            Spacer(Modifier.height(20.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                InlyButtonSecondary(
+                    text = "Cancel",
+                    onClick = { showDeleteConfirm = false },
+                    modifier = Modifier.weight(1f)
+                )
+                Button(
+                    onClick = { onDelete(); showDeleteConfirm = false },
+                    modifier = Modifier.weight(1f).height(46.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    ),
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
+                ) {
+                    Text("Delete", style = MaterialTheme.typography.bodyLarge)
                 }
             }
-        )
+        }
     }
 }
