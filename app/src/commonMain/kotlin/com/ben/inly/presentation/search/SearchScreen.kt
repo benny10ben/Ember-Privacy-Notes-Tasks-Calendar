@@ -220,7 +220,8 @@ fun SearchScreen(
                     .padding(horizontal = horizontalInset)
                     .height(barSize)
                     .then(
-                        with(sharedTransitionScope) {
+                        if (isDesktopPlatform) Modifier
+                        else with(sharedTransitionScope) {
                             Modifier.sharedBounds(
                                 sharedContentState = rememberSharedContentState(key = "calendarBottomBarPill"),
                                 animatedVisibilityScope = searchIconAnimatedVisibilityScope,
@@ -238,11 +239,12 @@ fun SearchScreen(
                     )
             ) {
                 Row(
-                    modifier = with(sharedTransitionScope) {
-                        Modifier
-                            .padding(horizontal = 16.dp, vertical = 6.dp)
-                            .skipToLookaheadSize()
-                    },
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                        .then(
+                            if (isDesktopPlatform) Modifier
+                            else with(sharedTransitionScope) { Modifier.skipToLookaheadSize() }
+                        ),
                     horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -254,7 +256,8 @@ fun SearchScreen(
                             .padding(end = 8.dp)
                             .size(20.dp)
                             .then(
-                                with(sharedTransitionScope) {
+                                if (isDesktopPlatform) Modifier
+                                else with(sharedTransitionScope) {
                                     Modifier.sharedElement(
                                         sharedContentState = rememberSharedContentState(key = "searchIcon"),
                                         animatedVisibilityScope = searchIconAnimatedVisibilityScope,
