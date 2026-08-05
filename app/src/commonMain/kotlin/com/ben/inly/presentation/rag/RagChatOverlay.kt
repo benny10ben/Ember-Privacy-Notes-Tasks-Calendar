@@ -595,10 +595,8 @@ fun ChatBubble(
     if (message.text.isEmpty() && !message.isUser) return
 
     val isUser  = message.isUser
-    val bgColor = if (isUser) MaterialTheme.colorScheme.primary
-    else MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
-    val textColor = if (isUser) MaterialTheme.colorScheme.onPrimary
-    else MaterialTheme.colorScheme.onSurface
+    val bgColor = if (isUser) MaterialTheme.colorScheme.surface else Color.Transparent
+    val textColor = MaterialTheme.colorScheme.onSurface
     val shape = if (isUser) RoundedCornerShape(20.dp, 20.dp, 6.dp, 20.dp)
     else         RoundedCornerShape(20.dp, 20.dp, 20.dp, 6.dp)
     val boxAlign = if (isUser) Alignment.CenterEnd else Alignment.CenterStart
@@ -736,12 +734,6 @@ private fun ChatInputBar(
         }
     } else Modifier
 
-    // FIX: was `Surface(color = defaultBgColor, ...)`. Surface appends its own background paint
-    // AFTER the modifier chain you pass in, so it painted a flat opaque rectangle on top of the
-    // hazeEffect blur — that's what caused the "unblurs / goes translucent" artifact. Switching to
-    // a plain Box lets us control paint order ourselves: hazeEffect first (captures + blurs
-    // whatever's behind), then background() on top of that blur — same pattern as DailyTopBar
-    // in DailyScreen.kt.
     Box(
         modifier = modifier
             .fillMaxWidth()
