@@ -517,6 +517,7 @@ class DailyEditorViewModel(
     fun selectDate(date: LocalDate) {
         if (_selectedDate.value == date) return
         clearUndoHistory()
+        clearFocusRequest()
         autosaveJob?.cancel()
         indexingJob?.cancel()
 

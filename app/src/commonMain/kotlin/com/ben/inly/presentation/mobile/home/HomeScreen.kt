@@ -54,7 +54,7 @@ import com.ben.inly.presentation.shared.components.KmpBackHandler
 import com.ben.inly.presentation.shared.components.TopBarIconButtonGroup
 import com.ben.inly.presentation.shared.components.TopBarIconButtonItem
 import com.ben.inly.presentation.sync.SyncViewModel
-import com.ben.inly.presentation.sync.showSyncToast
+import com.ben.inly.domain.util.showNativeToast
 import com.ben.inly.ui.theme.LocalAppIsDark
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
@@ -189,7 +189,7 @@ fun HomeScreen(
 
     LaunchedEffect(syncState) {
         if (syncState != "Idle" && syncState != "Syncing...") {
-            showSyncToast(syncState)
+            showNativeToast(syncState)
             syncViewModel.resetSyncStatus()
         }
     }

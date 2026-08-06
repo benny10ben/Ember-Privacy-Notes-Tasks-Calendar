@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.*
@@ -69,7 +70,7 @@ import com.ben.inly.presentation.shared.editor.BlockStyleBar
 import com.ben.inly.presentation.shared.rememberStableStatusBarsPadding
 import com.ben.inly.presentation.shared.stableStatusBarsPadding
 import com.ben.inly.presentation.sync.SyncViewModel
-import com.ben.inly.presentation.sync.showSyncToast
+import com.ben.inly.domain.util.showNativeToast
 import dev.chrisbanes.haze.hazeSource
 import inly.app.generated.resources.Res
 import inly.app.generated.resources.calendar
@@ -172,7 +173,7 @@ fun DailyScreen(
 
     LaunchedEffect(syncState) {
         if (syncState != "Idle" && syncState != "Syncing...") {
-            showSyncToast(syncState)
+            showNativeToast(syncState)
             syncViewModel.resetSyncStatus()
         }
     }
@@ -210,6 +211,7 @@ fun DailyScreen(
     }
 
     LaunchedEffect(selectedDate) {
+        GlobalEditorState.currentlyFocusedBlockId = null
         val targetPage = initialPage + initialDate.daysUntil(selectedDate)
         if (pagerState.currentPage != targetPage && !pagerState.isScrollInProgress) {
             if (abs(pagerState.currentPage - targetPage) > 3) {
@@ -402,6 +404,8 @@ fun DailyScreen(
                         previewCache[pageDateString] ?: emptyList()
                     }
 
+                    val pageListState = remember(pageDateString) { LazyListState() }
+
                     Box(modifier = Modifier.fillMaxSize()) {
                         EditorScreen(
                             blocks = displayBlocks,
@@ -411,6 +415,7 @@ fun DailyScreen(
                             focusRequest = if (isCurrentActivePage) focusRequest else null,
                             selectionRequest = if (isCurrentActivePage) selectionRequest else null,
                             topBarClearancePx = topBarBottomPx,
+                            listState = pageListState,
                             selectedBlockIds = selectedBlockIds,
                             mobileMenuState = mobileMenuState,
                             onMobileMenuStateChange = { mobileMenuState = it },

@@ -244,8 +244,6 @@ fun InlyApp(
         val currentShare by shareViewModel.currentShare.collectAsState()
         val linkableNotes by shareViewModel.linkableNotes.collectAsState()
         val shareNavigateToNoteId by shareViewModel.navigateToNoteId.collectAsState()
-        val shareSavedMessage by shareViewModel.savedMessage.collectAsState()
-        val snackbarHostState = remember { SnackbarHostState() }
 
         LaunchedEffect(shareNavigateToNoteId) {
             shareNavigateToNoteId?.let { id ->
@@ -254,17 +252,9 @@ fun InlyApp(
             }
         }
 
-        LaunchedEffect(shareSavedMessage) {
-            shareSavedMessage?.let { message ->
-                snackbarHostState.showSnackbar(message)
-                shareViewModel.clearSavedMessage()
-            }
-        }
-
         Scaffold(
             containerColor = MaterialTheme.colorScheme.background,
-            contentWindowInsets = WindowInsets(0),
-            snackbarHost = { SnackbarHost(snackbarHostState) }
+            contentWindowInsets = WindowInsets(0)
         ) { innerPadding ->
             SharedTransitionLayout(
                 modifier = Modifier.fillMaxSize()

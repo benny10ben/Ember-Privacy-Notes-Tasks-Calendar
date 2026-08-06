@@ -35,7 +35,7 @@ import com.ben.inly.presentation.shared.components.TopBarIconButton
 import com.ben.inly.presentation.sync.SyncPairingDialog
 import com.ben.inly.presentation.sync.SyncScannerDialog
 import com.ben.inly.presentation.sync.SyncViewModel
-import com.ben.inly.presentation.sync.showSyncToast
+import com.ben.inly.domain.util.showNativeToast
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import com.ben.inly.ui.theme.FontStylePreference
@@ -105,7 +105,7 @@ fun SettingsScreen(
 
     LaunchedEffect(syncStatus) {
         if (syncStatus != "Idle" && syncStatus != "Syncing...") {
-            showSyncToast(syncStatus)
+            showNativeToast(syncStatus)
             syncViewModel.resetSyncStatus()
         }
     }

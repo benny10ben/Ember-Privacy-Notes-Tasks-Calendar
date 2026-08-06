@@ -689,44 +689,46 @@ fun EditorScreen(
                         )
                     }
                 }
-                item(key = "bottom_tap_area", contentType = "BottomTapArea") {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(dynamicBottomPadding + bottomContentPadding + toolbarOffset)
-                            .pointerInput(Unit) {
-                                detectTapGestures(
-                                    onDoubleTap = {
-                                        val lastBlock = currentBlocks.lastOrNull() ?: return@detectTapGestures
-                                        val isMediaBlock = lastBlock is BookmarkBlock
-                                                || lastBlock is ImageBlock
-                                                || lastBlock is DocumentBlock
-                                                || lastBlock is DatabaseBlock
-                                                || lastBlock is VoiceBlock
+                if (blocks.isNotEmpty()) {
+                    item(key = "bottom_tap_area", contentType = "BottomTapArea") {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(dynamicBottomPadding + bottomContentPadding + toolbarOffset)
+                                .pointerInput(Unit) {
+                                    detectTapGestures(
+                                        onDoubleTap = {
+                                            val lastBlock = currentBlocks.lastOrNull() ?: return@detectTapGestures
+                                            val isMediaBlock = lastBlock is BookmarkBlock
+                                                    || lastBlock is ImageBlock
+                                                    || lastBlock is DocumentBlock
+                                                    || lastBlock is DatabaseBlock
+                                                    || lastBlock is VoiceBlock
 
-                                        if (isMediaBlock) {
-                                            wrappedActions.onFocusBlock(lastBlock.id)
-                                            wrappedActions.onAddBlankBlock()
-                                        } else {
-                                            activeBlockId = lastBlock.id
-                                            GlobalEditorState.currentlyFocusedBlockId = lastBlock.id
-                                            wrappedActions.onFocusBlock(lastBlock.id)
-                                            localFocusRequest = FocusRequest(id = lastBlock.id, placeCursorAtEnd = true)
+                                            if (isMediaBlock) {
+                                                wrappedActions.onFocusBlock(lastBlock.id)
+                                                wrappedActions.onAddBlankBlock()
+                                            } else {
+                                                activeBlockId = lastBlock.id
+                                                GlobalEditorState.currentlyFocusedBlockId = lastBlock.id
+                                                wrappedActions.onFocusBlock(lastBlock.id)
+                                                localFocusRequest = FocusRequest(id = lastBlock.id, placeCursorAtEnd = true)
+                                            }
+                                        },
+                                        onTap = {
+                                            focusManager.clearFocus()
+                                            keyboardController?.hide()
+                                            activeBlockId = null
+                                            GlobalEditorState.currentlyFocusedBlockId = null
+                                            localFocusRequest = null
+                                            showSlashMenu = false
+                                            onMobileMenuStateChange(MobileMenuState.MAIN)
+                                            wrappedActions.onOutsideTap()
                                         }
-                                    },
-                                    onTap = {
-                                        focusManager.clearFocus()
-                                        keyboardController?.hide()
-                                        activeBlockId = null
-                                        GlobalEditorState.currentlyFocusedBlockId = null
-                                        localFocusRequest = null
-                                        showSlashMenu = false
-                                        onMobileMenuStateChange(MobileMenuState.MAIN)
-                                        wrappedActions.onOutsideTap()
-                                    }
-                                )
-                            }
-                    )
+                                    )
+                                }
+                        )
+                    }
                 }
             }
         }
