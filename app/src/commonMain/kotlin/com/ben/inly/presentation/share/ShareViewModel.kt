@@ -14,6 +14,7 @@ import com.ben.inly.domain.util.HtmlMetadataFetcher
 import com.ben.inly.domain.util.MediaStorageHelper
 import com.ben.inly.domain.util.ShareEventBus
 import com.ben.inly.domain.util.SyncCoordinator
+import com.ben.inly.domain.util.showNativeToast
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,6 +25,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import java.util.UUID
 
 class ShareViewModel(
@@ -41,15 +43,16 @@ class ShareViewModel(
     private val _navigateToNoteId = MutableStateFlow<String?>(null)
     val navigateToNoteId: StateFlow<String?> = _navigateToNoteId.asStateFlow()
 
-    private val _savedMessage = MutableStateFlow<String?>(null)
-    val savedMessage: StateFlow<String?> = _savedMessage.asStateFlow()
-
     init {
         ShareEventBus.pendingShare.onEach {
             _currentShare.value = it
             ShareEventBus.consumePendingShare()
         }.launchIn(viewModelScope)
         repository.getAllLinkableNotes().onEach { _linkableNotes.value = it }.launchIn(viewModelScope)
+    }
+
+    private suspend fun notify(message: String) = withContext(Dispatchers.Main) {
+        showNativeToast(message)
     }
 
     private suspend fun getOrCreateInbox(): Pair<NoteMetadataEntity, NoteContent> {
@@ -143,7 +146,7 @@ class ShareViewModel(
             try {
                 val newBlocks = buildBlocks(share)
                 if (newBlocks.isEmpty()) {
-                    _savedMessage.value = "Failed to save shared content."
+                    notify("Failed to save shared content.")
                     return@launch
                 }
 
@@ -158,10 +161,10 @@ class ShareViewModel(
                 }
 
                 newBlocks.filterIsInstance<BookmarkBlock>().forEach { scheduleLinkMetadataRefresh(inboxNoteId, it) }
-                _savedMessage.value = if (newBlocks.size > 1) "Saved ${newBlocks.size} items to Inbox" else "Saved to Inbox"
+                notify(if (newBlocks.size > 1) "Saved ${newBlocks.size} items to Inbox" else "Saved to Inbox")
             } catch (e: Exception) {
                 e.printStackTrace()
-                _savedMessage.value = "Failed to save shared content."
+                notify("Failed to save shared content.")
             }
         }
     }
@@ -173,7 +176,7 @@ class ShareViewModel(
             try {
                 val newBlocks = buildBlocks(share)
                 if (newBlocks.isEmpty()) {
-                    _savedMessage.value = "Failed to save shared content."
+                    notify("Failed to save shared content.")
                     return@launch
                 }
 
@@ -189,7 +192,7 @@ class ShareViewModel(
                 }
 
                 if (!saved) {
-                    _savedMessage.value = "That note is no longer available."
+                    notify("That note is no longer available.")
                     return@launch
                 }
 
@@ -197,7 +200,7 @@ class ShareViewModel(
                 _navigateToNoteId.value = noteId
             } catch (e: Exception) {
                 e.printStackTrace()
-                _savedMessage.value = "Failed to save shared content."
+                notify("Failed to save shared content.")
             }
         }
     }
@@ -209,7 +212,7 @@ class ShareViewModel(
             try {
                 val newBlocks = buildBlocks(share)
                 if (newBlocks.isEmpty()) {
-                    _savedMessage.value = "Failed to save shared content."
+                    notify("Failed to save shared content.")
                     return@launch
                 }
 
@@ -227,7 +230,7 @@ class ShareViewModel(
                 _navigateToNoteId.value = newNoteId
             } catch (e: Exception) {
                 e.printStackTrace()
-                _savedMessage.value = "Failed to save shared content."
+                notify("Failed to save shared content.")
             }
         }
     }
@@ -238,9 +241,5 @@ class ShareViewModel(
 
     fun clearNavigation() {
         _navigateToNoteId.value = null
-    }
-
-    fun clearSavedMessage() {
-        _savedMessage.value = null
     }
 }

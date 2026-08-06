@@ -36,8 +36,10 @@ import com.ben.inly.domain.selfhost.sync.SelfHostSyncScheduler
 import com.ben.inly.domain.selfhost.sync.SelfHostSyncWorker
 import com.ben.inly.domain.sync.SyncRepository
 import com.ben.inly.domain.util.AndroidAudioRecorder
+import com.ben.inly.domain.util.AndroidImageDownloader
 import com.ben.inly.domain.util.AndroidMediaStorageHelper
 import com.ben.inly.domain.util.AudioRecorder
+import com.ben.inly.domain.util.ImageDownloader
 import com.ben.inly.domain.util.MediaStorageHelper
 import com.ben.inly.domain.util.NativeVoiceRecognizer
 import com.ben.inly.domain.util.VoiceRecognizer
@@ -58,6 +60,7 @@ val androidModule = module {
 
     // Platform implementations
     single<MediaStorageHelper> { AndroidMediaStorageHelper(androidContext()) }
+    single<ImageDownloader> { AndroidImageDownloader(androidContext()) }
     single<VoiceRecognizer> { NativeVoiceRecognizer(androidContext()) }
     single<ReminderScheduler> { AndroidReminderScheduler(androidContext()) }
     single<AudioRecorder> { AndroidAudioRecorder(androidContext()) }

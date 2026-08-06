@@ -24,6 +24,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,14 +36,17 @@ import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
 import com.ben.inly.domain.model.ImageBlock
 import com.ben.inly.domain.sync.MediaRetryCoordinator
+import com.ben.inly.domain.util.ImageDownloader
 import com.ben.inly.domain.util.MediaStorageHelper
 import com.ben.inly.domain.util.isDesktopPlatform
+import com.ben.inly.domain.util.showFeedback
 import com.ben.inly.presentation.LocalImageOverlay
 import com.ben.inly.presentation.shared.editor.DefaultBlockShape
 import inly.app.generated.resources.Res
 import inly.app.generated.resources.camera
 import inly.app.generated.resources.circle_x
 import inly.app.generated.resources.image
+import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import org.koin.compose.koinInject
 import java.io.File
@@ -55,11 +59,12 @@ fun ImageBlockView(
     onToggleSelection: () -> Unit,
     onRequestPicker: () -> Unit,
     onDelete: () -> Unit = {},
-    onRequestCamera: () -> Unit,
-    onDownload: () -> Unit = {}
+    onRequestCamera: () -> Unit
 ) {
     val mediaStorageHelper = koinInject<MediaStorageHelper>()
     val mediaRetryCoordinator = koinInject<MediaRetryCoordinator>()
+    val imageDownloader = koinInject<ImageDownloader>()
+    val coroutineScope = rememberCoroutineScope()
     var showFullScreen by remember { mutableStateOf(false) }
     val setFullScreenOverlay = LocalImageOverlay.current
 
@@ -223,8 +228,20 @@ fun ImageBlockView(
                             request = request,
                             hasLocalFile = block.localFilePath != null,
                             onBack = { showFullScreen = false },
-                            onDownload = onDownload,
+                            onDownload = {
+                                coroutineScope.launch {
+                                    val success = imageDownloader.downloadImage(absolutePath, fileName)
+                                    showFeedback(
+                                        if (success) {
+                                            if (isDesktopPlatform) "Image saved to Downloads" else "Image saved to Photos"
+                                        } else {
+                                            "Failed to save image"
+                                        }
+                                    )
+                                }
+                            },
                             onDelete = {
+                                setFullScreenOverlay(null)
                                 showFullScreen = false
                                 onDelete()
                             }

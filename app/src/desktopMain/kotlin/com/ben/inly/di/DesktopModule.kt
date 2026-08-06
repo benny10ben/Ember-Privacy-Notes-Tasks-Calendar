@@ -29,8 +29,10 @@ import com.ben.inly.domain.selfhost.sync.SelfHostSyncScheduler
 import com.ben.inly.domain.sync.SyncRepository
 import com.ben.inly.domain.util.AudioRecorder
 import com.ben.inly.domain.util.DesktopAudioRecorder
+import com.ben.inly.domain.util.DesktopImageDownloader
 import com.ben.inly.domain.util.DesktopMediaStorageHelper
 import com.ben.inly.domain.util.DesktopVoiceRecognizer
+import com.ben.inly.domain.util.ImageDownloader
 import com.ben.inly.domain.util.MediaStorageHelper
 import com.ben.inly.domain.util.VoiceRecognizer
 import com.ben.inly.presentation.rag.RagViewModel
@@ -82,6 +84,7 @@ val desktopModule = module {
     single<SettingsManager> { DesktopSettingsManager() }
     single<ReminderScheduler> { DesktopReminderScheduler() }
     single<MediaStorageHelper> { DesktopMediaStorageHelper() }
+    single<ImageDownloader> { DesktopImageDownloader() }
     single<AudioRecorder> { DesktopAudioRecorder() }
 
     // Self-hosted WebDAV sync
