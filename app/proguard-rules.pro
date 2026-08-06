@@ -9,10 +9,10 @@
 # APP ARCHITECTURE (Room, Hilt, Navigation)
 # ------------------------------------------------------------------
 # Keep all data models so databases/serialization don't crash
--keep class com.ben.inly.domain.model.** { *; }
+-keep class com.ben.ember.domain.model.** { *; }
 
 # Keep all ViewModels so Hilt can inject them properly
--keep class com.ben.inly.presentation.**.*ViewModel { *; }
+-keep class com.ben.ember.presentation.**.*ViewModel { *; }
 
 # Keep Compose Navigation arguments safe
 -keepnames class androidx.navigation.compose.** { *; }

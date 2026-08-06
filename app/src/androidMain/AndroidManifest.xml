@@ -23,8 +23,8 @@
     </queries>
 
     <application
-        android:name=".InlyApplication"
-        android:theme="@style/Theme.Inly.Splash"
+        android:name=".EmberApplication"
+        android:theme="@style/Theme.Ember.Splash"
         android:windowSoftInputMode="adjustResize"
         android:enableOnBackInvokedCallback="true"
         android:allowBackup="true"
@@ -42,7 +42,7 @@
             android:exported="true"
             android:launchMode="singleTask"
             android:label="@string/app_name"
-            android:theme="@style/Theme.Inly.Splash"
+            android:theme="@style/Theme.Ember.Splash"
             >
 
             <intent-filter>

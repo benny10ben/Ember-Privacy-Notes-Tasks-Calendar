@@ -24,5 +24,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Inly"
+rootProject.name = "Ember"
 include(":app")
