@@ -121,7 +121,7 @@ val sharedModule = module {
         )
     }
     viewModel {
-        _root_ide_package_.com.ben.inly.presentation.mobile.home.overview.reminders.RemindersViewModel(
+        _root_ide_package_.com.ben.inly.presentation.mobile.home.overview.tasks.TasksViewModel(
             repository = get(),
             reminderScheduler = get()
         )

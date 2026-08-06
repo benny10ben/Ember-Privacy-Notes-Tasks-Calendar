@@ -442,7 +442,7 @@ fun InlyApp(
                                 )
                             }
                         ) {
-                            _root_ide_package_.com.ben.inly.presentation.mobile.home.overview.reminders.RemindersScreen(
+                            _root_ide_package_.com.ben.inly.presentation.mobile.home.overview.tasks.TasksScreen(
                                 onNavigateBack = { navController.popBackStack() },
                                 onNavigateToEditor = { noteId ->
                                     navController.navigate(

@@ -1,4 +1,4 @@
-package com.ben.inly.presentation.mobile.home.overview.reminders
+package com.ben.inly.presentation.mobile.home.overview.tasks
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -55,11 +55,11 @@ import org.jetbrains.compose.resources.painterResource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RemindersScreen(
+fun TasksScreen(
     onNavigateBack: () -> Unit,
     onOpenFile: (filePath: String, mimeType: String) -> Unit = { _, _ -> },
     onNavigateToEditor: (String) -> Unit = {},
-    viewModel: RemindersViewModel = koinViewModel(),
+    viewModel: TasksViewModel = koinViewModel(),
 ) {
     val isLoading: Boolean by viewModel.isLoading.collectAsState()
     val blocks: List<NoteBlock> by viewModel.visibleBlocks.collectAsState()
@@ -311,7 +311,7 @@ fun RemindersScreen(
                 hazeState = hazeState,
                 isSelectionMode = isSelectionMode,
                 isShowingCompleted = isShowingCompleted,
-                collapsedTitle = if (isShowingCompleted) "Completed" else "Reminders",
+                collapsedTitle = if (isShowingCompleted) "Completed" else "Tasks",
                 collapsedTitleProgress = titleCollapseProgress,
                 onCollapsedTitleClick = onCollapsedTitleClick,
                 onPositioned = { topBarBottomPx = it.positionInRoot().y + it.size.height },
@@ -372,7 +372,7 @@ private fun ScreenTitle(isShowingCompleted: Boolean, modifier: Modifier = Modifi
         it.copy(fontSize = it.fontSize * 1.5f, lineHeight = it.lineHeight * 1.2f)
     }
     Text(
-        text = if (isShowingCompleted) "Completed" else "Reminders",
+        text = if (isShowingCompleted) "Completed" else "Tasks",
         style = titleStyle,
         fontWeight = FontWeight.Bold,
         color = MaterialTheme.colorScheme.onBackground,

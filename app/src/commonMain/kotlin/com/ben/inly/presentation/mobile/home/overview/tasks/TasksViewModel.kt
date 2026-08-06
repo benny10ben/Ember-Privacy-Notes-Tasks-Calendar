@@ -1,4 +1,4 @@
-package com.ben.inly.presentation.mobile.home.overview.reminders
+package com.ben.inly.presentation.mobile.home.overview.tasks
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -32,7 +32,7 @@ import kotlin.time.Duration.Companion.milliseconds
 
 data class BlockLocation(val noteId: String, val isDaily: Boolean)
 
-class RemindersViewModel constructor(
+class TasksViewModel(
     private val repository: NoteRepository,
     private val reminderScheduler: ReminderScheduler
 ) : ViewModel() {
@@ -280,14 +280,14 @@ class RemindersViewModel constructor(
                 if (target != null) movedBlock = target.copy(isChecked = true, completedAt = timestamp)
                 list.filterNot { it.id == blockId }
             }
-            if (movedBlock != null) _completedBlocks.update { list -> listOf(movedBlock!!) + list }
+            if (movedBlock != null) _completedBlocks.update { list -> listOf(movedBlock) + list }
         } else {
             _completedBlocks.update { list ->
                 val target = list.find { it.id == blockId } as? CheckboxBlock
                 if (target != null) movedBlock = target.copy(isChecked = false, completedAt = timestamp)
                 list.filterNot { it.id == blockId }
             }
-            if (movedBlock != null) _activeBlocks.update { list -> listOf(movedBlock!!) + list }
+            if (movedBlock != null) _activeBlocks.update { list -> listOf(movedBlock) + list }
         }
 
         viewModelScope.launch(Dispatchers.IO) {
@@ -620,7 +620,7 @@ class RemindersViewModel constructor(
 
         if (focusPrevId != null) {
             _focusRequest.value = null
-            _focusRequest.value = FocusRequest(id = focusPrevId!!, placeCursorAtEnd = true)
+            _focusRequest.value = FocusRequest(id = focusPrevId, placeCursorAtEnd = true)
         }
 
         val loc = blockSourceMap[id] ?: return
