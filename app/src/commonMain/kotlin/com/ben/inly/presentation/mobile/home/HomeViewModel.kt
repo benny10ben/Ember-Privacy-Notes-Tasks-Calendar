@@ -29,8 +29,11 @@ import kotlinx.datetime.todayIn
 import java.util.UUID
 import kotlin.time.Duration.Companion.milliseconds
 
-enum class SortType { LAST_EDITED, DATE_CREATED, NAME, MANUAL }
+enum class SortType { LAST_EDITED, DATE_CREATED, NAME, MANUAL, TYPE }
 enum class SortOrder { ASCENDING, DESCENDING }
+
+internal val FolderEntity.lastEditedAt: Long
+    get() = if (updatedAt > 0L) updatedAt else createdAt
 
 class HomeViewModel(
     private val repository: NoteRepository,
@@ -43,11 +46,11 @@ class HomeViewModel(
 ) : ViewModel() {
 
     val sortType: StateFlow<SortType> = settingsManager.sortTypeFlow
-        .map { SortType.valueOf(it) }
+        .map { stored -> SortType.entries.firstOrNull { it.name == stored } ?: SortType.LAST_EDITED }
         .stateIn(viewModelScope, SharingStarted.Lazily, SortType.LAST_EDITED)
 
     val sortOrder: StateFlow<SortOrder> = settingsManager.sortOrderFlow
-        .map { SortOrder.valueOf(it) }
+        .map { stored -> SortOrder.entries.firstOrNull { it.name == stored } ?: SortOrder.DESCENDING }
         .stateIn(viewModelScope, SharingStarted.Lazily, SortOrder.DESCENDING)
 
     fun updateSort(type: SortType, order: SortOrder) {
@@ -64,7 +67,21 @@ class HomeViewModel(
             SortType.MANUAL -> list.sortedBy { it.sortOrder }
             SortType.LAST_EDITED -> if (descending) list.sortedByDescending { it.updatedAt } else list.sortedBy { it.updatedAt }
             SortType.DATE_CREATED -> if (descending) list.sortedByDescending { it.createdAt } else list.sortedBy { it.createdAt }
-            SortType.NAME -> if (descending) list.sortedByDescending { it.title.lowercase() } else list.sortedBy { it.title.lowercase() }
+            SortType.NAME, SortType.TYPE -> if (descending) list.sortedByDescending { it.title.lowercase() } else list.sortedBy { it.title.lowercase() }
+        }
+    }
+
+    private fun applyFolderSort(
+        list: List<FolderEntity>,
+        type: SortType,
+        order: SortOrder
+    ): List<FolderEntity> {
+        val descending = order == SortOrder.DESCENDING
+        return when (type) {
+            SortType.MANUAL -> list.sortedBy { it.sortOrder }
+            SortType.LAST_EDITED -> if (descending) list.sortedByDescending { it.lastEditedAt } else list.sortedBy { it.lastEditedAt }
+            SortType.DATE_CREATED -> if (descending) list.sortedByDescending { it.createdAt } else list.sortedBy { it.createdAt }
+            SortType.NAME, SortType.TYPE -> if (descending) list.sortedByDescending { it.name.lowercase() } else list.sortedBy { it.name.lowercase() }
         }
     }
 
@@ -72,18 +89,78 @@ class HomeViewModel(
         _expandedFolderIds.update { if (it.contains(folderId)) it - folderId else it + folderId }
     }
 
-    // orderedKeys: the flat visual order of sidebar rows as the user saw them,
-    // passed in from HomeScreen so the VM doesn't re-derive a potentially different order.
+    private data class RowParent(val parentFolderId: String?)
+
+    private suspend fun findRowParent(rowKey: String): RowParent? = when {
+        HomeItemKey.isFolder(rowKey) ->
+            _allFolders.value
+                .find { it.folderId == HomeItemKey.folderIdOf(rowKey) }
+                ?.let { RowParent(it.parentFolderId) }
+
+        HomeItemKey.isNote(rowKey) ->
+            repository.getNoteById(HomeItemKey.noteIdOf(rowKey))
+                ?.let { RowParent(it.folderId) }
+
+        else -> null
+    }
+
+    private fun isFolderDescendantOf(candidateId: String?, ancestorId: String): Boolean {
+        var curr = candidateId
+        while (curr != null) {
+            if (curr == ancestorId) return true
+            curr = _allFolders.value.find { it.folderId == curr }?.parentFolderId
+        }
+        return false
+    }
+
+    private suspend fun reparentRow(rowKey: String, newParentFolderId: String?): Boolean {
+        try {
+            SyncCoordinator.mutex.withLock {
+                when {
+                    HomeItemKey.isFolder(rowKey) -> {
+                        val folderId = HomeItemKey.folderIdOf(rowKey)
+                        if (isFolderDescendantOf(newParentFolderId, folderId)) return false
+                        val folder = _allFolders.value.find { it.folderId == folderId } ?: return false
+                        repository.insertFolder(folder.copy(parentFolderId = newParentFolderId))
+                    }
+
+                    HomeItemKey.isNote(rowKey) -> {
+                        val noteId = HomeItemKey.noteIdOf(rowKey)
+                        val meta = repository.getNoteById(noteId) ?: return false
+                        val content = repository.getNoteContent(noteId) ?: NoteContent(blocks = emptyList())
+                        repository.saveNote(
+                            meta.copy(folderId = newParentFolderId, updatedAt = System.currentTimeMillis()),
+                            content
+                        )
+                    }
+
+                    else -> return false
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return false
+        }
+        return true
+    }
+
+    // orderedKeys: the flat visual order of the rows as the user saw them, passed in from the
+    // screen so the VM doesn't re-derive a potentially different order.
     fun reorderItems(draggedKey: String, targetKey: String, insertBefore: Boolean, orderedKeys: List<String>) {
         viewModelScope.launch(Dispatchers.IO) {
 
-            // Filter orderedKeys to only sb_note_ and sb_folder_ items (skip headers etc).
             val scopeKeys = orderedKeys.filter {
-                it.startsWith("sb_note_") || it.startsWith("sb_folder_")
+                HomeItemKey.isNote(it) || HomeItemKey.isFolder(it)
             }.toMutableList()
 
             if (draggedKey !in scopeKeys) return@launch
             if (targetKey !in scopeKeys) return@launch
+
+            val draggedParent = findRowParent(draggedKey) ?: return@launch
+            val targetParent = findRowParent(targetKey) ?: return@launch
+            if (draggedParent.parentFolderId != targetParent.parentFolderId &&
+                !reparentRow(draggedKey, targetParent.parentFolderId)
+            ) return@launch
 
             // Move dragged item to new position.
             scopeKeys.remove(draggedKey)
@@ -92,21 +169,33 @@ class HomeViewModel(
             val insertAt = if (insertBefore) targetIndex else targetIndex + 1
             scopeKeys.add(insertAt.coerceIn(0, scopeKeys.size), draggedKey)
 
-            // Write new sortOrder values based on the new visual order.
-            scopeKeys.forEachIndexed { index, key ->
-                val order = index + 1
-                when {
-                    key.startsWith("sb_folder_") ->
-                        repository.updateFolderSortOrder(key.removePrefix("sb_folder_"), order)
-                    key.startsWith("sb_note_") ->
-                        repository.updateNoteSortOrder(key.removePrefix("sb_note_"), order)
-                }
-            }
+            persistManualOrder(scopeKeys)
+        }
+    }
 
-            // Auto-switch to MANUAL sort.
-            withContext(Dispatchers.Main) {
-                settingsManager.saveSortSettings(SortType.MANUAL.name, SortOrder.ASCENDING.name)
+    // orderedKeys: the final order the user already sees on screen (the mobile grid reorders
+    // live while dragging), so nothing has to be recomputed here.
+    fun applyManualOrder(orderedKeys: List<String>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            persistManualOrder(
+                orderedKeys.filter { HomeItemKey.isNote(it) || HomeItemKey.isFolder(it) }
+            )
+        }
+    }
+
+    private suspend fun persistManualOrder(orderedKeys: List<String>) {
+        orderedKeys.forEachIndexed { index, key ->
+            val order = index + 1
+            when {
+                HomeItemKey.isFolder(key) ->
+                    repository.updateFolderSortOrder(HomeItemKey.folderIdOf(key), order)
+                HomeItemKey.isNote(key) ->
+                    repository.updateNoteSortOrder(HomeItemKey.noteIdOf(key), order)
             }
+        }
+
+        withContext(Dispatchers.Main) {
+            settingsManager.saveSortSettings(SortType.MANUAL.name, SortOrder.ASCENDING.name)
         }
     }
 
@@ -152,8 +241,13 @@ class HomeViewModel(
     val favoriteNotes = repository.getFavoriteNotes()
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
-    val currentSubFolders = combine(_allFolders, _selectedFolderId) { all, currentParent ->
-        all.filter { !it.isDeleted && it.parentFolderId == currentParent }
+    val currentSubFolders = combine(
+        _allFolders,
+        _selectedFolderId,
+        sortType,
+        sortOrder
+    ) { all, currentParent, type, order ->
+        applyFolderSort(all.filter { !it.isDeleted && it.parentFolderId == currentParent }, type, order)
     }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     val breadcrumbs = combine(_allFolders, _selectedFolderId) { all, currentId ->
@@ -174,13 +268,11 @@ class HomeViewModel(
     val foldersByParent: StateFlow<Map<String?, List<FolderEntity>>> =
         combine(
             _allFolders,
-            sortType
-        ) { all: List<FolderEntity>, type: SortType ->
-            val sorted = if (type == SortType.MANUAL)
-                all.filter { !it.isDeleted }.sortedBy { it.sortOrder }
-            else
-                all.filter { !it.isDeleted }
-            sorted.groupBy { it.parentFolderId }
+            sortType,
+            sortOrder
+        ) { all: List<FolderEntity>, type: SortType, order: SortOrder ->
+            applyFolderSort(all.filter { !it.isDeleted }, type, order)
+                .groupBy { it.parentFolderId }
         }.stateIn(viewModelScope, SharingStarted.Lazily, emptyMap())
 
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -237,12 +329,7 @@ class HomeViewModel(
             filteredList
         }
 
-        when (activeSortType) {
-            SortType.MANUAL -> finalFilteredList.sortedBy { it.sortOrder }
-            SortType.LAST_EDITED -> if (activeSortOrder == SortOrder.DESCENDING) finalFilteredList.sortedByDescending { it.updatedAt } else finalFilteredList.sortedBy { it.updatedAt }
-            SortType.DATE_CREATED -> if (activeSortOrder == SortOrder.DESCENDING) finalFilteredList.sortedByDescending { it.createdAt } else finalFilteredList.sortedBy { it.createdAt }
-            SortType.NAME -> if (activeSortOrder == SortOrder.DESCENDING) finalFilteredList.sortedByDescending { it.title.lowercase() } else finalFilteredList.sortedBy { it.title.lowercase() }
-        }
+        applyNoteSort(finalFilteredList, activeSortType, activeSortOrder)
     }.flowOn(Dispatchers.IO)
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
@@ -698,18 +785,9 @@ class HomeViewModel(
     fun moveFolder(folderId: String, targetParentId: String?) {
         // Prevent dropping a folder into itself or its own descendants.
         if (folderId == targetParentId) return
-        val allFolders = _allFolders.value
-        fun isDescendant(candidateId: String): Boolean {
-            var curr: String? = candidateId
-            while (curr != null) {
-                if (curr == folderId) return true
-                curr = allFolders.find { it.folderId == curr }?.parentFolderId
-            }
-            return false
-        }
-        if (targetParentId != null && isDescendant(targetParentId)) return
+        if (isFolderDescendantOf(targetParentId, folderId)) return
         viewModelScope.launch(Dispatchers.IO) {
-            val folder = allFolders.find { it.folderId == folderId } ?: return@launch
+            val folder = _allFolders.value.find { it.folderId == folderId } ?: return@launch
             repository.insertFolder(folder.copy(parentFolderId = targetParentId))
         }
     }

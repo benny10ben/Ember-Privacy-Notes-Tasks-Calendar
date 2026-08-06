@@ -10,7 +10,6 @@ import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
@@ -50,29 +49,26 @@ import com.ben.inly.presentation.mobile.daily.CollapsedWeekStrip
 import com.ben.inly.presentation.mobile.daily.DailyEditorPane
 import com.ben.inly.presentation.mobile.daily.DailyEditorViewModel
 import com.ben.inly.presentation.mobile.daily.TaskDaySection
-import com.ben.inly.presentation.mobile.home.DROP_KEY_ROOT
 import com.ben.inly.presentation.mobile.home.DRAG_PREFIX_FOLDER
 import com.ben.inly.presentation.mobile.home.DRAG_PREFIX_NOTE
 import com.ben.inly.presentation.mobile.home.DesktopSortMenu
 import com.ben.inly.presentation.mobile.home.DropInsertPosition
 import com.ben.inly.presentation.mobile.home.HomeViewModel
-import com.ben.inly.presentation.mobile.home.SidebarDragChip
+import com.ben.inly.presentation.mobile.home.DesktopListDragChip
 import com.ben.inly.presentation.mobile.home.SidebarFolderRow
 import com.ben.inly.presentation.mobile.home.SidebarNoteRow
-import com.ben.inly.presentation.mobile.home.SidebarRootDropZone
 import com.ben.inly.presentation.mobile.home.SidebarSectionHeader
-import com.ben.inly.presentation.mobile.home.SidebarTreeRow
-import com.ben.inly.presentation.mobile.home.SortType
+import com.ben.inly.presentation.mobile.home.HomeItem
+import com.ben.inly.presentation.mobile.home.HomeItemKey
 import com.ben.inly.presentation.mobile.home.TemplatesDesktopMenu
 import com.ben.inly.presentation.mobile.home.flattenFolderTree
 import com.ben.inly.presentation.mobile.home.note.NoteScreen
 import com.ben.inly.presentation.mobile.home.overview.bookmarks.BookmarksScreen
 import com.ben.inly.presentation.mobile.home.overview.documents.DocumentsScreen
 import com.ben.inly.presentation.mobile.home.overview.images.ImagesScreen
-import com.ben.inly.presentation.mobile.home.overview.reminders.RemindersScreen
-import com.ben.inly.presentation.mobile.home.rememberSidebarDragState
-import com.ben.inly.presentation.mobile.home.sidebarDragTracker
-import com.ben.inly.presentation.customInlyShadow
+import com.ben.inly.presentation.mobile.home.overview.tasks.TasksScreen
+import com.ben.inly.presentation.mobile.home.rememberDesktopListDragState
+import com.ben.inly.presentation.mobile.home.desktopListDragTracker
 import com.ben.inly.presentation.search.SearchScreen
 import com.ben.inly.presentation.trash.TrashScreen
 import dev.chrisbanes.haze.HazeState
@@ -103,7 +99,6 @@ import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.ben.inly.presentation.shared.components.InlyBlur
-import com.ben.inly.ui.theme.LocalAppIsDark
 import dev.chrisbanes.haze.hazeSource
 import inly.app.generated.resources.Res
 import inly.app.generated.resources.arrow_up_down
@@ -368,7 +363,7 @@ fun DesktopMainScreen(
     }
 
     // Drag
-    val dragState = rememberSidebarDragState()
+    val dragState = rememberDesktopListDragState()
     val sidebarListState = rememberLazyListState()
     val density = LocalDensity.current
     val rowHeightPx = with(density) { 46.dp.toPx() }
@@ -386,7 +381,8 @@ fun DesktopMainScreen(
     val leftPanel = @Composable { startPadding: Dp, endPadding: Dp ->
         val treeRows = if (isNotesExpanded) flattenFolderTree(
             null, 0, foldersByParent, notesByFolder, expandedFolderIds,
-            isManualSort = currentSortType == SortType.MANUAL
+            sortType = currentSortType,
+            sortOrder = currentSortOrder
         ) else emptyList()
 
         val rowKeys: List<String?> = buildList {
@@ -398,7 +394,6 @@ fun DesktopMainScreen(
             }
 
             add(null) // Notes header
-            add(DROP_KEY_ROOT)
 
             if (isNotesExpanded) treeRows.forEach { add(it.key) }
 
@@ -462,7 +457,7 @@ fun DesktopMainScreen(
                         .fillMaxWidth()
                         .hazeSource(hazeState)
                         .background(if (isSidebarVisible) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.surface)
-                        .sidebarDragTracker(
+                        .desktopListDragTracker(
                             dragState = dragState,
                             listState = sidebarListState,
                             rowKeys = rowKeys,
@@ -470,8 +465,8 @@ fun DesktopMainScreen(
                             payloadForKey = { key ->
                                 when {
                                     key == null -> null
-                                    key.startsWith("sb_folder_") -> "$DRAG_PREFIX_FOLDER${key.removePrefix("sb_folder_")}"
-                                    key.startsWith("sb_note_") -> "$DRAG_PREFIX_NOTE${key.removePrefix("sb_note_")}"
+                                    HomeItemKey.isFolder(key) -> "$DRAG_PREFIX_FOLDER${HomeItemKey.folderIdOf(key)}"
+                                    HomeItemKey.isNote(key) -> "$DRAG_PREFIX_NOTE${HomeItemKey.noteIdOf(key)}"
                                     key.startsWith("sb_fav_") -> "$DRAG_PREFIX_NOTE${key.removePrefix("sb_fav_")}"
                                     key.startsWith("sb_recent_") -> "$DRAG_PREFIX_NOTE${key.removePrefix("sb_recent_")}"
                                     else -> null
@@ -482,20 +477,16 @@ fun DesktopMainScreen(
                                 else when {
                                     key.startsWith("sb_fav_") -> false
                                     key.startsWith("sb_recent_") -> false
-                                    key.startsWith("sb_folder_") &&
-                                            payload == "$DRAG_PREFIX_FOLDER${key.removePrefix("sb_folder_")}" -> false
+                                    HomeItemKey.isFolder(key) &&
+                                            payload == "$DRAG_PREFIX_FOLDER${HomeItemKey.folderIdOf(key)}" -> false
                                     else -> true
                                 }
                             },
                             onDrop = { payload, targetKey, insertBefore ->
                                 when {
-                                    targetKey == DROP_KEY_ROOT -> when {
-                                        payload.startsWith(DRAG_PREFIX_NOTE) -> homeViewModel.moveNote(payload.removePrefix(DRAG_PREFIX_NOTE), null)
-                                        payload.startsWith(DRAG_PREFIX_FOLDER) -> homeViewModel.moveFolder(payload.removePrefix(DRAG_PREFIX_FOLDER), null)
-                                    }
-                                    !insertBefore && targetKey.startsWith("sb_folder_") &&
+                                    !insertBefore && HomeItemKey.isFolder(targetKey) &&
                                             dragState.dropPosition == DropInsertPosition.INTO -> {
-                                        val folderId = targetKey.removePrefix("sb_folder_")
+                                        val folderId = HomeItemKey.folderIdOf(targetKey)
                                         when {
                                             payload.startsWith(DRAG_PREFIX_NOTE) -> homeViewModel.moveNote(payload.removePrefix(DRAG_PREFIX_NOTE), folderId)
                                             payload.startsWith(DRAG_PREFIX_FOLDER) -> homeViewModel.moveFolder(payload.removePrefix(DRAG_PREFIX_FOLDER), folderId)
@@ -503,9 +494,9 @@ fun DesktopMainScreen(
                                     }
                                     else -> {
                                         val draggedKey = when {
-                                            payload.startsWith(DRAG_PREFIX_NOTE) -> "sb_note_${payload.removePrefix(DRAG_PREFIX_NOTE)}"
-                                            payload.startsWith(DRAG_PREFIX_FOLDER) -> "sb_folder_${payload.removePrefix(DRAG_PREFIX_FOLDER)}"
-                                            else -> return@sidebarDragTracker
+                                            payload.startsWith(DRAG_PREFIX_NOTE) -> HomeItemKey.forNote(payload.removePrefix(DRAG_PREFIX_NOTE))
+                                            payload.startsWith(DRAG_PREFIX_FOLDER) -> HomeItemKey.forFolder(payload.removePrefix(DRAG_PREFIX_FOLDER))
+                                            else -> return@desktopListDragTracker
                                         }
                                         homeViewModel.reorderItems(
                                             draggedKey = draggedKey,
@@ -753,12 +744,10 @@ fun DesktopMainScreen(
                             )
                         }
 
-                        item(key = DROP_KEY_ROOT) { SidebarRootDropZone(dragState = dragState) }
-
                         if (isNotesExpanded) {
                             items(treeRows, key = { it.key }) { row ->
                                 when (row) {
-                                    is SidebarTreeRow.Folder -> SidebarFolderRow(
+                                    is HomeItem.Folder -> SidebarFolderRow(
                                         modifier = Modifier.animateItem(
                                             fadeInSpec = tween(220, easing = FastOutSlowInEasing),
                                             fadeOutSpec = tween(180, easing = FastOutSlowInEasing),
@@ -775,7 +764,7 @@ fun DesktopMainScreen(
                                         onRename = { newName -> homeViewModel.renameFolder(row.folder.folderId, newName) },
                                         onDelete = { homeViewModel.trashFolder(row.folder.folderId) }
                                     )
-                                    is SidebarTreeRow.Note -> SidebarNoteRow(
+                                    is HomeItem.Note -> SidebarNoteRow(
                                         modifier = Modifier.animateItem(
                                             fadeInSpec = tween(220, easing = FastOutSlowInEasing),
                                             fadeOutSpec = tween(180, easing = FastOutSlowInEasing),
@@ -813,7 +802,7 @@ fun DesktopMainScreen(
                         }
                     }
 
-                    SidebarDragChip(
+                    DesktopListDragChip(
                         dragState = dragState,
                         labelForPayload = { payload ->
                             when {
@@ -904,7 +893,7 @@ fun DesktopMainScreen(
                     SelfHostSetupScreen(onNavigateBack = { detail = DetailPane.Settings })
                 }
                 DetailPane.Trash -> key("trash") { TrashScreen(onNavigateBack = { detail = DetailPane.Daily(selectedDate) }) }
-                DetailPane.Reminders -> key("reminders") { RemindersScreen(onNavigateBack = { detail = DetailPane.Daily(selectedDate) }, onOpenFile = onOpenFile, onNavigateToEditor = { openNote(it) }) }
+                DetailPane.Reminders -> key("reminders") { TasksScreen(onNavigateBack = { detail = DetailPane.Daily(selectedDate) }, onOpenFile = onOpenFile, onNavigateToEditor = { openNote(it) }) }
                 DetailPane.Images -> key("images") { ImagesScreen(onNavigateBack = { detail = DetailPane.Daily(selectedDate) }, onTriggerImagePicker = { onPickImage { } }) }
                 DetailPane.Documents -> key("documents") { DocumentsScreen(onNavigateBack = { detail = DetailPane.Daily(selectedDate) }, onTriggerDocumentPicker = { onPickDocument { } }, onOpenFile = onOpenFile) }
                 DetailPane.Bookmarks -> key("bookmarks") { BookmarksScreen(onNavigateBack = { detail = DetailPane.Daily(selectedDate) }) }

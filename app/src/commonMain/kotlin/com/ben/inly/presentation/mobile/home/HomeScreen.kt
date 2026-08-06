@@ -1,6 +1,8 @@
 package com.ben.inly.presentation.mobile.home
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -32,7 +34,11 @@ import com.ben.inly.presentation.shared.rememberStableStatusBarsPadding
 import com.ben.inly.presentation.shared.stableStatusBarsPadding
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -58,6 +64,7 @@ import com.ben.inly.domain.util.showNativeToast
 import com.ben.inly.ui.theme.LocalAppIsDark
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DateTimeUnit
@@ -106,6 +113,19 @@ private fun Modifier.mouseScrollable(scrollState: ScrollableState): Modifier {
         }
     }
 }
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun Modifier.cardGestures(
+    enabled: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit
+): Modifier = if (!enabled) this else this.combinedClickable(
+    interactionSource = remember { MutableInteractionSource() },
+    indication = null,
+    onClick = onClick,
+    onLongClick = onLongClick
+)
 
 @Composable
 private fun Modifier.noRippleClickable(onClick: () -> Unit): Modifier =
@@ -156,6 +176,66 @@ fun HomeScreen(
     val currentSortType by viewModel.sortType.collectAsState()
     val currentSortOrder by viewModel.sortOrder.collectAsState()
 
+    val gridItems: List<HomeItem> = remember(subFolders, notes, currentSortType, currentSortOrder) {
+        sortedHomeItems(subFolders, notes, currentSortType, currentSortOrder)
+    }
+
+    val gridState = rememberLazyStaggeredGridState()
+    val gridDragState = rememberMobileGridDragState()
+    val cardCornerRadiusPx = with(LocalDensity.current) { 12.dp.toPx() }
+    var gridOriginInRoot by remember { mutableStateOf(Offset.Zero) }
+
+    // While a drag is in flight the grid renders this optimistic order, so cards slide out of
+    // the way under the finger
+    var previewItems by remember { mutableStateOf<List<HomeItem>?>(null) }
+    val displayedItems = previewItems ?: gridItems
+
+    LaunchedEffect(gridItems) { if (!gridDragState.isDragging) previewItems = null }
+
+    LaunchedEffect(gridDragState.draggedKey) {
+        if (gridDragState.isDragging && previewItems == null) previewItems = gridItems
+    }
+
+    val edgeScrollZonePx = with(LocalDensity.current) { 110.dp.toPx() }
+    val edgeScrollStepPx = with(LocalDensity.current) { 14.dp.toPx() }
+
+    LaunchedEffect(selectedFolderId) { gridState.scrollToItem(0) }
+
+    LaunchedEffect(gridDragState.isDragging) {
+        if (!gridDragState.isDragging) return@LaunchedEffect
+        while (isActive) {
+            withFrameNanos { }
+            val delta = gridDragState.edgeScrollDelta(gridState, edgeScrollZonePx, edgeScrollStepPx)
+            if (delta != 0f) {
+                gridState.scrollBy(delta)
+                gridDragState.refreshHoverTarget(gridState)
+            }
+        }
+    }
+
+    LaunchedEffect(gridDragState.hoverKey, gridDragState.hoverMode) {
+        val draggedKey = gridDragState.draggedKey ?: return@LaunchedEffect
+        val hoverKey = gridDragState.hoverKey ?: return@LaunchedEffect
+        if (gridDragState.hoverMode != MobileDropMode.REORDER) return@LaunchedEffect
+        previewItems = (previewItems ?: gridItems).movedTo(draggedKey, hoverKey)
+    }
+
+    val handleGridDrop: (String, String?, MobileDropMode) -> Unit = { draggedKey, hoverKey, mode ->
+        if (mode == MobileDropMode.INTO && hoverKey != null && HomeItemKey.isFolder(hoverKey)) {
+            previewItems = null
+            val destinationFolderId = HomeItemKey.folderIdOf(hoverKey)
+            when {
+                HomeItemKey.isNote(draggedKey) ->
+                    viewModel.moveNote(HomeItemKey.noteIdOf(draggedKey), destinationFolderId)
+
+                HomeItemKey.isFolder(draggedKey) ->
+                    viewModel.moveFolder(HomeItemKey.folderIdOf(draggedKey), destinationFolderId)
+            }
+        } else {
+            viewModel.applyManualOrder(displayedItems.map { it.key })
+        }
+    }
+
     val templates by viewModel.filteredTemplates.collectAsState()
     val templateSearchQuery by viewModel.templateSearchQuery.collectAsState()
 
@@ -178,10 +258,7 @@ fun HomeScreen(
     var isRecentsExpanded by remember { mutableStateOf(true) }
 
     val favListState = rememberLazyListState()
-    val folderListState = rememberLazyListState()
     val recentListState = rememberLazyListState()
-
-    val gridState = rememberLazyStaggeredGridState()
 
     val isSelectionMode = selectedNoteIds.isNotEmpty() || selectedFolderIds.isNotEmpty()
 
@@ -235,7 +312,10 @@ fun HomeScreen(
     }
 
     val homeGridContent = @Composable {
-        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        BoxWithConstraints(
+            modifier = Modifier.fillMaxSize()
+                .onGloballyPositioned { gridOriginInRoot = it.positionInRoot() }
+        ) {
             val cardWidth = (maxWidth - (HORIZONTAL_PADDING * 2) - 10.dp) / 2
 
             if (isLoading) {
@@ -337,7 +417,7 @@ fun HomeScreen(
                         }
                     }
 
-                    if (notes.isNotEmpty() || !isSelectionMode) {
+                    if (gridItems.isNotEmpty() || !isSelectionMode) {
                         item(span = StaggeredGridItemSpan.FullLine) {
                             Row(modifier = Modifier.fillMaxWidth().padding(start = HORIZONTAL_PADDING, end = HORIZONTAL_PADDING, top = 14.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                                 Row(modifier = Modifier.clip(RoundedCornerShape(4.dp)).noRippleClickable { isNotesExpanded = !isNotesExpanded }.padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -378,6 +458,67 @@ fun HomeScreen(
                                                                 order
                                                             ); showSortMenu = false
                                                         })
+                                                }
+                                            }
+                                        }
+                                        Box {
+                                            Icon(
+                                                painterResource(Res.drawable.folder_plus),
+                                                "New Folder",
+                                                modifier = Modifier.size(20.dp)
+                                                    .noRippleClickable {
+                                                        if (isDesktopPlatform) {
+                                                            addFolderInput = ""; showAddFolderPopup = true
+                                                        } else showAddFolderDialog = true
+                                                    },
+                                                tint = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            if (isDesktopPlatform) {
+                                                InlyDesktopMenu(
+                                                    expanded = showAddFolderPopup,
+                                                    onDismissRequest = { showAddFolderPopup = false },
+                                                    modifier = Modifier.width(280.dp)
+                                                ) {
+                                                    Column(
+                                                        modifier = Modifier.padding(
+                                                            horizontal = 16.dp,
+                                                            vertical = 12.dp
+                                                        )
+                                                    ) {
+                                                        Text(
+                                                            "New Folder",
+                                                            style = MaterialTheme.typography.bodyLarge,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = MaterialTheme.colorScheme.onSurface,
+                                                            modifier = Modifier.padding(bottom = 10.dp)
+                                                        )
+                                                        InlyTextField(
+                                                            value = addFolderInput,
+                                                            onValueChange = { addFolderInput = it },
+                                                            placeholder = "e.g. Personal, Work...",
+                                                            modifier = Modifier.fillMaxWidth()
+                                                        )
+                                                        Row(
+                                                            modifier = Modifier.fillMaxWidth(),
+                                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                        ) {
+                                                            InlyButtonSecondary(
+                                                                text = "Cancel",
+                                                                onClick = { showAddFolderPopup = false },
+                                                                modifier = Modifier.weight(1f)
+                                                            )
+                                                            InlyButtonPrimary(
+                                                                text = "Create",
+                                                                onClick = {
+                                                                    if (addFolderInput.isNotBlank()) {
+                                                                        handleCreateFolder(addFolderInput.trim())
+                                                                        showAddFolderPopup = false
+                                                                    }
+                                                                },
+                                                                modifier = Modifier.weight(1f)
+                                                            )
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
@@ -462,114 +603,6 @@ fun HomeScreen(
                     }
 
                     if (isNotesExpanded) {
-                        if (subFolders.isNotEmpty() || !isSelectionMode) {
-                            item(span = StaggeredGridItemSpan.FullLine) {
-                                LazyRow(
-                                    state = folderListState,
-                                    contentPadding = PaddingValues(horizontal = HORIZONTAL_PADDING),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
-                                        .mouseScrollable(folderListState)
-                                ) {
-                                    if (!isSelectionMode) {
-                                        item {
-                                            if (isDesktopPlatform) {
-                                                Box(
-                                                    modifier = Modifier.wrapContentSize(Alignment.TopStart)
-                                                        .height(36.dp)
-                                                ) {
-                                                    FolderPill(
-                                                        name = "New",
-                                                        isSelected = false,
-                                                        isNewButton = true,
-                                                        onClick = {
-                                                            addFolderInput =
-                                                                ""; showAddFolderPopup = true
-                                                        },
-                                                        onLongClick = {})
-                                                    InlyDesktopMenu(
-                                                        expanded = showAddFolderPopup,
-                                                        onDismissRequest = {
-                                                            showAddFolderPopup = false
-                                                        },
-                                                        modifier = Modifier.width(280.dp)
-                                                    ) {
-                                                        Column(
-                                                            modifier = Modifier.padding(
-                                                                horizontal = 16.dp,
-                                                                vertical = 12.dp
-                                                            )
-                                                        ) {
-                                                            Text(
-                                                                "New Folder",
-                                                                style = MaterialTheme.typography.bodyLarge,
-                                                                fontWeight = FontWeight.Bold,
-                                                                color = MaterialTheme.colorScheme.onSurface,
-                                                                modifier = Modifier.padding(bottom = 10.dp)
-                                                            )
-                                                            InlyTextField(
-                                                                value = addFolderInput,
-                                                                onValueChange = {
-                                                                    addFolderInput = it
-                                                                },
-                                                                placeholder = "e.g. Personal, Work...",
-                                                                modifier = Modifier.fillMaxWidth()
-                                                            )
-                                                            Row(
-                                                                modifier = Modifier.fillMaxWidth(),
-                                                                horizontalArrangement = Arrangement.spacedBy(
-                                                                    8.dp
-                                                                )
-                                                            ) {
-                                                                InlyButtonSecondary(
-                                                                    text = "Cancel",
-                                                                    onClick = {
-                                                                        showAddFolderPopup = false
-                                                                    },
-                                                                    modifier = Modifier.weight(1f)
-                                                                )
-                                                                InlyButtonPrimary(
-                                                                    text = "Create",
-                                                                    onClick = {
-                                                                        if (addFolderInput.isNotBlank()) {
-                                                                            handleCreateFolder(
-                                                                                addFolderInput.trim()
-                                                                            ); showAddFolderPopup =
-                                                                                false
-                                                                        }
-                                                                    },
-                                                                    modifier = Modifier.weight(1f)
-                                                                )
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            } else {
-                                                FolderPill(
-                                                    name = "New",
-                                                    isSelected = false,
-                                                    isNewButton = true,
-                                                    onClick = { showAddFolderDialog = true },
-                                                    onLongClick = {})
-                                            }
-                                        }
-                                    }
-                                    items(subFolders, key = { it.folderId }) { folder ->
-                                        FolderPill(
-                                            name = folder.name,
-                                            isSelected = selectedFolderIds.contains(folder.folderId),
-                                            onClick = {
-                                                if (isSelectionMode) viewModel.toggleFolderSelection(
-                                                    folder.folderId
-                                                ) else viewModel.selectFolder(folder.folderId)
-                                            },
-                                            onLongClick = { viewModel.toggleFolderSelection(folder.folderId) })
-                                    }
-                                }
-                            }
-                        }
-
                         if (!isDesktopPlatform && !isSelectionMode && selectedFolderId != null) {
                             item(span = StaggeredGridItemSpan.FullLine) {
                                 BreadcrumbTrail(
@@ -581,17 +614,79 @@ fun HomeScreen(
                             }
                         }
 
-                        itemsIndexed(notes, key = { _, note -> note.noteId }) { index, note ->
+                        if (displayedItems.isEmpty()) {
+                            item(span = StaggeredGridItemSpan.FullLine, key = "home_empty_state") {
+                                HomeEmptyState()
+                            }
+                        }
+
+                        itemsIndexed(displayedItems, key = { _, row -> row.key }) { index, row ->
                             val sidePad = if (index % 2 == 0) Modifier.padding(start = HORIZONTAL_PADDING) else Modifier.padding(end = HORIZONTAL_PADDING)
-                            Box(modifier = sidePad) {
-                                NoteCard(
-                                    note = note, isSelected = selectedNoteIds.contains(note.noteId),
-                                    onClick = {
-                                        if (isSelectionMode) viewModel.toggleNoteSelection(
-                                            note.noteId
-                                        ) else onNavigateToEditor(note.noteId)
-                                    },
-                                    onLongClick = { viewModel.toggleNoteSelection(note.noteId) })
+                            Box(
+                                modifier = Modifier
+                                    .then(
+                                        if (gridDragState.isDragging) Modifier.animateItem(
+                                            fadeInSpec = null,
+                                            fadeOutSpec = null,
+                                            placementSpec = spring(
+                                                stiffness = Spring.StiffnessMediumLow,
+                                                dampingRatio = Spring.DampingRatioNoBouncy
+                                            )
+                                        ) else Modifier
+                                    )
+                                    .then(sidePad)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .mobileGridDropFeedback(
+                                            isDragged = gridDragState.isDragged(row.key),
+                                            isIntoTarget = gridDragState.isIntoTarget(row.key),
+                                            cornerRadiusPx = cardCornerRadiusPx
+                                        )
+                                        .mobileGridDragSource(
+                                            itemKey = row.key,
+                                            dragState = gridDragState,
+                                            gridState = gridState,
+                                            gridOriginInRoot = gridOriginInRoot,
+                                            dragEnabled = !isSelectionMode,
+                                            onClick = {
+                                                when (row) {
+                                                    is HomeItem.Folder ->
+                                                        if (isSelectionMode) viewModel.toggleFolderSelection(row.folder.folderId)
+                                                        else viewModel.selectFolder(row.folder.folderId)
+
+                                                    is HomeItem.Note ->
+                                                        if (isSelectionMode) viewModel.toggleNoteSelection(row.note.noteId)
+                                                        else onNavigateToEditor(row.note.noteId)
+                                                }
+                                            },
+                                            onLongPress = {
+                                                when (row) {
+                                                    is HomeItem.Folder -> viewModel.toggleFolderSelection(row.folder.folderId)
+                                                    is HomeItem.Note -> viewModel.toggleNoteSelection(row.note.noteId)
+                                                }
+                                            },
+                                            onDrop = { hoverKey, mode ->
+                                                handleGridDrop(row.key, hoverKey, mode)
+                                            }
+                                        )
+                                ) {
+                                    when (row) {
+                                        is HomeItem.Folder -> FolderCard(
+                                            folder = row.folder,
+                                            isSelected = selectedFolderIds.contains(row.folder.folderId),
+                                            handlesGestures = false,
+                                            onClick = {},
+                                            onLongClick = {})
+
+                                        is HomeItem.Note -> NoteCard(
+                                            note = row.note,
+                                            isSelected = selectedNoteIds.contains(row.note.noteId),
+                                            handlesGestures = false,
+                                            onClick = {},
+                                            onLongClick = {})
+                                    }
+                                }
                             }
                         }
                     }
@@ -646,6 +741,37 @@ fun HomeScreen(
                                 }
                             }
                         }
+                    }
+                }
+            }
+
+            val floatingItem = gridDragState.draggedKey?.let { key ->
+                displayedItems.firstOrNull { it.key == key }
+            }
+            if (floatingItem != null && gridDragState.floatingSize.width > 0) {
+                val density = LocalDensity.current
+                Box(
+                    modifier = Modifier
+                        .size(
+                            width = with(density) { gridDragState.floatingSize.width.toDp() },
+                            height = with(density) { gridDragState.floatingSize.height.toDp() }
+                        )
+                        .mobileGridFloatingItem(gridDragState, gridOriginInRoot)
+                ) {
+                    when (floatingItem) {
+                        is HomeItem.Folder -> FolderCard(
+                            folder = floatingItem.folder,
+                            isSelected = false,
+                            handlesGestures = false,
+                            onClick = {},
+                            onLongClick = {})
+
+                        is HomeItem.Note -> NoteCard(
+                            note = floatingItem.note,
+                            isSelected = false,
+                            handlesGestures = false,
+                            onClick = {},
+                            onLongClick = {})
                     }
                 }
             }
@@ -879,6 +1005,10 @@ fun DesktopSortMenu(currentSortType: SortType, currentSortOrder: SortOrder, onDi
             "Name (A-Z)",
             currentSortType == SortType.NAME
         ) { onDismiss(); onSortChanged(SortType.NAME, currentSortOrder) }
+        DesktopSortOptionItem(
+            "Type",
+            currentSortType == SortType.TYPE
+        ) { onDismiss(); onSortChanged(SortType.TYPE, currentSortOrder) }
         DesktopSortOptionItem("Manual", currentSortType == SortType.MANUAL) {
             onDismiss(); onSortChanged(SortType.MANUAL, currentSortOrder)
         }
@@ -921,6 +1051,29 @@ private fun DesktopSortOptionItem(text: String, isSelected: Boolean, onClick: ()
             "Selected",
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(16.dp)
+        )
+    }
+}
+
+@Composable
+private fun HomeEmptyState(modifier: Modifier = Modifier) {
+    val mutedColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+    Column(
+        modifier = modifier.fillMaxWidth()
+            .padding(horizontal = HORIZONTAL_PADDING, vertical = 40.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(
+            painterResource(Res.drawable.file_text),
+            null,
+            modifier = Modifier.size(26.dp),
+            tint = mutedColor
+        )
+        Spacer(Modifier.height(10.dp))
+        Text(
+            "No notes available",
+            style = MaterialTheme.typography.labelSmall,
+            color = mutedColor
         )
     }
 }
@@ -977,38 +1130,77 @@ fun BreadcrumbTrail(selectedFolderId: String?, breadcrumbs: List<FolderEntity>, 
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun FolderPill(name: String, isSelected: Boolean, isNewButton: Boolean = false, onClick: () -> Unit, onLongClick: () -> Unit) {
-    val bgColor = when { isNewButton -> MaterialTheme.colorScheme.primary; isSelected -> MaterialTheme.colorScheme.onSurface; isDesktopPlatform -> MaterialTheme.colorScheme.background; else -> MaterialTheme.colorScheme.surface }
-    val textColor = when { isNewButton -> MaterialTheme.colorScheme.onPrimary; isSelected -> MaterialTheme.colorScheme.background; else -> MaterialTheme.colorScheme.onSurface }
-    Surface(shape = RoundedCornerShape(8.dp), color = bgColor, contentColor = textColor, modifier = Modifier.height(36.dp).defaultMinSize(minWidth = 72.dp).clip(RoundedCornerShape(8.dp)).combinedClickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick, onLongClick = onLongClick)) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 0.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
+fun FolderCard(
+    folder: FolderEntity,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    handlesGestures: Boolean = true
+) {
+    val bgColor = when {
+        isSelected -> MaterialTheme.colorScheme.onSurface; isDesktopPlatform -> MaterialTheme.colorScheme.background; else -> MaterialTheme.colorScheme.surface
+    }
+    val titleColor =
+        if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+    val mutedColor =
+        if (isSelected) MaterialTheme.colorScheme.background.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+
+    Box(
+        modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(DefaultCornerShape)
+            .background(bgColor)
+            .cardGestures(handlesGestures, onClick, onLongClick)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(12.dp),
+            verticalArrangement = Arrangement.SpaceBetween
         ) {
             Icon(
-                if (isNewButton) painterResource(Res.drawable.folder_plus) else painterResource(Res.drawable.folder),
+                painterResource(Res.drawable.folder),
                 null,
-                modifier = Modifier.size(16.dp)
+                modifier = Modifier.size(26.dp),
+                tint = mutedColor
             )
-            Spacer(Modifier.width(6.dp))
-            Text(name, style = MaterialTheme.typography.bodyLarge)
-            AnimatedVisibility(visible = isSelected && !isNewButton) {
-                Row {
-                    Spacer(Modifier.width(6.dp)); Icon(
-                    Icons.Default.Check,
-                    "Selected",
-                    modifier = Modifier.size(14.dp)
+            Column {
+                Text(
+                    folder.name.ifEmpty { "Untitled" },
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    color = titleColor,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
-                }
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Folder",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = mutedColor
+                )
             }
+        }
+        if (isSelected) Box(
+            modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).size(22.dp)
+                .background(MaterialTheme.colorScheme.onPrimary, CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Default.Check,
+                "Selected",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(14.dp)
+            )
         }
     }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun NoteCard(note: NoteMetadataEntity, isSelected: Boolean, onClick: () -> Unit, onLongClick: () -> Unit) {
+fun NoteCard(
+    note: NoteMetadataEntity,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    handlesGestures: Boolean = true
+) {
     val mediaStorageHelper: com.ben.inly.domain.util.MediaStorageHelper = koinInject()
     val bgColor = when {
         isSelected -> MaterialTheme.colorScheme.onSurface; isDesktopPlatform -> MaterialTheme.colorScheme.background; else -> MaterialTheme.colorScheme.surface
@@ -1025,12 +1217,8 @@ fun NoteCard(note: NoteMetadataEntity, isSelected: Boolean, onClick: () -> Unit,
 
     Box(
         modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(DefaultCornerShape)
-            .background(bgColor).combinedClickable(
-            interactionSource = remember { MutableInteractionSource() },
-            indication = null,
-            onClick = onClick,
-            onLongClick = onLongClick
-        )
+            .background(bgColor)
+            .cardGestures(handlesGestures, onClick, onLongClick)
     ) {
         Column(Modifier.fillMaxSize()) {
             if (hasHeader) {
@@ -1408,6 +1596,10 @@ fun SortBottomSheet(expanded: Boolean, currentSortType: SortType, currentSortOrd
                 "Name (A-Z)",
                 currentSortType == SortType.NAME
             ) { closeAnd { onSortChanged(SortType.NAME, currentSortOrder) } }
+            SortOptionItem(
+                "Type",
+                currentSortType == SortType.TYPE
+            ) { closeAnd { onSortChanged(SortType.TYPE, currentSortOrder) } }
             SortOptionItem("Manual", currentSortType == SortType.MANUAL) {
                 closeAnd { onSortChanged(SortType.MANUAL, currentSortOrder) }
             }
