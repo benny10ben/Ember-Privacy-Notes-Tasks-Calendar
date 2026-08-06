@@ -16,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -58,6 +59,7 @@ import inly.app.generated.resources.sidebar
 import inly.app.generated.resources.timer_reset
 import inly.app.generated.resources.triangle_alert
 import com.ben.inly.presentation.shared.SubNoteOpenMode
+import com.ben.inly.presentation.shared.components.InlyBlur
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import org.koin.compose.viewmodel.koinViewModel
@@ -108,7 +110,7 @@ fun SettingsScreen(
         }
     }
 
-    val internalHazeState = remember { HazeState() }
+    val HazeState = remember { HazeState() }
     val listState = rememberLazyListState()
     val density = LocalDensity.current
     var topBarHeightPx by remember { mutableFloatStateOf(0f) }
@@ -121,7 +123,7 @@ fun SettingsScreen(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .hazeSource(state = internalHazeState)
+                .hazeSource(state = HazeState)
                 .background(MaterialTheme.colorScheme.background),
             contentPadding = PaddingValues(top = topBarHeightDp + 8.dp, bottom = 48.dp)
         ) {
@@ -133,7 +135,7 @@ fun SettingsScreen(
                         onClick = { showImportExportSheet = true }
                     )
 
-                    if (!com.ben.inly.domain.util.isDesktopPlatform) {
+                    if (!isDesktopPlatform) {
                         SettingsToggleRow(
                             icon = painterResource(Res.drawable.folder_sync),
                             title = "Automatic Backups",
@@ -379,7 +381,7 @@ fun SettingsScreen(
                 .zIndex(10f)
                 .onGloballyPositioned { coordinates -> topBarHeightPx = coordinates.size.height.toFloat() }
         ) {
-            SettingsTopBar(onNavigateBack = onNavigateBack, hazeState = internalHazeState)
+            SettingsTopBar(onNavigateBack = onNavigateBack, hazeState = HazeState)
         }
 
         if (showImportExportSheet) {
@@ -463,12 +465,12 @@ fun SettingsScreen(
                     items = days,
                     selectedIndex = selectedIndex,
                     onItemSelected = { selectedIndex = it },
-                    itemHeight = if (com.ben.inly.domain.util.isDesktopPlatform) 40.dp else 44.dp
+                    itemHeight = if (isDesktopPlatform) 40.dp else 44.dp
                 )
             }
         }
 
-        if (com.ben.inly.domain.util.isDesktopPlatform) {
+        if (isDesktopPlatform) {
             com.ben.inly.presentation.shared.components.InlyDesktopMenu(
                 expanded = showDayPicker,
                 onDismissRequest = { showDayPicker = false }
@@ -726,9 +728,6 @@ fun SettingsSelectionRow(
 
 @Composable
 private fun SettingsTopBar(onNavigateBack: () -> Unit, hazeState: HazeState) {
-    val defaultBgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.65f)
-    val defaultContentColor = MaterialTheme.colorScheme.onSurface
-
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -744,9 +743,10 @@ private fun SettingsTopBar(onNavigateBack: () -> Unit, hazeState: HazeState) {
         TopBarIconButton(
             icon = painterResource(Res.drawable.chevron_left),
             contentDescription = "Back",
-            bgColor = defaultBgColor,
-            tint = defaultContentColor,
+            bgColor = Color.Transparent,
+            tint = MaterialTheme.colorScheme.primary,
             hazeState = hazeState,
+            hazeStyle = InlyBlur.Regular,
             onClick = onNavigateBack
         )
 
@@ -754,7 +754,7 @@ private fun SettingsTopBar(onNavigateBack: () -> Unit, hazeState: HazeState) {
             text = "Settings",
             style = MaterialTheme.typography.bodyLarge,
             fontWeight = FontWeight.Bold,
-            color = defaultContentColor,
+            color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.align(Alignment.Center)
         )
     }

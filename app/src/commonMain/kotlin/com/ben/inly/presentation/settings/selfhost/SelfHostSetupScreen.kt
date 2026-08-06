@@ -67,6 +67,7 @@ import androidx.compose.ui.zIndex
 import com.ben.inly.domain.selfhost.sync.SelfHostSyncLog
 import com.ben.inly.domain.util.isDesktopPlatform
 import com.ben.inly.presentation.settings.SettingsGroup
+import com.ben.inly.presentation.shared.components.InlyBlur
 import com.ben.inly.presentation.shared.components.InlyButtonPrimary
 import com.ben.inly.presentation.shared.components.InlyTextField
 import com.ben.inly.presentation.shared.components.TopBarIconButton
@@ -639,9 +640,6 @@ private fun ErrorMessageCard(message: String) {
 
 @Composable
 private fun SelfHostSetupTopBar(onNavigateBack: () -> Unit, hazeState: HazeState) {
-    val defaultBgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.65f)
-    val defaultContentColor = MaterialTheme.colorScheme.onSurface
-
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -657,9 +655,10 @@ private fun SelfHostSetupTopBar(onNavigateBack: () -> Unit, hazeState: HazeState
         TopBarIconButton(
             icon = painterResource(Res.drawable.chevron_left),
             contentDescription = "Back",
-            bgColor = defaultBgColor,
-            tint = defaultContentColor,
+            bgColor = Color.Transparent,
+            tint = MaterialTheme.colorScheme.primary,
             hazeState = hazeState,
+            hazeStyle = InlyBlur.Regular,
             onClick = onNavigateBack
         )
 
@@ -667,7 +666,7 @@ private fun SelfHostSetupTopBar(onNavigateBack: () -> Unit, hazeState: HazeState
             text = "Self-Host",
             style = MaterialTheme.typography.bodyLarge,
             fontWeight = FontWeight.Bold,
-            color = defaultContentColor,
+            color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.align(Alignment.Center)
         )
     }

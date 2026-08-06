@@ -168,10 +168,11 @@ private fun reportGridScrollState(gridState: LazyGridState, onScrolledChanged: (
 private fun TrashTopBar(
     onNavigateBack: () -> Unit,
     showEmptyAction: Boolean,
-    onEmptyTrashClick: () -> Unit
+    onEmptyTrashClick: () -> Unit,
 ) {
     val defaultBgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.65f)
     val defaultContentColor = MaterialTheme.colorScheme.onSurface
+    val hazeState = remember { HazeState() }
 
     Box(
         modifier = Modifier
@@ -188,8 +189,10 @@ private fun TrashTopBar(
         TopBarIconButton(
             icon = painterResource(Res.drawable.chevron_left),
             contentDescription = "Back",
-            bgColor = defaultBgColor,
-            tint = defaultContentColor,
+            bgColor = Color.Transparent,
+            tint = MaterialTheme.colorScheme.primary,
+            hazeState = hazeState,
+            hazeStyle = InlyBlur.Regular,
             onClick = onNavigateBack
         )
 
