@@ -70,14 +70,19 @@ fun CollapsedWeekStrip(
     }
 
     val dates = remember(anchorDate) { (-15..15).map { anchorDate.plus(it, DateTimeUnit.DAY) } }
+    val today = remember { Clock.System.todayIn(TimeZone.currentSystemDefault()) }
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     val density = LocalDensity.current
-    val leadingOffset = if (isDesktopPlatform) 3 else 4
+    val leadingOffset = if (isDesktopPlatform) 1 else 2
+
+    val chipWidth = 74.dp
+    val chipHeight = 32.dp
+    val chipSpacing = 8.dp
 
     if (pagerState != null) {
         LaunchedEffect(pagerState, initialPage, initialDate, anchorDate, dates) {
-            val itemExtentPx = with(density) { (44.dp + 14.dp).toPx() }
+            val itemExtentPx = with(density) { (chipWidth + chipSpacing).toPx() }
             snapshotFlow { pagerState.currentPage - initialPage + pagerState.currentPageOffsetFraction }
                 .collect { continuousOffsetFromInitial ->
                     val continuousOffsetFromAnchor = anchorDate.daysUntil(initialDate) + continuousOffsetFromInitial
@@ -113,14 +118,18 @@ fun CollapsedWeekStrip(
                     }
                 }
             },
-        horizontalArrangement = Arrangement.spacedBy(14.dp)
+        horizontalArrangement = Arrangement.spacedBy(chipSpacing),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         items(dates, key = { it.toString() }) { date ->
-            DateCard(
+            WeekStripChip(
                 date = date,
+                isToday = date == today,
+                width = chipWidth,
+                height = chipHeight,
+                hazeState = null,
                 isSelected = date == selectedDate,
-                showDayText = true,
-                onDateClick = { onDateSelected(date) }
+                onClick = { onDateSelected(date) }
             )
         }
     }
@@ -140,6 +149,7 @@ fun DailyBottomWeekStrip(
     }
 
     val dates = remember(anchorDate) { (-20..20).map { anchorDate.plus(it, DateTimeUnit.DAY) } }
+    val today = remember { Clock.System.todayIn(TimeZone.currentSystemDefault()) }
     val listState = rememberLazyListState()
 
     val sizeSpec = tween<Dp>(durationMillis = 350, easing = FastOutSlowInEasing)
@@ -217,6 +227,7 @@ fun DailyBottomWeekStrip(
             items(dates, key = { it.toString() }) { date ->
                 WeekStripChip(
                     date = date,
+                    isToday = date == today,
                     width = pillWidth,
                     height = pillHeight,
                     hazeState = hazeState,
@@ -230,13 +241,22 @@ fun DailyBottomWeekStrip(
 @Composable
 private fun WeekStripChip(
     date: LocalDate,
+    isToday: Boolean,
     width: Dp,
     height: Dp,
-    hazeState: HazeState,
+    hazeState: HazeState?,
+    isSelected: Boolean = false,
     onClick: () -> Unit
 ) {
     val shape = RoundedCornerShape(12.dp)
     val shortDayName = date.dayOfWeek.name.take(3).lowercase().replaceFirstChar { it.uppercase() }
+    val primaryTextColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+    val mutedTextColor = if (isSelected) {
+        MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
+    } else {
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+    }
+
     Row(
         horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
@@ -244,26 +264,41 @@ private fun WeekStripChip(
             .width(width)
             .height(height)
             .clip(shape)
-            .inlyBlur(hazeState, InlyBlur.Regular)
-            .background(Color.Transparent)
+            .then(if (hazeState != null) Modifier.inlyBlur(hazeState, InlyBlur.Regular) else Modifier)
+            .background(
+                when {
+                    isSelected -> MaterialTheme.colorScheme.primary
+                    hazeState != null -> Color.Transparent
+                    else -> Color.Transparent
+                }
+            )
             .border(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), shape)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = NoRippleIndicationNodeFactory
             ) { onClick() }
     ) {
-        Text(
-            text = shortDayName,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Normal,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-        )
-        Text(
-            text = date.dayOfMonth.toString(),
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
+        if (isToday) {
+            Text(
+                text = "Today",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Normal,
+                color = primaryTextColor
+            )
+        } else {
+            Text(
+                text = shortDayName,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Normal,
+                color = mutedTextColor
+            )
+            Text(
+                text = date.dayOfMonth.toString(),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Normal,
+                color = primaryTextColor
+            )
+        }
     }
 }
 
@@ -377,47 +412,5 @@ private fun BottomSheetDateCell(
                     .clip(CircleShape).background(if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary)
             )
         }
-    }
-}
-
-@Composable
-private fun DateCard(
-    date: LocalDate,
-    isSelected: Boolean,
-    showDayText: Boolean,
-    onDateClick: () -> Unit
-) {
-    val bgColor = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
-    val textColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-    val mutedTextColor = if (isSelected) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-    val shortDayName = date.dayOfWeek.name.take(3).lowercase().replaceFirstChar { it.uppercase() }
-
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            .width(44.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(bgColor)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) { onDateClick() }
-            .padding(vertical = 8.dp)
-    ) {
-        if (showDayText) {
-            Text(
-                text = shortDayName,
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal,
-                color = mutedTextColor
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-        }
-        Text(
-            text = date.dayOfMonth.toString(),
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal,
-            color = textColor
-        )
     }
 }
