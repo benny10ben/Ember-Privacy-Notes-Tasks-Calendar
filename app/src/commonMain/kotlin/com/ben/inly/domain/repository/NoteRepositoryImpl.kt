@@ -81,7 +81,7 @@ import kotlinx.serialization.json.put
 // editor mid-typing, causing cursor jumps and UI flicker. So the editor writes to its
 // own in-memory state instantly, then flushes to Room on a 1-second debounce.
 //
-// This creates a problem: other screens (e.g. RemindersScreen) write directly to Room
+// This creates a problem: other screens (e.g. TasksScreen) write directly to Room
 // via saveNote/saveDailyNote, but the editor's in-memory state doesn't know about it.
 // On navigation back, the editor was showing stale data.
 //
@@ -94,7 +94,7 @@ import kotlinx.serialization.json.put
 //
 // The editor guards against its own writes bouncing back by checking autosaveJob?.isActive.
 // If the editor itself triggered the write, the cache emission is ignored. If another
-// ViewModel (RemindersViewModel, SyncRepositoryImpl, etc.) triggered it, the emission
+// ViewModel (TasksViewModel, SyncRepositoryImpl, etc.) triggered it, the emission
 // goes through and updates the editor's blocks.
 //
 // CRASH SAFETY
@@ -137,7 +137,7 @@ class NoteRepositoryImpl(
 
     // Exposes a Flow that emits whenever the cache entry for this noteId changes.
     // NoteEditorViewModel subscribes to this in its init block to stay in sync
-    // with external writes (e.g. RemindersViewModel toggling a checkbox).
+    // with external writes (e.g. TasksViewModel toggling a checkbox).
     override fun observeNoteContent(noteId: String): Flow<NoteContent?> =
         noteContentCache.map { it[noteId] }
 
@@ -348,7 +348,7 @@ class NoteRepositoryImpl(
             AutoSyncTrigger.requestSync()
 
             // Sync projection tables — these are flat Room tables that allow
-            // RemindersScreen, ImagesScreen, DocumentsScreen, and BookmarksScreen
+            // TasksScreen, ImagesScreen, DocumentsScreen, and BookmarksScreen
             // to query their content without scanning every note's block list.
             if (dateString != "global_pinned") {
                 syncCalendarTasks(
@@ -775,7 +775,7 @@ class NoteRepositoryImpl(
         blocks.filterIsInstance<CheckboxBlock>().filter { !it.isDeleted }
 
     // Rebuilds the CalendarTaskEntity projection table for a given note on every save.
-    // RemindersScreen and the calendar strip both read from this table, so they always
+    // TasksScreen and the calendar strip both read from this table, so they always
     // reflect the latest checkbox state without scanning raw block JSON.
     private suspend fun syncCalendarTasks(
         noteId: String,
