@@ -90,7 +90,7 @@ import com.ben.ember.domain.util.isDesktopPlatform
 import com.ben.ember.presentation.shared.components.EmberBottomSheet
 import com.ben.ember.presentation.shared.components.EmberDesktopMenu
 import com.ben.ember.presentation.shared.components.rememberKeyboardHandoff
-import com.ben.ember.presentation.shared.editor.blockViews.databaseBlockView.DbOptionRow
+import com.ben.ember.presentation.shared.editor.blockViews.databaseBlockView.SheetMenuRow
 import com.ben.ember.presentation.shared.editor.components.DesktopCursor
 import com.ben.ember.presentation.shared.editor.components.desktopPointerCursor
 import com.ben.ember.presentation.shared.editor.mouseScrollable
@@ -325,16 +325,16 @@ fun TableBlockView(
         val rowIndex = activeRowIndex
         val colIndex = activeColIndex
         if (rowIndex in rows.indices && colIndex in 0 until columnCount) {
-            DbOptionRow(painterResource(Res.drawable.arrow_up), "Insert Row Above") {
+            SheetMenuRow(painterResource(Res.drawable.arrow_up), "Insert Row Above") {
                 insertRowAt(rowIndex); closeMenu()
             }
-            DbOptionRow(painterResource(Res.drawable.arrow_down), "Insert Row Below") {
+            SheetMenuRow(painterResource(Res.drawable.arrow_down), "Insert Row Below") {
                 insertRowAt(rowIndex + 1); closeMenu()
             }
-            DbOptionRow(painterResource(Res.drawable.arrow_left), "Insert Column Left") {
+            SheetMenuRow(painterResource(Res.drawable.arrow_left), "Insert Column Left") {
                 insertColumnAt(colIndex); closeMenu()
             }
-            DbOptionRow(painterResource(Res.drawable.arrow_right), "Insert Column Right") {
+            SheetMenuRow(painterResource(Res.drawable.arrow_right), "Insert Column Right") {
                 insertColumnAt(colIndex + 1); closeMenu()
             }
 
@@ -344,22 +344,22 @@ fun TableBlockView(
             )
 
             if (rowIndex > 0) {
-                DbOptionRow(rememberVectorPainter(Icons.Default.ArrowUpward), "Move Row Up") {
+                SheetMenuRow(rememberVectorPainter(Icons.Default.ArrowUpward), "Move Row Up") {
                     moveRow(rowIndex, rowIndex - 1); closeMenu()
                 }
             }
             if (rowIndex < rows.lastIndex) {
-                DbOptionRow(rememberVectorPainter(Icons.Default.ArrowDownward), "Move Row Down") {
+                SheetMenuRow(rememberVectorPainter(Icons.Default.ArrowDownward), "Move Row Down") {
                     moveRow(rowIndex, rowIndex + 1); closeMenu()
                 }
             }
             if (colIndex > 0) {
-                DbOptionRow(painterResource(Res.drawable.move_left), "Move Column Left") {
+                SheetMenuRow(painterResource(Res.drawable.move_left), "Move Column Left") {
                     moveColumn(colIndex, colIndex - 1); closeMenu()
                 }
             }
             if (colIndex < columnCount - 1) {
-                DbOptionRow(painterResource(Res.drawable.move_right), "Move Column Right") {
+                SheetMenuRow(painterResource(Res.drawable.move_right), "Move Column Right") {
                     moveColumn(colIndex, colIndex + 1); closeMenu()
                 }
             }
@@ -420,19 +420,19 @@ fun TableBlockView(
             )
 
             val paletteIcon = rememberVectorPainter(Icons.Default.Palette)
-            DbOptionRow(paletteIcon, "Style Cell") { openStyleFromCellActions(TableStyleScope.CELL) }
-            DbOptionRow(paletteIcon, "Style Row") { openStyleFromCellActions(TableStyleScope.ROW) }
-            DbOptionRow(paletteIcon, "Style Column") { openStyleFromCellActions(TableStyleScope.COLUMN) }
+            SheetMenuRow(paletteIcon, "Style Cell") { openStyleFromCellActions(TableStyleScope.CELL) }
+            SheetMenuRow(paletteIcon, "Style Row") { openStyleFromCellActions(TableStyleScope.ROW) }
+            SheetMenuRow(paletteIcon, "Style Column") { openStyleFromCellActions(TableStyleScope.COLUMN) }
 
             HorizontalDivider(
                 modifier = Modifier.padding(vertical = 12.dp),
                 color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
             )
 
-            DbOptionRow(painterResource(Res.drawable.trash), "Delete Row", MaterialTheme.colorScheme.error) {
+            SheetMenuRow(painterResource(Res.drawable.trash), "Delete Row", MaterialTheme.colorScheme.error) {
                 deleteRowAt(rowIndex); closeMenu()
             }
-            DbOptionRow(painterResource(Res.drawable.trash), "Delete Column", MaterialTheme.colorScheme.error) {
+            SheetMenuRow(painterResource(Res.drawable.trash), "Delete Column", MaterialTheme.colorScheme.error) {
                 deleteColumnAt(colIndex); closeMenu()
             }
         }
@@ -757,7 +757,7 @@ private fun TableStyleSheetContent(
             color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
         )
 
-        DbOptionRow(painterResource(Res.drawable.trash), "Reset Style", MaterialTheme.colorScheme.error) {
+        SheetMenuRow(painterResource(Res.drawable.trash), "Reset Style", MaterialTheme.colorScheme.error) {
             onReset()
         }
     }

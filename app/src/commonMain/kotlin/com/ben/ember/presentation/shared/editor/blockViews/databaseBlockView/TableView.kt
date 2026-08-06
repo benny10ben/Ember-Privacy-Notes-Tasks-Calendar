@@ -114,10 +114,10 @@ fun TableView(
     scrollState: ScrollState,
     coroutineScope: CoroutineScope,
     focusManager: FocusManager,
-    currentSheet: DbSheetType,
+    currentSheet: DatabaseSheet,
     activeColId: String?,
     activeRowId: String?,
-    onOpenSheet: (sheet: DbSheetType, rowId: String?, colId: String?) -> Unit,
+    onOpenSheet: (sheet: DatabaseSheet, rowId: String?, colId: String?) -> Unit,
     onOpenDatePicker: (rowId: String, colId: String) -> Unit,
     desktopDropdown: @Composable (Boolean) -> Unit
 ) {
@@ -186,7 +186,7 @@ fun TableView(
                                             drawLine(borderColor, Offset(0f, size.height), Offset(size.width, size.height), px)
                                         }
                                         .clickable(enabled = !inSelectionMode) {
-                                            onOpenSheet(DbSheetType.COLUMN_OPTIONS, null, col.id)
+                                            onOpenSheet(DatabaseSheet.COLUMN_OPTIONS, null, col.id)
                                         }
                                         .pointerInput(col.id) {
                                             detectDragGesturesAfterLongPress(
@@ -259,7 +259,7 @@ fun TableView(
                                     }
                                 }
                                 desktopDropdown(activeColId == col.id && currentSheet in listOf(
-                                    DbSheetType.COLUMN_OPTIONS, DbSheetType.RENAME, DbSheetType.FORMULA))
+                                    DatabaseSheet.COLUMN_OPTIONS, DatabaseSheet.RENAME, DatabaseSheet.FORMULA))
 
                                 if (isDesktopPlatform) {
                                     val density = LocalDensity.current
@@ -322,7 +322,7 @@ fun TableView(
                         Row(modifier = Modifier.height(IntrinsicSize.Max).defaultMinSize(minHeight = 44.dp)) {
                             orderedColumns.forEach { col ->
                                 val cellData = row.cells[col.id]
-                                val isHighlighted = currentSheet == DbSheetType.CELL_OPTIONS && activeRowId == row.id && activeColId == col.id
+                                val isHighlighted = currentSheet == DatabaseSheet.CELL_OPTIONS && activeRowId == row.id && activeColId == col.id
 
                                 Box {
                                     Box(
@@ -350,7 +350,7 @@ fun TableView(
                                                     }
                                                     if (isLongPress && !inSelectionMode) {
                                                         focusManager.clearFocus()
-                                                        onOpenSheet(DbSheetType.CELL_OPTIONS, row.id, col.id)
+                                                        onOpenSheet(DatabaseSheet.CELL_OPTIONS, row.id, col.id)
                                                     }
                                                 }
                                             }
@@ -384,7 +384,7 @@ fun TableView(
                                                 if (!inSelectionMode) {
                                                     focusManager.clearFocus()
                                                     onOpenSheet(
-                                                        DbSheetType.TAG_SELECTION,
+                                                        DatabaseSheet.TAG_SELECTION,
                                                         row.id,
                                                         col.id
                                                     )
@@ -394,7 +394,7 @@ fun TableView(
                                                 if (!inSelectionMode) {
                                                     focusManager.clearFocus()
                                                     onOpenSheet(
-                                                        DbSheetType.FILE_OPTIONS,
+                                                        DatabaseSheet.FILE_OPTIONS,
                                                         row.id,
                                                         col.id
                                                     )
@@ -404,7 +404,7 @@ fun TableView(
                                                 if (!inSelectionMode) {
                                                     focusManager.clearFocus()
                                                     onOpenSheet(
-                                                        DbSheetType.PRIORITY_SELECTION,
+                                                        DatabaseSheet.PRIORITY_SELECTION,
                                                         row.id,
                                                         col.id
                                                     )
@@ -414,7 +414,7 @@ fun TableView(
                                                 if (!inSelectionMode) {
                                                     focusManager.clearFocus()
                                                     onOpenSheet(
-                                                        DbSheetType.STATUS_SELECTION,
+                                                        DatabaseSheet.STATUS_SELECTION,
                                                         row.id,
                                                         col.id
                                                     )
@@ -447,7 +447,7 @@ fun TableView(
                                                 if (!inSelectionMode) {
                                                     focusManager.clearFocus()
                                                     onOpenSheet(
-                                                        DbSheetType.CELL_OPTIONS,
+                                                        DatabaseSheet.CELL_OPTIONS,
                                                         row.id,
                                                         col.id
                                                     )
@@ -456,7 +456,7 @@ fun TableView(
                                         )
                                     }
                                     desktopDropdown(activeRowId == row.id && activeColId == col.id && currentSheet in listOf(
-                                        DbSheetType.CELL_OPTIONS, DbSheetType.TAG_SELECTION, DbSheetType.FILE_OPTIONS, DbSheetType.PRIORITY_SELECTION, DbSheetType.STATUS_SELECTION))
+                                        DatabaseSheet.CELL_OPTIONS, DatabaseSheet.TAG_SELECTION, DatabaseSheet.FILE_OPTIONS, DatabaseSheet.PRIORITY_SELECTION, DatabaseSheet.STATUS_SELECTION))
                                 }
                             }
 
@@ -480,7 +480,7 @@ fun TableView(
             Row(modifier = Modifier.height(IntrinsicSize.Max).defaultMinSize(minHeight = 36.dp)) {
                 orderedColumns.forEach { col ->
                     val aggType = col.aggregationType
-                    val isActivelyEditing = currentSheet == DbSheetType.AGGREGATION && activeColId == col.id
+                    val isActivelyEditing = currentSheet == DatabaseSheet.AGGREGATION && activeColId == col.id
                     val isCurr  = col.type == ColumnType.MONEY || (col.type == ColumnType.FORMULA && col.isFormulaCurrency)
                     val prefix  = if (isCurr) (col.currencySymbol ?: "$") else ""
 
@@ -523,7 +523,7 @@ fun TableView(
                             .fillMaxHeight()
                             .defaultMinSize(minHeight = 36.dp)
                             .clickable(enabled = !inSelectionMode) {
-                                onOpenSheet(DbSheetType.AGGREGATION, null, col.id)
+                                onOpenSheet(DatabaseSheet.AGGREGATION, null, col.id)
                             }
                             .padding(horizontal = 12.dp, vertical = 8.dp),
                         contentAlignment = Alignment.TopEnd
@@ -535,7 +535,7 @@ fun TableView(
                             maxLines = 1
                         )
                     }
-                    desktopDropdown(activeColId == col.id && currentSheet == DbSheetType.AGGREGATION)
+                    desktopDropdown(activeColId == col.id && currentSheet == DatabaseSheet.AGGREGATION)
                 }
                 Box(modifier = Modifier.width(44.dp).fillMaxHeight().defaultMinSize(minHeight = 36.dp))
             }
