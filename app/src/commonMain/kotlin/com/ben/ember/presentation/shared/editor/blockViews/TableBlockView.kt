@@ -190,7 +190,13 @@ fun TableBlockView(
     }
 
     fun addRow() = onUpdateTable(rows + listOf(List(columnCount) { "" }))
-    fun addColumn() = onUpdateTable(rows.map { it + "" })
+    fun addColumn() {
+        onUpdateTable(rows.map { it + "" })
+        coroutineScope.launch {
+            delay(150.milliseconds)
+            scrollState.animateScrollTo(scrollState.maxValue)
+        }
+    }
     fun insertRowAt(index: Int) = onUpdateTable(rows.toMutableList().apply { add(index, List(columnCount) { "" }) })
     fun insertColumnAt(index: Int) = onUpdateTable(rows.map { row -> row.toMutableList().apply { add(index, "") } })
 
