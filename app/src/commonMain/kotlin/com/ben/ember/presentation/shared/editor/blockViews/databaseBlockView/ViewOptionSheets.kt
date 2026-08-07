@@ -291,7 +291,7 @@ internal fun SortSheet(context: DatabaseSheetContext) {
                         containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
                         labelColor = MaterialTheme.colorScheme.onSurface
                     ),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
                 )
             }
         }
@@ -335,7 +335,7 @@ internal fun FilterSheet(context: DatabaseSheetContext) {
 
     Surface(
         shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
         modifier = Modifier
             .fillMaxWidth()
@@ -395,7 +395,7 @@ internal fun FilterSheet(context: DatabaseSheetContext) {
                 border = BorderStroke(
                     1.dp,
                     if (isSelected) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                    else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
                 ),
                 colors = FilterChipDefaults.filterChipColors(
                     selectedContainerColor = MaterialTheme.colorScheme.primary,
@@ -463,7 +463,7 @@ internal fun FilterSheet(context: DatabaseSheetContext) {
                     shape = RoundedCornerShape(12.dp),
                     border = BorderStroke(
                         1.dp,
-                        if (isSelected) chipColor else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                        if (isSelected) chipColor else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
                     ),
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = chipColor,

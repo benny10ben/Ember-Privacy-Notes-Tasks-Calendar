@@ -226,7 +226,7 @@ fun AudioBlockView(
                     Spacer(modifier = Modifier.width(12.dp))
 
                     val barActiveColor = MaterialTheme.colorScheme.onSurface
-                    val barInactiveColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                    val barInactiveColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
 
                     Box(
                         modifier = Modifier

@@ -240,7 +240,7 @@ internal fun ColumnOptionsSheet(context: DatabaseSheetContext) {
                 border = BorderStroke(
                     1.dp,
                     if (isSelected) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                    else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
                 ),
                 colors = FilterChipDefaults.filterChipColors(
                     selectedContainerColor = MaterialTheme.colorScheme.primary,
@@ -265,7 +265,7 @@ private fun ColumnWidthStepper(icon: Painter, onClick: () -> Unit) {
     Surface(
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
         modifier = Modifier.clickable(onClick = onClick)
     ) {
         Icon(
@@ -326,7 +326,7 @@ internal fun EditFormulaSheet(context: DatabaseSheetContext) {
                 colors = SuggestionChipDefaults.suggestionChipColors(
                     containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
                 ),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
             )
         }
     }
@@ -348,7 +348,7 @@ internal fun EditFormulaSheet(context: DatabaseSheetContext) {
                         color = MaterialTheme.colorScheme.onSurface
                     )
                 },
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
             )
         }
     }

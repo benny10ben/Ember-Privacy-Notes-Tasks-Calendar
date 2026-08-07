@@ -230,7 +230,7 @@ fun SketchToolbar(
             modifier = Modifier
                 .width(1.dp)
                 .height(24.dp)
-                .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
         )
 
         // Tools (Icons Only)

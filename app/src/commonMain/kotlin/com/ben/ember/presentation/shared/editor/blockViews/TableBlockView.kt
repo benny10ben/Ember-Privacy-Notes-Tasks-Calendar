@@ -143,7 +143,7 @@ fun TableBlockView(
     val rows = block.rows
     val columnCount = rows.firstOrNull()?.size ?: 0
     val borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.65f)
-    val borderColor1 = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+    val borderColor1 = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
     val scrollState = rememberScrollState()
     val coroutineScope = rememberCoroutineScope()
     val keyboardHandoff = rememberKeyboardHandoff()
@@ -379,7 +379,7 @@ fun TableBlockView(
                     Surface(
                         shape = RoundedCornerShape(12.dp),
                         color = MaterialTheme.colorScheme.surface,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
                         modifier = Modifier.clickable { updateColumnWidthBy(colIndex, -20) }
                     ) {
                         Icon(
@@ -401,7 +401,7 @@ fun TableBlockView(
                     Surface(
                         shape = RoundedCornerShape(12.dp),
                         color = MaterialTheme.colorScheme.surface,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
                         modifier = Modifier.clickable { updateColumnWidthBy(colIndex, 20) }
                     ) {
                         Icon(

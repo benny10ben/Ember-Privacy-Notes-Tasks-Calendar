@@ -122,7 +122,7 @@ fun TableView(
     desktopDropdown: @Composable (Boolean) -> Unit
 ) {
     val borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.65f)
-    val borderColor1 = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+    val borderColor1 = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
 
     val orderedColumns = remember(visibleColumns) { mutableStateListOf(*visibleColumns.toTypedArray()) }
     var draggedColId by remember { mutableStateOf<String?>(null) }
@@ -531,7 +531,7 @@ fun TableView(
                         Text(
                             text = displayValue,
                             style = MaterialTheme.typography.labelSmall,
-                            color = if (aggType == null) MaterialTheme.colorScheme.outline.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurface,
+                            color = if (aggType == null) MaterialTheme.colorScheme.outline.copy(alpha = 0.2f) else MaterialTheme.colorScheme.onSurface,
                             maxLines = 1
                         )
                     }
