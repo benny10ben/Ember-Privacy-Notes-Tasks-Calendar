@@ -20,7 +20,7 @@ object EmberBlur {
         get() = HazeStyle(
             backgroundColor = MaterialTheme.colorScheme.background,
             tints = listOf(
-                HazeTint(MaterialTheme.colorScheme.background.copy(alpha = 0.35f))
+                HazeTint(MaterialTheme.colorScheme.background.copy(alpha = 0.45f))
             ),
             blurRadius = 32.dp,
             noiseFactor = 0f,
