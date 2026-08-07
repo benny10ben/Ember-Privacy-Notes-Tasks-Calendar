@@ -41,6 +41,7 @@ import dev.chrisbanes.haze.hazeSource
 import com.ben.ember.ui.theme.FontStylePreference
 import com.ben.ember.ui.theme.fontFamilyFor
 import ember.app.generated.resources.Res
+import ember.app.generated.resources.astroid
 import ember.app.generated.resources.badge_plus
 import ember.app.generated.resources.badge_question_mark
 import ember.app.generated.resources.calendar_clock
@@ -102,6 +103,18 @@ fun SettingsScreen(
 
     val subNoteOpenMode by viewModel.subNoteOpenMode.collectAsState()
     var showSubNoteOpenModeSheet by remember { mutableStateOf(false) }
+
+    val aiFeaturesDisabled by viewModel.aiFeaturesDisabled.collectAsState()
+    val isPurgingAiData by viewModel.isPurgingAiData.collectAsState()
+    val aiPurgeResultMessage by viewModel.aiPurgeResultMessage.collectAsState()
+    var showDisableAiConfirmation by remember { mutableStateOf(false) }
+
+    LaunchedEffect(aiPurgeResultMessage) {
+        aiPurgeResultMessage?.let { message ->
+            showNativeToast(message)
+            viewModel.consumeAiPurgeResultMessage()
+        }
+    }
 
     LaunchedEffect(syncStatus) {
         if (syncStatus != "Idle" && syncStatus != "Syncing...") {
@@ -299,6 +312,35 @@ fun SettingsScreen(
                             onClick = { showSubNoteOpenModeSheet = true }
                         )
                     }
+                }
+            }
+
+            item {
+                SettingsGroup(title = "AI") {
+                    SettingsToggleRow(
+                        icon = painterResource(Res.drawable.astroid),
+                        title = "Turn Off AI Features",
+                        isChecked = aiFeaturesDisabled,
+                        onCheckedChange = { isChecked ->
+                            if (isPurgingAiData) return@SettingsToggleRow
+                            if (isChecked) {
+                                showDisableAiConfirmation = true
+                            } else {
+                                viewModel.setAiFeaturesDisabled(false)
+                            }
+                        }
+                    )
+
+                    Text(
+                        text = when {
+                            isPurgingAiData -> "Removing models, embeddings and saved keys…"
+                            aiFeaturesDisabled -> "AI is off. The assistant button is hidden, notes are no longer indexed, and all model files, embeddings and API keys have been removed. Saved chats are kept."
+                            else -> "Hides the AI assistant, stops note indexing, and permanently deletes downloaded models, the search index and stored API keys to free up storage. Saved chats are kept."
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        modifier = Modifier.padding(start = 64.dp, end = 14.dp, bottom = 14.dp)
+                    )
                 }
             }
 
@@ -608,6 +650,50 @@ fun SettingsScreen(
                 }
             }
         }
+    }
+
+    if (showDisableAiConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showDisableAiConfirmation = false },
+            shape = RoundedCornerShape(12.dp),
+            containerColor = MaterialTheme.colorScheme.surface,
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+            textContentColor = MaterialTheme.colorScheme.onSurface,
+            title = {
+                Text(
+                    text = "Turn Off AI Features?",
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            },
+            text = {
+                Text(
+                    text = "This permanently deletes the downloaded embedding and language models, the note search index, and every saved provider API key. Your notes and saved chats are untouched. Turning AI back on later means downloading and re-indexing everything again.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            },
+            confirmButton = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    EmberButtonSecondary(
+                        text = "Cancel",
+                        onClick = { showDisableAiConfirmation = false },
+                        modifier = Modifier.weight(1f)
+                    )
+                    EmberButtonPrimary(
+                        text = "Turn Off",
+                        onClick = {
+                            showDisableAiConfirmation = false
+                            viewModel.setAiFeaturesDisabled(true)
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        )
     }
 
     if (showPairingDialog && activePairingData != null) {

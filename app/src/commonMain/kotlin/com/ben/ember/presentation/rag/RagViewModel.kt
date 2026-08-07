@@ -164,6 +164,18 @@ class RagViewModel(
         }
     }
 
+    fun refreshAiAvailability() {
+        val hasTransientSetupState = _embeddingSetupState.value.let { state ->
+            state is EmbeddingSetupState.Downloading ||
+                state is EmbeddingSetupState.Indexing ||
+                state == EmbeddingSetupState.DownloadComplete
+        }
+        if (!hasTransientSetupState) refreshEmbeddingSetupState()
+
+        refreshInstalledLocalModels()
+        refreshModelAvailability()
+    }
+
     fun hasResumableEmbeddingDownload(): Boolean = hasResumableDownload(ModelFileNames.EMBEDDER)
 
     private var embeddingDownloadJob: Job? = null

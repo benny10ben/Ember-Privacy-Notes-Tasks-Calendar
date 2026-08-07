@@ -86,6 +86,7 @@ fun EmberBottomBar(
     onSearchClick: () -> Unit,
     onMicClick: () -> Unit,
     onAiIconTap: () -> Unit = {},
+    isAiEnabled: Boolean = true,
     isListening: Boolean = false,
     partialText: String = "",
     isCompact: Boolean = false
@@ -188,19 +189,21 @@ fun EmberBottomBar(
                             restoreState = true
                         }
                     }
-                    BottomNavItem(
-                        icon = painterResource(Res.drawable.astroid),
-                        isSelected = false,
-                        modifier = Modifier.weight(1f).height(navItemHeight),
-                        iconModifier = with(sharedTransitionScope) {
-                            Modifier.sharedElement(
-                                sharedContentState = rememberSharedContentState(key = "aiIcon"),
-                                animatedVisibilityScope = bottomBarAnimatedVisibilityScope,
-                                boundsTransform = { _, _ -> tween(durationMillis = 300, easing = FastOutSlowInEasing) }
-                            )
-                        },
-                        onClick = onAiIconTap
-                    )
+                    if (isAiEnabled) {
+                        BottomNavItem(
+                            icon = painterResource(Res.drawable.astroid),
+                            isSelected = false,
+                            modifier = Modifier.weight(1f).height(navItemHeight),
+                            iconModifier = with(sharedTransitionScope) {
+                                Modifier.sharedElement(
+                                    sharedContentState = rememberSharedContentState(key = "aiIcon"),
+                                    animatedVisibilityScope = bottomBarAnimatedVisibilityScope,
+                                    boundsTransform = { _, _ -> tween(durationMillis = 300, easing = FastOutSlowInEasing) }
+                                )
+                            },
+                            onClick = onAiIconTap
+                        )
+                    }
                     BottomNavItem(
                         icon = painterResource(Res.drawable.search),
                         isSelected = false,

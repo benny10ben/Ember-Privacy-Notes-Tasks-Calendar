@@ -243,6 +243,7 @@ class SyncRepositoryImpl(
         embeddedBlocksJson: String,
         syncKey: String
     ) {
+        if (settingsManager.isAiFeaturesDisabled()) return
         if (embeddedBlocksJson.isEmpty()) return
         val decrypted = encryptionManager.decryptPayload(embeddedBlocksJson, syncKey)
         val remoteEmbeddedBlocks = json.decodeFromString(ListSerializer(EmbeddedBlockPayload.serializer()), decrypted)

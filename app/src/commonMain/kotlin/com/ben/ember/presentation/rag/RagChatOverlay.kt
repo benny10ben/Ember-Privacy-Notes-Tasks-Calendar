@@ -63,6 +63,7 @@ import com.ben.ember.domain.ai.chat.ChatSession
 import com.ben.ember.domain.ai.KnowledgeMode
 import com.ben.ember.domain.ai.external.ExternalAiProvider
 import com.ben.ember.domain.ai.external.ExternalAiProviderConfig
+import com.ben.ember.domain.ai.models.ModelDownloadProgress
 import com.ben.ember.domain.util.AiEventBus
 import com.ben.ember.domain.util.isDesktopPlatform
 import com.ben.ember.presentation.customEmberShadow
@@ -151,6 +152,8 @@ private fun RagChatContent(
     val isLoading       by viewModel.isLoading.collectAsState()
     val isModelAvailable by viewModel.isModelAvailable.collectAsState()
     val embeddingSetupState by viewModel.embeddingSetupState.collectAsState()
+    val localGeneratorDownloadProgress by viewModel.localGeneratorDownloadProgress.collectAsState()
+    val aiGenerationMode by viewModel.aiGenerationMode.collectAsState()
     val listState       = rememberLazyListState()
     val hazeState       = remember { HazeState() }
 
@@ -183,6 +186,7 @@ private fun RagChatContent(
 
     LaunchedEffect(isVisible) {
         if (isVisible) {
+            viewModel.refreshAiAvailability()
             AiEventBus.requestImmediateIndex()
         } else {
             inputText = ""
@@ -243,12 +247,14 @@ private fun RagChatContent(
                     }
                 }
 
-                // Model not found
+                // No AI reachable — nothing installed on-device and no provider connected
                 isModelAvailable == false -> {
                     ModelUnavailablePrompt(
                         sidePadding = sidePadding,
-                        onDownloadClick = { /* TODO: implement download */ },
-                        onApiKeyClick = { /* TODO: implement API key entry */ }
+                        downloadProgress = localGeneratorDownloadProgress,
+                        isExternalModeSelected = aiGenerationMode == AiGenerationMode.EXTERNAL,
+                        onDownloadClick = { showLocalAiSheet = true },
+                        onApiKeyClick = { showExternalAiSheet = true }
                     )
                 }
 
@@ -438,9 +444,13 @@ private fun RagChatContent(
 @Composable
 private fun ModelUnavailablePrompt(
     sidePadding: Dp,
+    downloadProgress: ModelDownloadProgress?,
+    isExternalModeSelected: Boolean,
     onDownloadClick: () -> Unit,
     onApiKeyClick: () -> Unit
 ) {
+    val isDownloading = downloadProgress is ModelDownloadProgress.Downloading
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -456,34 +466,41 @@ private fun ModelUnavailablePrompt(
         )
         Spacer(Modifier.height(20.dp))
         Text(
-            text = "Local AI model not found",
+            text = if (isDownloading) "Setting up your AI" else "No AI connected yet",
             style = MaterialTheme.typography.titleLarge,
             color = MaterialTheme.colorScheme.onBackground,
             textAlign = TextAlign.Center
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            text = "Download the on-device model to chat privately, or connect an external AI with an API key.",
+            text = when {
+                isDownloading -> "The on-device model is downloading. You can chat as soon as it finishes."
+                isExternalModeSelected -> "Ember is set to use a cloud provider, but no working API key is saved. Add one, or switch to the on-device model."
+                else -> "Ember has no AI available right now. Run one privately on this device, or connect a cloud provider with your own API key."
+            },
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Center
         )
         Spacer(Modifier.height(32.dp))
 
-        // Download option
         ModelOptionCard(
-            icon = { Icon(Icons.Default.Download, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp)) },
-            title = "Download local model",
-            subtitle = "Runs fully on-device. Private & offline.",
+//            icon = { Icon(Icons.Default.Download, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp)) },
+            title = "Run AI on this device",
+            subtitle = when (val progress = downloadProgress) {
+                is ModelDownloadProgress.Downloading -> "Downloading… ${(progress.fraction * 100).toInt()}% — tap to manage"
+                is ModelDownloadProgress.Failed -> "Download stopped. Tap to try again."
+                ModelDownloadProgress.Paused -> "Paused. Tap to resume the download."
+                else -> "Private and offline. Download or add your own model."
+            },
             onClick = onDownloadClick
         )
         Spacer(Modifier.height(10.dp))
 
-        // API key option
         ModelOptionCard(
-            icon = { Icon(Icons.Default.Key, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp)) },
-            title = "Use an API key",
-            subtitle = "Connect an external AI provider.",
+//            icon = { Icon(Icons.Default.Key, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp)) },
+            title = "Connect a cloud provider",
+            subtitle = "Use your own API key with OpenAI, Claude, Gemini and more.",
             onClick = onApiKeyClick
         )
     }
@@ -499,7 +516,7 @@ internal fun ModelOptionCard(
 ) {
     Surface(
         shape = RoundedCornerShape(12.dp),
-        color = Color.Transparent,
+        color = MaterialTheme.colorScheme.surface,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
         modifier = Modifier
@@ -508,7 +525,7 @@ internal fun ModelOptionCard(
             .clickable(onClick = onClick)
     ) {
         Row(
-            modifier = Modifier.padding(vertical = 12.dp),
+            modifier = Modifier.padding(vertical = 12.dp, horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {

@@ -874,6 +874,7 @@ class SelfHostSyncEngine(
         remoteEmbeddedBlocks: List<EmbeddedBlockPayload>
     ) {
         if (remoteEmbeddedBlocks.isEmpty()) return
+        if (settingsManager.isAiFeaturesDisabled()) return
 
         val remoteMetadataWon = remoteMetadata != null &&
             (localMetadata == null || remoteMetadata.updatedAt > localMetadata.updatedAt)

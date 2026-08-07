@@ -19,6 +19,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -108,6 +109,11 @@ fun EmberApp(
     // AI chat ViewModel
     val ragViewModel: com.ben.ember.presentation.rag.RagViewModel = koinViewModel()
 
+    val settingsManager = koinInject<com.ben.ember.data.local.prefs.SettingsManager>()
+    val isAiDisabled by settingsManager.aiFeaturesDisabledFlow.collectAsState(
+        initial = settingsManager.isAiFeaturesDisabled()
+    )
+
     // Controls the AI chat overlay
     var showRagChatOverlay by remember { mutableStateOf(false) }
 
@@ -164,7 +170,9 @@ fun EmberApp(
     }
 
     val openAiChat: () -> Unit = {
-        if (isDesktopPlatform) {
+        if (isAiDisabled) {
+            if (showRagChatOverlay) dismissRagChat()
+        } else if (isDesktopPlatform) {
             if (showRagChatOverlay) {
                 dismissRagChat()
             } else {
@@ -184,6 +192,14 @@ fun EmberApp(
                 AiEventBus.requestImmediateIndex()
                 navController.navigate(Screen.RagChat.route)
             }
+        }
+    }
+
+    LaunchedEffect(isAiDisabled) {
+        if (isAiDisabled) {
+            showRagChatOverlay = false
+            if (!isDesktopPlatform && currentRoute == Screen.RagChat.route) navController.popBackStack()
+            ragViewModel.clearChat()
         }
     }
 
@@ -842,6 +858,7 @@ fun EmberApp(
                                 currentRoute = currentRoute,
                                 activeTab = activeTab,
                                 onAiIconTap = openAiChat,
+                                isAiEnabled = !isAiDisabled,
                                 onSearchClick = { navController.navigate(Screen.Search.route) },
                                 onMicClick = {
                                     if (isVoiceTaskListening) {

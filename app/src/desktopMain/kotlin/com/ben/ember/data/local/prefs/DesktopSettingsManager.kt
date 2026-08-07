@@ -273,4 +273,16 @@ class DesktopSettingsManager : SettingsManager {
     override fun saveSelectedLocalModelFileName(fileName: String) {
         prefs.put(SyncConstants.KEY_SELECTED_LOCAL_MODEL_FILE_NAME, fileName)
     }
+
+    private val _aiFeaturesDisabled = MutableStateFlow(
+        prefs.getBoolean(SyncConstants.KEY_AI_FEATURES_DISABLED, SyncConstants.DEFAULT_AI_FEATURES_DISABLED)
+    )
+    override val aiFeaturesDisabledFlow: Flow<Boolean> = _aiFeaturesDisabled
+
+    override fun isAiFeaturesDisabled(): Boolean = _aiFeaturesDisabled.value
+
+    override fun saveAiFeaturesDisabled(disabled: Boolean) {
+        prefs.putBoolean(SyncConstants.KEY_AI_FEATURES_DISABLED, disabled)
+        _aiFeaturesDisabled.value = disabled
+    }
 }

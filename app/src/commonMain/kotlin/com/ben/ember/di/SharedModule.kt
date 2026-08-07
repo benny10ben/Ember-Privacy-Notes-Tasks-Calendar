@@ -26,7 +26,19 @@ val sharedModule = module {
     single {
         NoteIndexer(
             database = get(),
-            aiEngine = get()
+            aiEngine = get(),
+            settingsManager = get()
+        )
+    }
+
+    single {
+        com.ben.ember.domain.ai.DisableAiFeaturesUseCase(
+            database = get(),
+            settingsManager = get(),
+            aiSettingsRepository = get(),
+            secureAiKeyStorage = get(),
+            localAiEngine = get(),
+            modelDownloadScheduler = get()
         )
     }
 
@@ -105,7 +117,9 @@ val sharedModule = module {
             backupRepository = get(),
             noteRepository = get(),
             settingsManager = get(),
-            backupRescheduler = get()
+            backupRescheduler = get(),
+            disableAiFeaturesUseCase = get(),
+            appScope = get(named("AppScope"))
         )
     }
 

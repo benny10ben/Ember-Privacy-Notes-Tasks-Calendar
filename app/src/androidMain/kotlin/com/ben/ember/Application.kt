@@ -39,6 +39,7 @@ class EmberApplication : Application() {
 
         CoroutineScope(Dispatchers.Default).launch {
             try {
+                if (getKoin().get<com.ben.ember.data.local.prefs.SettingsManager>().isAiFeaturesDisabled()) return@launch
                 getKoin().get<LocalAiEngine>().warmUpGenerator()
             } catch (e: Exception) {
                 // Silent — if pre-warm fails, first query just pays the load cost

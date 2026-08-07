@@ -4,13 +4,19 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ben.ember.data.local.prefs.SettingsManager
 import com.ben.ember.data.worker.BackupRescheduler
+import com.ben.ember.domain.ai.AiPurgeReport
+import com.ben.ember.domain.ai.DisableAiFeaturesUseCase
 import com.ben.ember.domain.model.backup.EmberBackupData
 import com.ben.ember.domain.repository.BackupRepository
 import com.ben.ember.domain.repository.NoteRepository
 import com.ben.ember.domain.util.SyncEventBus
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -18,7 +24,9 @@ class SettingsViewModel(
     private val backupRepository: BackupRepository,
     private val noteRepository: NoteRepository,
     private val settingsManager: SettingsManager,
-    private val backupRescheduler: BackupRescheduler
+    private val backupRescheduler: BackupRescheduler,
+    private val disableAiFeaturesUseCase: DisableAiFeaturesUseCase,
+    private val appScope: CoroutineScope
 ) : ViewModel() {
 
     // A safe JSON parser that won't crash if future app versions add new fields
@@ -105,6 +113,60 @@ class SettingsViewModel(
 
     fun setSubNoteOpenMode(mode: String) {
         settingsManager.saveSubNoteOpenMode(mode)
+    }
+
+    val aiFeaturesDisabled: StateFlow<Boolean> = settingsManager.aiFeaturesDisabledFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = settingsManager.isAiFeaturesDisabled()
+    )
+
+    private val _isPurgingAiData = MutableStateFlow(false)
+    val isPurgingAiData: StateFlow<Boolean> = _isPurgingAiData.asStateFlow()
+
+    private val _aiPurgeResultMessage = MutableStateFlow<String?>(null)
+    val aiPurgeResultMessage: StateFlow<String?> = _aiPurgeResultMessage.asStateFlow()
+
+    fun consumeAiPurgeResultMessage() {
+        _aiPurgeResultMessage.value = null
+    }
+
+    fun setAiFeaturesDisabled(disabled: Boolean) {
+        if (!disabled) {
+            disableAiFeaturesUseCase.enableAiFeatures()
+            return
+        }
+        if (_isPurgingAiData.value) return
+
+        _isPurgingAiData.value = true
+        appScope.launch {
+            try {
+                val report = disableAiFeaturesUseCase.execute()
+                _aiPurgeResultMessage.value = describePurgeResult(report)
+            } catch (e: Exception) {
+                _aiPurgeResultMessage.value = "Couldn't finish removing AI data: ${e.message}"
+            } finally {
+                _isPurgingAiData.value = false
+            }
+        }
+    }
+
+    private fun describePurgeResult(report: AiPurgeReport): String {
+        val blockedPaths = report.undeletablePaths + report.survivingPaths
+        return when {
+            blockedPaths.isNotEmpty() ->
+                "Freed ${formatByteSize(report.bytesFreed)}, but ${blockedPaths.size} file(s) could not be removed: " +
+                    blockedPaths.joinToString(", ") { it.substringAfterLast('/') }
+            report.bytesFreed > 0L -> "Freed ${formatByteSize(report.bytesFreed)} of model files."
+            else -> "No model files were on disk to remove."
+        }
+    }
+
+    private fun formatByteSize(bytes: Long): String = when {
+        bytes >= 1_000_000_000L -> "${(bytes / 100_000_000L) / 10.0} GB"
+        bytes >= 1_000_000L -> "${bytes / 1_000_000L} MB"
+        bytes >= 1_000L -> "${bytes / 1_000L} KB"
+        else -> "$bytes B"
     }
 
     /**

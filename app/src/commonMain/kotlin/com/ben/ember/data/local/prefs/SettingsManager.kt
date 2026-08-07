@@ -91,4 +91,8 @@ interface SettingsManager {
 
     fun getSelectedLocalModelFileName(): String
     fun saveSelectedLocalModelFileName(fileName: String)
+
+    val aiFeaturesDisabledFlow: Flow<Boolean>
+    fun isAiFeaturesDisabled(): Boolean
+    fun saveAiFeaturesDisabled(disabled: Boolean)
 }

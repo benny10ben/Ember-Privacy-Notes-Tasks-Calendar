@@ -294,4 +294,16 @@ class AndroidSettingsManager(
     override fun saveSelectedLocalModelFileName(fileName: String) {
         sharedPreferences.edit { putString(SyncConstants.KEY_SELECTED_LOCAL_MODEL_FILE_NAME, fileName) }
     }
+
+    private val _aiFeaturesDisabled = MutableStateFlow(
+        sharedPreferences.getBoolean(SyncConstants.KEY_AI_FEATURES_DISABLED, SyncConstants.DEFAULT_AI_FEATURES_DISABLED)
+    )
+    override val aiFeaturesDisabledFlow: Flow<Boolean> = _aiFeaturesDisabled
+
+    override fun isAiFeaturesDisabled(): Boolean = _aiFeaturesDisabled.value
+
+    override fun saveAiFeaturesDisabled(disabled: Boolean) {
+        sharedPreferences.edit(commit = true) { putBoolean(SyncConstants.KEY_AI_FEATURES_DISABLED, disabled) }
+        _aiFeaturesDisabled.value = disabled
+    }
 }

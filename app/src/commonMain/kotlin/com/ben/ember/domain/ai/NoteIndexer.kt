@@ -1,5 +1,6 @@
 package com.ben.ember.domain.ai
 
+import com.ben.ember.data.local.prefs.SettingsManager
 import com.ben.ember.data.local.room.NoteMetadataEntity
 import com.ben.ember.domain.model.*
 import com.ember.database.EmberDatabase
@@ -8,7 +9,8 @@ import java.util.*
 
 class NoteIndexer(
     private val database: EmberDatabase,
-    private val aiEngine: LocalAiEngine
+    private val aiEngine: LocalAiEngine,
+    private val settingsManager: SettingsManager
 ) {
     private data class PendingIndex(
         val blockId: String,
@@ -59,6 +61,7 @@ class NoteIndexer(
         dateOnlyFormatter.format(Date(millis))
 
     suspend fun indexNote(metadata: NoteMetadataEntity, content: NoteContent) {
+        if (settingsManager.isAiFeaturesDisabled()) return
         if (metadata.noteId == "global_pinned") return
 
         val baseContext = buildContextString(metadata)

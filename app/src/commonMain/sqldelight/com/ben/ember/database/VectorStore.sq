@@ -18,3 +18,6 @@ SELECT block_id, chunk_text, embedding FROM block_metadata WHERE note_id = ?;
 
 deleteBlocksForNote:
 DELETE FROM block_metadata WHERE note_id = ?;
+
+deleteAllBlocks:
+DELETE FROM block_metadata;

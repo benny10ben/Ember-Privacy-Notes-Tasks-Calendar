@@ -113,6 +113,7 @@ import ember.app.generated.resources.folder_plus
 import ember.app.generated.resources.images
 import ember.app.generated.resources.inbox
 import ember.app.generated.resources.notes2
+import ember.app.generated.resources.search
 import ember.app.generated.resources.template
 import org.jetbrains.compose.resources.painterResource
 import java.awt.Cursor
@@ -237,6 +238,9 @@ fun DesktopMainScreen(
 ) {
     val hazeState = remember { HazeState() }
     val savedWidth by settingsManager.desktopSidebarWidthFlow.collectAsState(initial = sidebarWidth.value)
+    val isAiDisabled by settingsManager.aiFeaturesDisabledFlow.collectAsState(
+        initial = settingsManager.isAiFeaturesDisabled()
+    )
     var panelWidth by remember { mutableStateOf(sidebarWidth) }
     var hasLoadedWidth by remember { mutableStateOf(false) }
     var ragPanelWidth by remember { mutableStateOf(DEFAULT_RAG_PANEL_WIDTH) }
@@ -837,15 +841,17 @@ fun DesktopMainScreen(
                     hazeStyle = EmberBlur.Regular,
                     onClick = { showSearchDialog = true }
                 )
-                TopBarIconButton(
-                    icon = painterResource(Res.drawable.astroid),
-                    contentDescription = "Ask AI",
-                    bgColor = Color.Transparent,
-                    tint = MaterialTheme.colorScheme.primary,
-                    hazeState = hazeState,
-                    hazeStyle = EmberBlur.Regular,
-                    onClick = onAiIconTap
-                )
+                if (!isAiDisabled) {
+                    TopBarIconButton(
+                        icon = painterResource(Res.drawable.astroid),
+                        contentDescription = "Ask AI",
+                        bgColor = Color.Transparent,
+                        tint = MaterialTheme.colorScheme.primary,
+                        hazeState = hazeState,
+                        hazeStyle = EmberBlur.Regular,
+                        onClick = onAiIconTap
+                    )
+                }
             }
         }
     }

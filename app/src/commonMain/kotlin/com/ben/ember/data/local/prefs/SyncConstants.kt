@@ -29,6 +29,8 @@ object SyncConstants {
     const val KEY_INSTALLED_LOCAL_MODELS_JSON = "ai_installed_local_models_json"
     const val DEFAULT_INSTALLED_LOCAL_MODELS_JSON = "[]"
     const val KEY_SELECTED_LOCAL_MODEL_FILE_NAME = "ai_selected_local_model_file_name"
+    const val KEY_AI_FEATURES_DISABLED = "ai_features_disabled"
+    const val DEFAULT_AI_FEATURES_DISABLED = false
     // Sync Keys
     const val KEY_SYNC_TIMESTAMP = "last_sync_timestamp"
     const val KEY_SELF_HOST_SYNC_TIMESTAMP = "self_host_last_sync_timestamp"
