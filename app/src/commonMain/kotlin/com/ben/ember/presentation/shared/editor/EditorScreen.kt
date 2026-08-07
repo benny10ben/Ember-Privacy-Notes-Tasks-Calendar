@@ -539,6 +539,7 @@ fun EditorScreen(
 
     val immutableTags = remember(globalTags) { globalTags.toImmutableList() }
     val immutableSelectedIds = remember(selectedBlockIds) { selectedBlockIds.toImmutableSet() }
+    val validNoteIds = remember(allLinkableNotes) { allLinkableNotes.mapTo(HashSet()) { it.noteId } }
 
     val onFocusBlock: (String) -> Unit = remember(wrappedActions) {
         { focusedId ->
@@ -688,7 +689,8 @@ fun EditorScreen(
                             slashQuery = slashQuery,
                             onDismissSlashMenu = onDismissSlash,
                             isFirstToggleChild = isFirstToggleChild,
-                            selectionRequest = selectionRequest
+                            selectionRequest = selectionRequest,
+                            validNoteIds = validNoteIds
                         )
                     }
                 }

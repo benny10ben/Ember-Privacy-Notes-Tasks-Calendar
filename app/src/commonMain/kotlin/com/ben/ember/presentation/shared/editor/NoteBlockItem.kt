@@ -39,8 +39,6 @@ import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.boundsInWindow
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -158,6 +156,7 @@ fun NoteBlockItem(
     onDismissSlashMenu: () -> Unit = {},
     isFirstToggleChild: Boolean = false,
     selectionRequest: SelectionRequest? = null,
+    validNoteIds: Set<String> = emptySet(),
 ) {
     // STANDARD BLOCK LOGIC
     val density = LocalDensity.current
@@ -224,7 +223,6 @@ fun NoteBlockItem(
     val isDatabase = block is DatabaseBlock
 
     var isHovered by remember { mutableStateOf(false) }
-    var blockBounds by remember { mutableStateOf<Rect?>(null) }
     var gutterZone by remember { mutableIntStateOf(0) }
 
     var lastTappedYInBlock by remember { mutableFloatStateOf(0f) }
@@ -340,11 +338,14 @@ fun NoteBlockItem(
 
     // INSERT-HOVER LINE (synced with the +above/+below buttons)
     val insertLineZone = if (isDesktopPlatform) gutterZone else 0
-    val insertLineAlpha by animateFloatAsState(
-        targetValue = if (insertLineZone != 0) 0.6f else 0f,
-        animationSpec = tween(durationMillis = 120),
-        label = "insertLineAlpha"
-    )
+    val insertLineAlpha = if (isDesktopPlatform) {
+        val animatedAlpha by animateFloatAsState(
+            targetValue = if (insertLineZone != 0) 0.6f else 0f,
+            animationSpec = tween(durationMillis = 120),
+            label = "insertLineAlpha"
+        )
+        animatedAlpha
+    } else 0f
     val indicatorColor = MaterialTheme.colorScheme.primary
 
     // RENDER BLOCK CONTENT
@@ -352,55 +353,55 @@ fun NoteBlockItem(
         modifier = modifier
             .fillMaxWidth()
             .background(selectionBg)
-            .onGloballyPositioned { layoutCoordinates ->
-                blockBounds = layoutCoordinates.boundsInWindow()
-            }
-            .drawWithContent {
-                drawContent()
+            .then(
+                if (!isDesktopPlatform) Modifier else Modifier
+                    .drawWithContent {
+                        drawContent()
 
-                // hover-insert line (synced with + button)
-                if (isDesktopPlatform && insertLineAlpha > 0.01f) {
-                    val stroke = 2.dp.toPx()
-                    val dotR = 3.dp.toPx()
-                    val c = indicatorColor.copy(alpha = insertLineAlpha)
-                    when (insertLineZone) {
-                        -1 -> {
-                            drawLine(c, Offset(dotR * 2, stroke), Offset(size.width, stroke), stroke, cap = StrokeCap.Round)
-                            drawCircle(c, dotR, Offset(dotR, stroke))
-                        }
-                        1 -> {
-                            val y = size.height - stroke
-                            drawLine(c, Offset(dotR * 2, y), Offset(size.width, y), stroke, cap = StrokeCap.Round)
-                            drawCircle(c, dotR, Offset(dotR, y))
+                        // hover-insert line (synced with + button)
+                        if (insertLineAlpha > 0.01f) {
+                            val stroke = 2.dp.toPx()
+                            val dotR = 3.dp.toPx()
+                            val c = indicatorColor.copy(alpha = insertLineAlpha)
+                            when (insertLineZone) {
+                                -1 -> {
+                                    drawLine(c, Offset(dotR * 2, stroke), Offset(size.width, stroke), stroke, cap = StrokeCap.Round)
+                                    drawCircle(c, dotR, Offset(dotR, stroke))
+                                }
+                                1 -> {
+                                    val y = size.height - stroke
+                                    drawLine(c, Offset(dotR * 2, y), Offset(size.width, y), stroke, cap = StrokeCap.Round)
+                                    drawCircle(c, dotR, Offset(dotR, y))
+                                }
+                            }
                         }
                     }
-                }
-            }
-            .pointerInput(Unit) {
-                awaitPointerEventScope {
-                    while (true) {
-                        val event = awaitPointerEvent(PointerEventPass.Main)
-                        when (event.type) {
-                            PointerEventType.Enter -> isHovered = true
-                            PointerEventType.Exit -> {
-                                isHovered = false
-                                gutterZone = 0
-                            }
-                            PointerEventType.Move -> {
-                                if (isDesktopPlatform && !inSelectionMode) {
-                                    val y = event.changes.firstOrNull()?.position?.y ?: 0f
-                                    val h = blockBounds?.height ?: 0f
-                                    gutterZone = when {
-                                        h > 0f && y < 6.dp.toPx()         -> -1
-                                        h > 0f && y > h - 6.dp.toPx()     ->  1
-                                        else                                ->  0
+                    .pointerInput(inSelectionMode) {
+                        awaitPointerEventScope {
+                            while (true) {
+                                val event = awaitPointerEvent(PointerEventPass.Main)
+                                when (event.type) {
+                                    PointerEventType.Enter -> isHovered = true
+                                    PointerEventType.Exit -> {
+                                        isHovered = false
+                                        gutterZone = 0
+                                    }
+                                    PointerEventType.Move -> {
+                                        if (!inSelectionMode) {
+                                            val y = event.changes.firstOrNull()?.position?.y ?: 0f
+                                            val h = size.height.toFloat()
+                                            gutterZone = when {
+                                                h > 0f && y < 6.dp.toPx()     -> -1
+                                                h > 0f && y > h - 6.dp.toPx() ->  1
+                                                else                          ->  0
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
                     }
-                }
-            }
+            )
             .combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -564,7 +565,15 @@ fun NoteBlockItem(
                     if (currentlyFocused) onFocus(block.id) else GlobalEditorState.currentSelection = TextRange.Zero
                 }
 
-            val validNoteIds = remember(allLinkableNotes) { allLinkableNotes.map { it.noteId }.toSet() }
+            val linkColor = MaterialTheme.colorScheme.primary
+            val fadedLinkColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+            val inlineSpans = block.inlineSpansOrEmpty()
+            val richTextTransformation: VisualTransformation = remember(
+                block is CodeBlock, linkColor, fadedLinkColor, validNoteIds, inlineSpans
+            ) {
+                if (block is CodeBlock) VisualTransformation.None
+                else RichTextVisualTransformation(linkColor, fadedLinkColor, validNoteIds, inlineSpans)
+            }
 
             Column(modifier = textFieldWrapperModifier) {
                 if (isTextBased) {
@@ -585,12 +594,7 @@ fun NoteBlockItem(
                                 allLinkableNotes = allLinkableNotes,
                                 onCreateLinkedNote = { actions.onCreateLinkedNote(it) },
                                 onOpenNote = { actions.onNoteLinkClick(it) },
-                                visualTransformation = if (block is CodeBlock) VisualTransformation.None else RichTextVisualTransformation(
-                                    linkColor = MaterialTheme.colorScheme.primary,
-                                    fadedColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                                    validNoteIds = validNoteIds,
-                                    inlineSpans = block.inlineSpansOrEmpty()
-                                ),
+                                visualTransformation = richTextTransformation,
                                 selectionRequest = selectionRequest,
                                 focusRequest = focusRequest,
                                 onTextLayout = { textLayoutResult = it }
@@ -1137,7 +1141,7 @@ fun IsolatedEditorTextField(
                         val cursor = tfv.selection.start
                         if (cursor > 0 && tfv.selection.collapsed) {
                             val textBeforeCursor = tfv.text.substring(0, cursor)
-                            val match = """\[([^\]]+)\]\(ember://note/([^)]+)\)$""".toRegex().find(textBeforeCursor)
+                            val match = TrailingNoteLinkRegex.find(textBeforeCursor)
 
                             if (match != null) {
                                 val textBeforeLink = textBeforeCursor.substring(0, match.range.first)
@@ -1212,7 +1216,7 @@ fun IsolatedEditorTextField(
 // Replaces raw note link syntax (e.g. "[title](ember://note/id)") with styled display text ("@title")
 // and applies inline rich-text styles (bold, italic, strike, underline). Computes offset mappings
 // so cursor movements and tap targets accurately correspond to the underlying text.
-class RichTextVisualTransformation(
+data class RichTextVisualTransformation(
     private val linkColor: Color,
     private val fadedColor: Color,
     private val validNoteIds: Set<String>,
@@ -1220,9 +1224,12 @@ class RichTextVisualTransformation(
 ) : VisualTransformation {
     override fun filter(text: AnnotatedString): TransformedText {
         val originalText = text.text
-        val regex = """\[([^\]]+)\]\(ember://note/([^)]+)\)""".toRegex()
 
-        val matches = regex.findAll(originalText).toList()
+        if (inlineSpans.isEmpty() && !originalText.contains(NOTE_LINK_MARKER)) {
+            return TransformedText(text, OffsetMapping.Identity)
+        }
+
+        val matches = NoteLinkRegex.findAll(originalText).toList()
         if (matches.isEmpty() && inlineSpans.isEmpty()) return TransformedText(text, OffsetMapping.Identity)
 
         val builder = AnnotatedString.Builder()
@@ -1235,11 +1242,10 @@ class RichTextVisualTransformation(
         val pendingLinks = mutableListOf<PendingLink>()
 
         for (match in matches) {
-            val before = originalText.substring(originalIndex, match.range.first)
-            for (char in before) {
+            while (originalIndex < match.range.first) {
                 mapping[transformedIndex] = originalIndex
                 inverse[originalIndex] = transformedIndex
-                builder.append(char.toString())
+                builder.append(originalText[originalIndex])
                 originalIndex++
                 transformedIndex++
             }
@@ -1264,11 +1270,10 @@ class RichTextVisualTransformation(
             originalIndex = match.range.last + 1
         }
 
-        val after = originalText.substring(originalIndex)
-        for (char in after) {
+        while (originalIndex < originalText.length) {
             mapping[transformedIndex] = originalIndex
             inverse[originalIndex] = transformedIndex
-            builder.append(char.toString())
+            builder.append(originalText[originalIndex])
             originalIndex++
             transformedIndex++
         }
