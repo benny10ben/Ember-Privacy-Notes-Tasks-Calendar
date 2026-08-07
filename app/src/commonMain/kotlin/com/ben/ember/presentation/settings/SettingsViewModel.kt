@@ -115,6 +115,16 @@ class SettingsViewModel(
         settingsManager.saveSubNoteOpenMode(mode)
     }
 
+    val showScrollbar: StateFlow<Boolean> = settingsManager.showScrollbarFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = settingsManager.isShowScrollbarEnabled()
+    )
+
+    fun setShowScrollbar(enabled: Boolean) {
+        settingsManager.saveShowScrollbar(enabled)
+    }
+
     val aiFeaturesDisabled: StateFlow<Boolean> = settingsManager.aiFeaturesDisabledFlow.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),

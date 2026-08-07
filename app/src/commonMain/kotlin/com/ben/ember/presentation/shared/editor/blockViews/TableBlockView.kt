@@ -93,7 +93,8 @@ import com.ben.ember.presentation.shared.components.rememberKeyboardHandoff
 import com.ben.ember.presentation.shared.editor.blockViews.databaseBlockView.SheetMenuRow
 import com.ben.ember.presentation.shared.editor.components.DesktopCursor
 import com.ben.ember.presentation.shared.editor.components.desktopPointerCursor
-import com.ben.ember.presentation.shared.editor.mouseScrollable
+import com.ben.ember.presentation.shared.components.EmberHorizontalScrollbar
+import com.ben.ember.presentation.shared.components.smoothWheelScroll
 import ember.app.generated.resources.Res
 import ember.app.generated.resources.arrow_down
 import ember.app.generated.resources.arrow_left
@@ -454,7 +455,7 @@ fun TableBlockView(
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(scrollState)
-                .mouseScrollable(scrollState)
+                .smoothWheelScroll(scrollState, horizontal = true)
         ) {
             Column(modifier = Modifier.padding(horizontal = SidePadding)) {
                 Surface(
@@ -565,6 +566,11 @@ fun TableBlockView(
                 }
             }
         }
+
+        EmberHorizontalScrollbar(
+            scrollState = scrollState,
+            modifier = Modifier.fillMaxWidth().padding(start = SidePadding, end = SidePadding, top = 4.dp)
+        )
     }
 
     if (!isDesktopPlatform) {

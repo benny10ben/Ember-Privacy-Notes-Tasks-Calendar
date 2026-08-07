@@ -90,6 +90,8 @@ import com.ben.ember.presentation.shared.components.EmberBottomSheet
 import com.ben.ember.presentation.shared.components.EmberDesktopMenu
 import com.ben.ember.presentation.shared.components.TopBarIconButton
 import com.ben.ember.presentation.shared.components.emberBlur
+import com.ben.ember.presentation.shared.components.EmberVerticalScrollbar
+import com.ben.ember.presentation.shared.components.smoothWheelScroll
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import ember.app.generated.resources.Res
@@ -753,10 +755,12 @@ private fun DayHourGrid(
     val density = LocalDensity.current
     val hourHeightPx = with(density) { hourHeight.toPx() }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     Row(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
+            .smoothWheelScroll(scrollState)
             .padding(top = topBarHeightDp, bottom = if (isDesktopPlatform) 0.dp else 56.dp)
     ) {
         HourLabelColumn(hours = hours, hourHeight = hourHeight)
@@ -774,6 +778,15 @@ private fun DayHourGrid(
                 onEventClick = onEventClick
             )
         }
+    }
+
+        EmberVerticalScrollbar(
+            scrollState = scrollState,
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .fillMaxHeight()
+                .padding(top = topBarHeightDp, bottom = if (isDesktopPlatform) 0.dp else 56.dp)
+        )
     }
 }
 
@@ -1021,10 +1034,12 @@ private fun MultiDayGridContent(
     val hourHeightPx = with(density) { hourHeight.toPx() }
     val headerHeight = 40.dp
 
+    Box(modifier = Modifier.fillMaxSize()) {
     Row(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
+            .smoothWheelScroll(scrollState)
             .padding(top = topBarHeightDp + headerHeight)
     ) {
         HourLabelColumn(hours = hours, hourHeight = hourHeight)
@@ -1054,6 +1069,15 @@ private fun MultiDayGridContent(
                 )
             }
         }
+    }
+
+        EmberVerticalScrollbar(
+            scrollState = scrollState,
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .fillMaxHeight()
+                .padding(top = topBarHeightDp + headerHeight)
+        )
     }
 }
 

@@ -72,7 +72,8 @@ import com.ben.ember.domain.util.isDesktopPlatform
 import com.ben.ember.presentation.shared.editor.components.DesktopCursor
 import com.ben.ember.presentation.shared.editor.components.desktopPointerCursor
 import com.ben.ember.presentation.shared.editor.EditorActions
-import com.ben.ember.presentation.shared.editor.mouseScrollable
+import com.ben.ember.presentation.shared.components.EmberHorizontalScrollbar
+import com.ben.ember.presentation.shared.components.smoothWheelScroll
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import ember.app.generated.resources.Res
@@ -130,8 +131,9 @@ fun TableView(
     var dragPointerX by remember { mutableStateOf(0f) }
     val colBoundsInWindow = remember { mutableStateMapOf<String, Rect>() }
 
+    Column(modifier = Modifier.fillMaxWidth()) {
     Box(modifier = Modifier.fillMaxWidth().horizontalScroll(scrollState)
-        .mouseScrollable(scrollState).hazeSource(state = hazeState)
+        .smoothWheelScroll(scrollState, horizontal = true).hazeSource(state = hazeState)
     ) {
         Column(modifier = Modifier.padding(horizontal = 18.dp)) {
             Surface(
@@ -554,5 +556,11 @@ fun TableView(
                 Text(text = "New Row", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
             }
         }
+    }
+
+        EmberHorizontalScrollbar(
+            scrollState = scrollState,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp).padding(top = 4.dp)
+        )
     }
 }

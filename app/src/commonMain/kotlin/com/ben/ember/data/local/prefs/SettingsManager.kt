@@ -74,6 +74,10 @@ interface SettingsManager {
     val subNoteOpenModeFlow: Flow<String>
     fun saveSubNoteOpenMode(mode: String)
 
+    val showScrollbarFlow: Flow<Boolean>
+    fun isShowScrollbarEnabled(): Boolean
+    fun saveShowScrollbar(enabled: Boolean)
+
     // AI generation
     val aiGenerationModeFlow: Flow<String>
     fun saveAiGenerationMode(mode: String)

@@ -37,6 +37,8 @@ object SyncConstants {
     const val KEY_SELECTED_LOCAL_MODEL_FILE_NAME = "ai_selected_local_model_file_name"
     const val KEY_AI_FEATURES_DISABLED = "ai_features_disabled"
     const val DEFAULT_AI_FEATURES_DISABLED = false
+    const val KEY_SHOW_SCROLLBAR = "show_scrollbar"
+    const val DEFAULT_SHOW_SCROLLBAR = false
     // Sync Keys
     const val KEY_SYNC_TIMESTAMP = "last_sync_timestamp"
     const val KEY_SELF_HOST_SYNC_TIMESTAMP = "self_host_last_sync_timestamp"

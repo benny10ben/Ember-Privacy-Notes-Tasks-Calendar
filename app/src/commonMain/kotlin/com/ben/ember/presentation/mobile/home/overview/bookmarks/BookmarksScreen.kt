@@ -48,6 +48,7 @@ import com.ben.ember.presentation.shared.components.KmpBackHandler
 import com.ben.ember.presentation.shared.components.TopBarIconButton
 import com.ben.ember.presentation.shared.components.customEmberShadow
 import com.ben.ember.presentation.shared.components.emberBlur
+import com.ben.ember.presentation.shared.components.EmberVerticalScrollbar
 import com.ben.ember.presentation.shared.editor.BlockSelectionPill
 import com.ben.ember.presentation.shared.editor.FocusRequest
 import com.ben.ember.presentation.shared.editor.blockViews.BookmarkBlockView
@@ -231,6 +232,11 @@ fun BookmarksScreen(
                     }
                 }
             }
+
+            EmberVerticalScrollbar(
+                listState = listState,
+                modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight().padding(top = 80.dp, bottom = 24.dp)
+            )
 
             BookmarksTopBar(
                 modifier = Modifier.align(Alignment.TopCenter),

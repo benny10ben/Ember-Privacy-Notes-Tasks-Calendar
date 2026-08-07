@@ -52,7 +52,7 @@ import com.ben.ember.domain.model.displayText
 import com.ben.ember.domain.util.isDesktopPlatform
 import com.ben.ember.domain.util.triggerHapticFeedback
 import com.ben.ember.presentation.shared.editor.RichTextVisualTransformation
-import com.ben.ember.presentation.shared.editor.mouseScrollable
+import com.ben.ember.presentation.shared.components.smoothWheelScroll
 import ember.app.generated.resources.Res
 import ember.app.generated.resources.file_text
 import ember.app.generated.resources.microphone
@@ -274,7 +274,7 @@ private fun FormulaCell(cell: CellData?, currencySymbol: String, isFormulaCurren
         style = MaterialTheme.typography.bodyLarge,
         color = MaterialTheme.colorScheme.primary,
         maxLines = 1,
-        modifier = Modifier.horizontalScroll(formulaScrollState).mouseScrollable(formulaScrollState)
+        modifier = Modifier.horizontalScroll(formulaScrollState).smoothWheelScroll(formulaScrollState, horizontal = true)
     )
 }
 

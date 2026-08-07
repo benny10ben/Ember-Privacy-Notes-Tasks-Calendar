@@ -77,6 +77,8 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import com.ben.ember.data.local.room.NoteMetadataEntity
 import com.ben.ember.presentation.shared.components.EmberBlur
 import com.ben.ember.presentation.shared.components.emberBlur
+import com.ben.ember.presentation.shared.components.EmberVerticalScrollbar
+import com.ben.ember.presentation.shared.components.smoothWheelScroll
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableSet
 import kotlin.math.abs
@@ -578,6 +580,7 @@ fun EditorScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(MaterialTheme.colorScheme.background)
+                    .smoothWheelScroll(listState)
                     .pointerInput(Unit) {
                         detectTapGestures(
                             onTap = {
@@ -732,6 +735,14 @@ fun EditorScreen(
                 }
             }
         }
+
+        EmberVerticalScrollbar(
+            listState = listState,
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .fillMaxHeight()
+                .padding(top = topContentPadding, bottom = bottomContentPadding)
+        )
     }
 }
 

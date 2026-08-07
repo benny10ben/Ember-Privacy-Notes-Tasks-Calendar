@@ -37,6 +37,7 @@ import com.ben.ember.presentation.shared.editor.blockViews.ImageBlockView
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.haze
 import com.ben.ember.presentation.shared.components.TopBarIconButton
+import com.ben.ember.presentation.shared.components.EmberVerticalScrollbar
 import ember.app.generated.resources.Res
 import ember.app.generated.resources.chevron_left
 import ember.app.generated.resources.circle_plus
@@ -189,6 +190,11 @@ fun ImagesScreen(
                     }
                 }
             }
+
+            EmberVerticalScrollbar(
+                listState = listState,
+                modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight().padding(top = 80.dp, bottom = 24.dp)
+            )
 
             ImagesTopBar(
                 modifier = Modifier.align(Alignment.TopCenter),

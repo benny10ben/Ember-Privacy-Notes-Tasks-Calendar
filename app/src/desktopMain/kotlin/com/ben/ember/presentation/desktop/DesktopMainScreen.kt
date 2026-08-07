@@ -43,6 +43,8 @@ import com.ben.ember.presentation.shared.components.EmberButtonPrimary
 import com.ben.ember.presentation.shared.components.EmberButtonSecondary
 import com.ben.ember.presentation.shared.components.EmberDesktopMenu
 import com.ben.ember.presentation.shared.components.EmberTextField
+import com.ben.ember.presentation.shared.components.EmberVerticalScrollbar
+import com.ben.ember.presentation.shared.components.smoothWheelScroll
 import com.ben.ember.presentation.sync.SyncViewModel
 import com.ben.ember.presentation.calendar.CalendarScreen
 import com.ben.ember.presentation.mobile.daily.CollapsedWeekStrip
@@ -454,10 +456,10 @@ fun DesktopMainScreen(
                 )
 
                 // Scrolling: overview rows + favorites + notes tree + recents
+                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 Box(
                     modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
+                        .fillMaxSize()
                         .hazeSource(hazeState)
                         .background(if (isSidebarVisible) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.surface)
                         .desktopListDragTracker(
@@ -514,7 +516,7 @@ fun DesktopMainScreen(
                 ) {
                     LazyColumn(
                         state = sidebarListState,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.fillMaxSize().smoothWheelScroll(sidebarListState),
                         contentPadding = PaddingValues(bottom = 80.dp)
                     ) {
                         item {
@@ -820,6 +822,12 @@ fun DesktopMainScreen(
                                 else -> ""
                             }
                         }
+                    )
+                }
+
+                    EmberVerticalScrollbar(
+                        listState = sidebarListState,
+                        modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight().padding(vertical = 4.dp)
                     )
                 }
 

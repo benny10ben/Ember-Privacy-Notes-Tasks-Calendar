@@ -73,6 +73,8 @@ import ember.app.generated.resources.Res
 import ember.app.generated.resources.file_text
 import kotlin.math.roundToInt
 import org.jetbrains.compose.resources.painterResource
+import com.ben.ember.presentation.shared.components.EmberHorizontalScrollbar
+import com.ben.ember.presentation.shared.components.smoothWheelScroll
 
 /** Bucket key/label for rows whose STATUS cell is blank or holds an unrecognized value. */
 const val NO_STATUS_BUCKET = "No Status"
@@ -321,6 +323,8 @@ fun KanbanView(
     fun hitTestBucket(pointerXInWindow: Float): String? =
         bucketBounds.entries.firstOrNull { (_, rect) -> pointerXInWindow in rect.left..rect.right }?.key
 
+    val boardScrollState = rememberScrollState()
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -329,7 +333,8 @@ fun KanbanView(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
+                .horizontalScroll(boardScrollState)
+                .smoothWheelScroll(boardScrollState, horizontal = true)
                 .padding(horizontal = 20.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -456,6 +461,11 @@ fun KanbanView(
                 }
             }
         }
+
+        EmberHorizontalScrollbar(
+            scrollState = boardScrollState,
+            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 20.dp)
+        )
     }
 }
 

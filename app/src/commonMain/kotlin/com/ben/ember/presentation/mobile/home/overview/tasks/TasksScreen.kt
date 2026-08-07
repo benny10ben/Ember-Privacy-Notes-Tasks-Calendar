@@ -46,6 +46,7 @@ import com.ben.ember.presentation.shared.editor.EditorActions
 import com.ben.ember.presentation.shared.editor.FocusRequest
 import dev.chrisbanes.haze.HazeState
 import com.ben.ember.presentation.shared.components.TopBarIconButton
+import com.ben.ember.presentation.shared.components.EmberVerticalScrollbar
 import dev.chrisbanes.haze.hazeSource
 import ember.app.generated.resources.Res
 import ember.app.generated.resources.chevron_left
@@ -188,6 +189,11 @@ fun TasksScreen(
                         }
                     }
                 }
+
+                EmberVerticalScrollbar(
+                    listState = listState,
+                    modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight().padding(top = 80.dp, bottom = 24.dp)
+                )
             } else {
                 val editorActions = remember(viewModel, onOpenFile) {
                     object : EditorActions {

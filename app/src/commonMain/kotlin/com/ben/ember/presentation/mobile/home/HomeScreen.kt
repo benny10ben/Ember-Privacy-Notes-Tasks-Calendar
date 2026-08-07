@@ -8,7 +8,6 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.ScrollableState
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.horizontalScroll
@@ -31,10 +30,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.PointerEventPass
 import com.ben.ember.presentation.shared.rememberStableStatusBarsPadding
 import com.ben.ember.presentation.shared.stableStatusBarsPadding
-import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.ContentScale
@@ -62,13 +59,13 @@ import com.ben.ember.presentation.shared.components.EmberDesktopMenu
 import com.ben.ember.presentation.shared.components.KmpBackHandler
 import com.ben.ember.presentation.shared.components.TopBarIconButtonGroup
 import com.ben.ember.presentation.shared.components.TopBarIconButtonItem
+import com.ben.ember.presentation.shared.components.smoothWheelScroll
 import com.ben.ember.presentation.sync.SyncViewModel
 import com.ben.ember.domain.util.showNativeToast
 import com.ben.ember.ui.theme.LocalAppIsDark
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.TimeZone
@@ -110,26 +107,6 @@ private fun SectionToggleIcon(isExpanded: Boolean, contentDescription: String) {
         modifier = Modifier.padding(start = 4.dp).size(20.dp).graphicsLayer { rotationZ = rotation },
         tint = MaterialTheme.colorScheme.onSurface
     )
-}
-
-@Composable
-private fun Modifier.mouseScrollable(scrollState: ScrollableState): Modifier {
-    val scope = rememberCoroutineScope()
-    return this.pointerInput(scrollState) {
-        awaitPointerEventScope {
-            while (true) {
-                val event = awaitPointerEvent(PointerEventPass.Initial)
-                if (event.type == PointerEventType.Scroll) {
-                    val change = event.changes.firstOrNull()
-                    val delta = change?.scrollDelta?.y ?: change?.scrollDelta?.x ?: 0f
-                    if (delta != 0f) {
-                        scope.launch { scrollState.scrollBy(delta * 75f) }
-                        change?.consume()
-                    }
-                }
-            }
-        }
-    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -410,7 +387,7 @@ fun HomeScreen(
                                 LazyRow(
                                     state = favListState,
                                     modifier = Modifier.fillMaxWidth()
-                                        .mouseScrollable(favListState),
+                                        .smoothWheelScroll(favListState, horizontal = true),
                                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                                     contentPadding = PaddingValues(horizontal = HORIZONTAL_PADDING)
                                 ) {
@@ -727,7 +704,7 @@ fun HomeScreen(
                                 LazyRow(
                                     state = recentListState,
                                     modifier = Modifier.fillMaxWidth()
-                                        .mouseScrollable(recentListState),
+                                        .smoothWheelScroll(recentListState, horizontal = true),
                                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                                     contentPadding = PaddingValues(horizontal = HORIZONTAL_PADDING)
                                 ) {

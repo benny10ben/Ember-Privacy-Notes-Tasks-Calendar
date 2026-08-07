@@ -3,13 +3,11 @@ package com.ben.ember.presentation.shared.editor
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.relocation.BringIntoViewRequester
@@ -128,29 +126,11 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.first
 
-@Composable
-fun Modifier.mouseScrollable(scrollState: ScrollState): Modifier {
-    val scope = rememberCoroutineScope()
-    return this.pointerInput(scrollState) {
-        awaitPointerEventScope {
-            while (true) {
-                val event = awaitPointerEvent(PointerEventPass.Initial)
-                if (event.type == PointerEventType.Scroll) {
-                    val change = event.changes.firstOrNull()
-                    val delta = change?.scrollDelta?.y ?: 0f
-                    if (delta != 0f) {
-                        scope.launch {
-                            scrollState.scrollBy(delta * 75f)
-                        }
-                        change?.consume()
-                    }
-                }
-            }
-        }
-    }
-}
-
 val DefaultBlockShape = RoundedCornerShape(12.dp)
+
+private const val NOTE_LINK_MARKER = "](ember://note/"
+private val NoteLinkRegex = """\[([^\]]+)\]\(ember://note/([^)]+)\)""".toRegex()
+private val TrailingNoteLinkRegex = """\[([^\]]+)\]\(ember://note/([^)]+)\)$""".toRegex()
 
 private fun TextAlignment.toComposeTextAlign(): TextAlign = when (this) {
     TextAlignment.LEFT -> TextAlign.Left

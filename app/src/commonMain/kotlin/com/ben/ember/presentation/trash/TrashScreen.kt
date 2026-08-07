@@ -31,6 +31,8 @@ import com.ben.ember.presentation.shared.stableStatusBarsPadding
 import com.ben.ember.presentation.mobile.home.NoteCard
 import com.ben.ember.presentation.shared.components.EmberBlur
 import com.ben.ember.presentation.shared.components.emberBlur
+import com.ben.ember.presentation.shared.components.EmberVerticalScrollbar
+import com.ben.ember.presentation.shared.components.smoothWheelScroll
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import ember.app.generated.resources.Res
@@ -95,6 +97,7 @@ fun TrashScreen(
                     .fillMaxSize()
                     .hazeSource(state = hazeState)
                     .background(backgroundColor)
+                    .smoothWheelScroll(gridState)
             ) {
                 items(trashedNotes, key = { it.noteId }) { note ->
                     NoteCard(
@@ -105,6 +108,14 @@ fun TrashScreen(
                     )
                 }
             }
+
+            EmberVerticalScrollbar(
+                gridState = gridState,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .fillMaxHeight()
+                    .padding(top = topBarHeightDp + 8.dp, bottom = 24.dp)
+            )
         }
 
         Box(

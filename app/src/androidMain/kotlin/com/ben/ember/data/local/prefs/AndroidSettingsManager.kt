@@ -250,6 +250,18 @@ class AndroidSettingsManager(
         _subNoteOpenMode.value = mode
     }
 
+    private val _showScrollbar = MutableStateFlow(
+        sharedPreferences.getBoolean(SyncConstants.KEY_SHOW_SCROLLBAR, SyncConstants.DEFAULT_SHOW_SCROLLBAR)
+    )
+    override val showScrollbarFlow: Flow<Boolean> = _showScrollbar
+
+    override fun isShowScrollbarEnabled(): Boolean = _showScrollbar.value
+
+    override fun saveShowScrollbar(enabled: Boolean) {
+        sharedPreferences.edit { putBoolean(SyncConstants.KEY_SHOW_SCROLLBAR, enabled) }
+        _showScrollbar.value = enabled
+    }
+
     private val _aiGenerationMode = MutableStateFlow(
         sharedPreferences.getString(SyncConstants.KEY_AI_GENERATION_MODE, SyncConstants.DEFAULT_AI_GENERATION_MODE)
             ?: SyncConstants.DEFAULT_AI_GENERATION_MODE

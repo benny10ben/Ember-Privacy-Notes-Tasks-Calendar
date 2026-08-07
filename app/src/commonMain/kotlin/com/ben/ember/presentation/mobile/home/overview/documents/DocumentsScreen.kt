@@ -34,6 +34,7 @@ import androidx.compose.ui.text.AnnotatedString
 import com.ben.ember.presentation.shared.components.EmberBlur
 import com.ben.ember.presentation.shared.components.KmpBackHandler
 import com.ben.ember.presentation.shared.components.TopBarIconButton
+import com.ben.ember.presentation.shared.components.EmberVerticalScrollbar
 import com.ben.ember.presentation.shared.editor.blockViews.DocumentBlockView
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.haze
@@ -186,6 +187,11 @@ fun DocumentsScreen(
                     }
                 }
             }
+
+            EmberVerticalScrollbar(
+                listState = listState,
+                modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight().padding(top = 80.dp, bottom = 24.dp)
+            )
 
             DocumentsTopBar(
                 modifier = Modifier.align(Alignment.TopCenter),

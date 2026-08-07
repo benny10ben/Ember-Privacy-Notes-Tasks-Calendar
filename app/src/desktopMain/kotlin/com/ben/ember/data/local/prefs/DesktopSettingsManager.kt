@@ -233,6 +233,18 @@ class DesktopSettingsManager : SettingsManager {
         _subNoteOpenMode.value = mode
     }
 
+    private val _showScrollbar = MutableStateFlow(
+        prefs.getBoolean(SyncConstants.KEY_SHOW_SCROLLBAR, SyncConstants.DEFAULT_SHOW_SCROLLBAR)
+    )
+    override val showScrollbarFlow: Flow<Boolean> = _showScrollbar
+
+    override fun isShowScrollbarEnabled(): Boolean = _showScrollbar.value
+
+    override fun saveShowScrollbar(enabled: Boolean) {
+        prefs.putBoolean(SyncConstants.KEY_SHOW_SCROLLBAR, enabled)
+        _showScrollbar.value = enabled
+    }
+
     private val _aiGenerationMode = MutableStateFlow(
         prefs.get(SyncConstants.KEY_AI_GENERATION_MODE, SyncConstants.DEFAULT_AI_GENERATION_MODE)
     )

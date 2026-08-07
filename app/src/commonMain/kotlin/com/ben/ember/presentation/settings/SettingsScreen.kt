@@ -104,6 +104,8 @@ fun SettingsScreen(
     val subNoteOpenMode by viewModel.subNoteOpenMode.collectAsState()
     var showSubNoteOpenModeSheet by remember { mutableStateOf(false) }
 
+    val showScrollbar by viewModel.showScrollbar.collectAsState()
+
     val aiFeaturesDisabled by viewModel.aiFeaturesDisabled.collectAsState()
     val isPurgingAiData by viewModel.isPurgingAiData.collectAsState()
     val aiPurgeResultMessage by viewModel.aiPurgeResultMessage.collectAsState()
@@ -310,6 +312,21 @@ fun SettingsScreen(
                             trailingLabel = runCatching { SubNoteOpenMode.valueOf(subNoteOpenMode) }
                                 .getOrDefault(SubNoteOpenMode.SIDE_PANEL).displayName,
                             onClick = { showSubNoteOpenModeSheet = true }
+                        )
+
+                        SettingsDivider()
+                        SettingsToggleRow(
+                            icon = painterResource(Res.drawable.sidebar),
+                            title = "Show Scrollbar",
+                            isChecked = showScrollbar,
+                            onCheckedChange = { viewModel.setShowScrollbar(it) }
+                        )
+
+                        Text(
+                            text = "Shows scrollbars in the sidebar, editor, note lists, tables and databases. Scrolling with the wheel or trackpad works either way.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                            modifier = Modifier.padding(start = 64.dp, end = 14.dp, bottom = 14.dp)
                         )
                     }
                 }
