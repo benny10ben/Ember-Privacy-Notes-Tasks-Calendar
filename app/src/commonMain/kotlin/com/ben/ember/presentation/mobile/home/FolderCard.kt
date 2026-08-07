@@ -110,6 +110,7 @@ fun FolderCard(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     handlesGestures: Boolean = true,
+    noteCount: Int = 0,
     itemCount: Int? = null,
     caption: String? = null
 ) {
@@ -133,7 +134,7 @@ fun FolderCard(
             modifier = Modifier
                 .matchParentSize()
                 .clip(FolderCardShape)
-                .background(MaterialTheme.colorScheme.background)
+                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
         ) {
             Box(
                 modifier = Modifier
@@ -153,6 +154,13 @@ fun FolderCard(
                         folder.name.ifEmpty { "Untitled" },
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        "Notes: $noteCount",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
