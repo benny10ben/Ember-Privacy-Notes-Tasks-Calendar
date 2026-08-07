@@ -125,7 +125,9 @@ fun Modifier.desktopListDragTracker(
             while (true) {
                 val press = awaitPointerEvent()
                 if (press.type != PointerEventType.Press) continue
-                val pressPos = press.changes.firstOrNull()?.position ?: continue
+                val pressChange = press.changes.firstOrNull() ?: continue
+                if (pressChange.isConsumed) continue
+                val pressPos = pressChange.position
 
                 var pressedKey: String? = keyAtY(pressPos.y, listState, currentRowKeys)
                 var dragStarted = false
@@ -137,6 +139,10 @@ fun Modifier.desktopListDragTracker(
                     when (event.type) {
                         PointerEventType.Move -> {
                             val dist = (change.position - pressPos).getDistance()
+
+                            if (!dragStarted && change.isConsumed) {
+                                pressedKey = null
+                            }
 
                             if (!dragStarted && dist > dragThresholdPx && pressedKey != null) {
                                 val payload = currentPayloadForKey(pressedKey)
