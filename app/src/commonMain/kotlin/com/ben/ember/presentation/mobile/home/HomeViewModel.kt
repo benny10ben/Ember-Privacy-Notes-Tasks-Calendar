@@ -249,6 +249,9 @@ class HomeViewModel(
     private val _allFolders = repository.getAllFolders()
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
+    val noteCountsByFolder: StateFlow<Map<String, Int>> = repository.getNoteCountsByFolder()
+        .stateIn(viewModelScope, SharingStarted.Lazily, emptyMap())
+
     val recentNotes = repository.getAllLinkableNotes()
         .map { notes ->
             notes.filter { !it.title.equals("Inbox", ignoreCase = true) }

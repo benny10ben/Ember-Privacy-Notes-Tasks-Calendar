@@ -452,6 +452,9 @@ class NoteRepositoryImpl(
 
     override fun getNotesInFolder(folderId: String): Flow<List<NoteMetadataEntity>> = noteDao.getNotesInFolder(folderId)
 
+    override fun getNoteCountsByFolder(): Flow<Map<String, Int>> =
+        noteDao.getNoteCountsByFolder().map { rows -> rows.associate { it.folderId to it.noteCount } }
+
     override fun getFavoriteNotes(): Flow<List<NoteMetadataEntity>> = noteDao.getFavoriteNotes()
 
     override fun getTrashedNotes(): Flow<List<NoteMetadataEntity>> = noteDao.getTrashedNotes()

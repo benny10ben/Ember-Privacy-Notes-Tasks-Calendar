@@ -27,6 +27,14 @@ interface NoteDao {
 
     @Query("SELECT * FROM notes_metadata WHERE folderId = :folderId AND trashedAt IS NULL AND isSubNote = 0 AND isTemplate = 0 ORDER BY updatedAt DESC")
     fun getNotesInFolder(folderId: String): Flow<List<NoteMetadataEntity>>
+    @Query(
+        """
+        SELECT folderId AS folderId, COUNT(*) AS noteCount FROM notes_metadata
+        WHERE folderId IS NOT NULL AND trashedAt IS NULL AND isSubNote = 0 AND isTemplate = 0
+        GROUP BY folderId
+        """
+    )
+    fun getNoteCountsByFolder(): Flow<List<FolderNoteCount>>
 
     @Query("SELECT * FROM notes_metadata WHERE isDaily = 1 AND dateString = :date AND isTemplate = 0 LIMIT 1")
     suspend fun getDailyNoteMetadata(date: String): NoteMetadataEntity?

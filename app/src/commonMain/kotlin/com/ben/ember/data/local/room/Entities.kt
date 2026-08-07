@@ -50,6 +50,11 @@ data class FolderEntity(
     val updatedAt: Long = 0L
 )
 
+data class FolderNoteCount(
+    val folderId: String,
+    val noteCount: Int
+)
+
 /**
  * Central registry for tags used across all databases.
  * `updatedAt`/`isDeleted` exist purely for self-host sync, same reasoning as [CategoryEntity].

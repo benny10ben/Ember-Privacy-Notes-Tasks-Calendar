@@ -142,6 +142,8 @@ interface NoteRepository {
 
     fun getIncompleteTasksCount(): Flow<Int>
 
+    fun getNoteCountsByFolder(): Flow<Map<String, Int>>
+
     fun getAllImagesFlow(): Flow<List<ImageBlockEntity>>
     fun getAllDocumentsFlow(): Flow<List<DocumentBlockEntity>>
     fun getAllBookmarksFlow(): Flow<List<BookmarkBlockEntity>>

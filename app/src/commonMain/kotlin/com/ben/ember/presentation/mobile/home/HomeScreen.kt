@@ -186,6 +186,8 @@ fun HomeScreen(
     val selectedFolderIds by viewModel.selectedFolderIds.collectAsState()
     val favoriteNotes by viewModel.favoriteNotes.collectAsState()
 
+    val noteCountsByFolder by viewModel.noteCountsByFolder.collectAsState()
+
     val remindersCount by viewModel.remindersCount.collectAsState()
     val bookmarksCount by viewModel.bookmarksCount.collectAsState()
     val imagesCount by viewModel.imagesCount.collectAsState()
@@ -683,6 +685,7 @@ fun HomeScreen(
                                         is HomeItem.Folder -> FolderCard(
                                             folder = row.folder,
                                             isSelected = selectedFolderIds.contains(row.folder.folderId),
+                                            noteCount = noteCountsByFolder[row.folder.folderId] ?: 0,
                                             handlesGestures = false,
                                             onClick = {},
                                             onLongClick = {})
@@ -765,6 +768,7 @@ fun HomeScreen(
                         is HomeItem.Folder -> FolderCard(
                             folder = floatingItem.folder,
                             isSelected = false,
+                            noteCount = noteCountsByFolder[floatingItem.folder.folderId] ?: 0,
                             handlesGestures = false,
                             onClick = {},
                             onLongClick = {})
