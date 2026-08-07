@@ -308,9 +308,9 @@ fun BottomSheetMonthCalendar(
     var currentMonth by remember(selectedDate) { mutableStateOf(LocalDate(selectedDate.year, selectedDate.month, 1)) }
     val months = arrayOf("", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
 
-    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp).padding(top = 12.dp)) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -337,7 +337,7 @@ fun BottomSheetMonthCalendar(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             listOf("M", "T", "W", "T", "F", "S", "S").forEach { day ->
                 Text(
                     text = day, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold,
@@ -354,7 +354,7 @@ fun BottomSheetMonthCalendar(
         val totalCells = daysInMonth + startOffset
         val rows = if (totalCells % 7 == 0) totalCells / 7 else totalCells / 7 + 1
 
-        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+        Column(modifier = Modifier.fillMaxWidth()) {
             for (row in 0 until rows) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     for (col in 0..6) {

@@ -13,6 +13,10 @@ interface SettingsManager {
     fun saveSortSettings(type: String, order: String)
     fun saveLastOpenedDesktopState(state: String)
 
+    fun homeSectionExpandedFlow(sectionKey: String): Flow<Boolean>
+    fun isHomeSectionExpanded(sectionKey: String): Boolean
+    fun saveHomeSectionExpanded(sectionKey: String, expanded: Boolean)
+
     fun getLastSyncTimestamp(): Long
     fun saveLastSyncTimestamp(timestamp: Long)
 

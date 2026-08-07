@@ -3,6 +3,7 @@ package com.ben.ember.presentation.mobile.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ben.ember.data.local.prefs.SettingsManager
+import com.ben.ember.data.local.prefs.SyncConstants
 import com.ben.ember.data.local.room.FolderEntity
 import com.ben.ember.data.local.room.NoteMetadataEntity
 import com.ben.ember.domain.media.LocalMediaGarbageCollector
@@ -55,6 +56,23 @@ class HomeViewModel(
 
     fun updateSort(type: SortType, order: SortOrder) {
         settingsManager.saveSortSettings(type.name, order.name)
+    }
+
+    private fun homeSectionExpandedState(sectionKey: String): StateFlow<Boolean> =
+        settingsManager.homeSectionExpandedFlow(sectionKey)
+            .stateIn(viewModelScope, SharingStarted.Eagerly, settingsManager.isHomeSectionExpanded(sectionKey))
+
+    val isFavoritesSectionExpanded: StateFlow<Boolean> =
+        homeSectionExpandedState(SyncConstants.HOME_SECTION_FAVORITES)
+
+    val isNotesSectionExpanded: StateFlow<Boolean> =
+        homeSectionExpandedState(SyncConstants.HOME_SECTION_NOTES)
+
+    val isRecentsSectionExpanded: StateFlow<Boolean> =
+        homeSectionExpandedState(SyncConstants.HOME_SECTION_RECENTS)
+
+    fun toggleHomeSection(sectionKey: String) {
+        settingsManager.saveHomeSectionExpanded(sectionKey, !settingsManager.isHomeSectionExpanded(sectionKey))
     }
 
     private fun applyNoteSort(

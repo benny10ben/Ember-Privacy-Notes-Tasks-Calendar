@@ -5,6 +5,12 @@ object SyncConstants {
     const val KEY_SORT_ORDER = "sort_order"
     // Desktop State
     const val KEY_LAST_OPENED_STATE = "last_opened_desktop_state"
+    // Home section collapse state
+    const val KEY_HOME_SECTION_EXPANDED_PREFIX = "home_section_expanded_"
+    const val HOME_SECTION_FAVORITES = "favorites"
+    const val HOME_SECTION_NOTES = "notes"
+    const val HOME_SECTION_RECENTS = "recents"
+    const val DEFAULT_HOME_SECTION_EXPANDED = true
     // Calendar
     const val KEY_CALENDAR_VIEW_MODE = "calendar_view_mode"
     const val DEFAULT_CALENDAR_VIEW_MODE = "DAY"

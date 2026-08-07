@@ -63,6 +63,29 @@ class AndroidSettingsManager(
         }
     }
 
+    private val homeSectionExpandedStates = mutableMapOf<String, MutableStateFlow<Boolean>>()
+
+    private fun homeSectionExpandedState(sectionKey: String): MutableStateFlow<Boolean> =
+        synchronized(homeSectionExpandedStates) {
+            homeSectionExpandedStates.getOrPut(sectionKey) {
+                MutableStateFlow(
+                    sharedPreferences.getBoolean(
+                        SyncConstants.KEY_HOME_SECTION_EXPANDED_PREFIX + sectionKey,
+                        SyncConstants.DEFAULT_HOME_SECTION_EXPANDED
+                    )
+                )
+            }
+        }
+
+    override fun homeSectionExpandedFlow(sectionKey: String): Flow<Boolean> = homeSectionExpandedState(sectionKey)
+
+    override fun isHomeSectionExpanded(sectionKey: String): Boolean = homeSectionExpandedState(sectionKey).value
+
+    override fun saveHomeSectionExpanded(sectionKey: String, expanded: Boolean) {
+        sharedPreferences.edit { putBoolean(SyncConstants.KEY_HOME_SECTION_EXPANDED_PREFIX + sectionKey, expanded) }
+        homeSectionExpandedState(sectionKey).value = expanded
+    }
+
     override fun getLastSyncTimestamp(): Long {
         return sharedPreferences.getLong(SyncConstants.KEY_SYNC_TIMESTAMP, 0L)
     }

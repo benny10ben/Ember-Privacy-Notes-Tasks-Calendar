@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -66,8 +65,7 @@ import com.ben.ember.presentation.shared.components.EmberTextField
 import com.ben.ember.presentation.shared.components.MinimalDatePickerDialog
 import com.ben.ember.presentation.shared.components.MinimalTimePickerDialog
 import com.ben.ember.presentation.shared.components.NoRippleIndicationNodeFactory
-import com.ben.ember.presentation.shared.components.TopBarIconButtonGroup
-import com.ben.ember.presentation.shared.components.TopBarIconButtonItem
+import com.ben.ember.presentation.shared.components.TopBarIconButton
 import dev.chrisbanes.haze.HazeState
 import ember.app.generated.resources.Res
 import ember.app.generated.resources.calendar
@@ -86,13 +84,10 @@ import kotlinx.datetime.toLocalDateTime
 import org.jetbrains.compose.resources.painterResource
 
 private val EventChipTextColor = Color(0xFF1A1A1A)
-
-// Shared shape/spacing scale for the editor sheet/menu - kept as one constant so every
-// interactive row (EventFieldRow, CategoryChip, EventChip) clips its ripple identically instead
-// of each one hand-rolling its own radius.
 private val InteractiveShape = RoundedCornerShape(12.dp)
 private val FieldPadding = 14.dp
 private val SectionSpacing = 16.dp
+private val ViewFieldsIconShadowElevation = 0.dp
 
 @Composable
 fun EventChip(
@@ -108,9 +103,6 @@ fun EventChip(
     Surface(
         shape = InteractiveShape,
         color = color,
-        // clip BEFORE clickable so the ripple is bounded by the rounded corners instead of
-        // bleeding into a square - Surface's own internal clip happens after this modifier
-        // chain, too late to constrain the ripple drawn by clickable.
         modifier = modifier
             .height(height)
             .clip(InteractiveShape)
@@ -139,11 +131,7 @@ data class EventEditorState(
     val url: String = "",
     val description: String = "",
     val recurrenceRule: RecurrenceRule? = null,
-    // Only meaningful when original?.recurrenceRule != null - which portion of the series an
-    // edit/delete applies to. Chosen via RecurrenceScopeChooser before editing/deleting begins.
     val editScope: RecurrenceEditScope = RecurrenceEditScope.ALL_EVENTS,
-    // New events (original == null) have nothing to view, so they start in edit mode.
-    // Tapping an existing event starts in read-only view mode until "Edit" is tapped.
     val isEditing: Boolean = original == null
 )
 
@@ -280,8 +268,6 @@ private fun EventEditorFields(
     onDelete: (() -> Unit)?
 ) {
     if (!state.isEditing) {
-        // View mode passes onDelete/onCancel through so the header action row (edit/delete/close)
-        // can wire directly to the same callbacks the edit-mode footer uses.
         EventViewFields(
             state = state,
             categories = categories,
@@ -317,10 +303,6 @@ private fun EventEditorFields(
             placeholder = "URL (optional)",
             modifier = Modifier.fillMaxWidth()
         )
-
-        // A single-occurrence edit can't move a date without needing reverse-date exception
-        // lookups (see plan) - the date row is dimmed and inert in that scope instead of hidden,
-        // so the user still sees which date they're editing.
         val canEditDate = state.editScope == RecurrenceEditScope.ALL_EVENTS
         EventFieldRow(
             icon = painterResource(Res.drawable.calendar),
@@ -359,9 +341,6 @@ private fun EventEditorFields(
             )
         }
 
-        // Time row and its duration caption are kept as one tight group (small internal gap)
-        // rather than the section-wide SectionSpacing, since the caption reads as a label for
-        // the row directly above it.
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -488,11 +467,6 @@ private fun EventEditorFields(
     }
 }
 
-// Read-only view shown when an existing event is tapped. Redesigned to match the
-// accent-bar + title/subtitle + plain icon rows layout: a colored bar (from the event's
-// category, falling back to the theme primary) sits beside the name and date/time range,
-// with edit/delete/close actions in a header row instead of a single bottom "Edit" button.
-// Static Text throughout (no EmberTextField) so no keyboard ever comes up in view mode.
 @Composable
 private fun EventViewFields(
     state: EventEditorState,
@@ -513,39 +487,34 @@ private fun EventViewFields(
             ),
         verticalArrangement = Arrangement.spacedBy(SectionSpacing)
     ) {
-        // Action row - edit / delete / close, top-right like the reference card. Grouped in a
-        // single pill (shared bg/shadow/border) via TopBarIconButtonGroup instead of three
-        // separate IconButtons.
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.End,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(modifier = Modifier.clip(CircleShape)) {
-                TopBarIconButtonGroup(
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TopBarIconButton(
+                    icon = painterResource(Res.drawable.pen),
+                    contentDescription = "Edit",
                     bgColor = Color.Transparent,
                     tint = MaterialTheme.colorScheme.primary,
                     hazeState = hazeState,
                     hazeStyle = EmberBlur.Regular,
-                    items = buildList {
-                        add(
-                            TopBarIconButtonItem(
-                                icon = painterResource(Res.drawable.pen),
-                                contentDescription = "Edit",
-                                onClick = onEditClick
-                            )
-                        )
-                        if (onDelete != null) {
-                            add(
-                                TopBarIconButtonItem(
-                                    icon = painterResource(Res.drawable.trash),
-                                    contentDescription = "Delete",
-                                    onClick = onDelete
-                                )
-                            )
-                        }
-                    }
+                    shadowElevation = ViewFieldsIconShadowElevation,
+                    onClick = onEditClick
                 )
+                if (onDelete != null) {
+                    TopBarIconButton(
+                        icon = painterResource(Res.drawable.trash),
+                        contentDescription = "Delete",
+                        bgColor = Color.Transparent,
+                        tint = MaterialTheme.colorScheme.error,
+                        hazeState = hazeState,
+                        hazeStyle = EmberBlur.Regular,
+                        shadowElevation = ViewFieldsIconShadowElevation,
+                        onClick = onDelete
+                    )
+                }
             }
         }
 
@@ -598,8 +567,6 @@ private fun EventViewFields(
     }
 }
 
-// Single icon + text line used by the read-only view - no background, no ripple bounds,
-// just an optional click target for the URL row.
 @Composable
 private fun InfoRow(
     icon: Painter,
@@ -639,8 +606,6 @@ private fun EventFieldRow(
     Surface(
         shape = InteractiveShape,
         color = MaterialTheme.colorScheme.surfaceVariant,
-        // clip BEFORE clickable, same reasoning as EventChip above - keeps the ripple inside
-        // the rounded rect instead of drawing a square highlight past the corners.
         modifier = modifier
             .clip(InteractiveShape)
             .clickable(onClick = onClick)
@@ -1071,8 +1036,6 @@ fun RecurrenceScopeChooser(
     }
 }
 
-// An event plus where it lands in the day column's horizontal layout: `columnIndex` of
-// `columnCount` equal-width slots, so overlapping events sit side by side instead of stacking.
 data class PositionedEvent(
     val event: CalendarEvent,
     val columnIndex: Int,

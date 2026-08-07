@@ -27,6 +27,8 @@ import kotlin.time.Duration.Companion.milliseconds
 private val BottomSheetShape = RoundedCornerShape(topEnd = 26.dp, topStart = 26.dp)
 private val FloatingDialogShape = RoundedCornerShape(12.dp)
 private val SheetHorizontalPadding = 20.dp
+private val SheetIconShadowElevation = 0.dp
+private val SheetIconSpacing = 8.dp
 
 class EmberBottomSheetAction(
     val icon: Painter,
@@ -118,12 +120,13 @@ private fun EmberFloatingDialog(
                                 .padding(horizontal = SheetHorizontalPadding, vertical = 8.dp)
                         )
                         if (headerAction != null) {
-                            Box(modifier = Modifier.padding(end = 4.dp)) {
+                            Box(modifier = Modifier.padding(end = SheetIconSpacing)) {
                                 TopBarIconButton(
                                     icon = headerAction.icon,
                                     contentDescription = headerAction.contentDescription,
                                     bgColor = if (LocalAppIsDark.current) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.background,
                                     tint = headerAction.tint ?: MaterialTheme.colorScheme.onSurface,
+                                    shadowElevation = SheetIconShadowElevation,
                                     onClick = headerAction.onClick
                                 )
                             }
@@ -134,6 +137,7 @@ private fun EmberFloatingDialog(
                                 contentDescription = "Close",
                                 bgColor = if (LocalAppIsDark.current) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.background,
                                 tint = MaterialTheme.colorScheme.onSurface,
+                                shadowElevation = SheetIconShadowElevation,
                                 onClick = onDismiss
                             )
                         }
@@ -245,12 +249,13 @@ private fun EmberModalBottomSheet(
                                 .padding(horizontal = SheetHorizontalPadding, vertical = 8.dp)
                         )
                         if (headerAction != null) {
-                            Box(modifier = Modifier.padding(end = 4.dp)) {
+                            Box(modifier = Modifier.padding(end = SheetIconSpacing)) {
                                 TopBarIconButton(
                                     icon = headerAction.icon,
                                     contentDescription = headerAction.contentDescription,
                                     bgColor = if (LocalAppIsDark.current) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.background,
                                     tint = headerAction.tint ?: MaterialTheme.colorScheme.onSurface,
+                                    shadowElevation = SheetIconShadowElevation,
                                     onClick = headerAction.onClick
                                 )
                             }
@@ -261,6 +266,7 @@ private fun EmberModalBottomSheet(
                                 contentDescription = "Close",
                                 bgColor = if (LocalAppIsDark.current) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.background,
                                 tint = MaterialTheme.colorScheme.onSurface,
+                                shadowElevation = SheetIconShadowElevation,
                                 onClick = onDismiss
                             )
                         }

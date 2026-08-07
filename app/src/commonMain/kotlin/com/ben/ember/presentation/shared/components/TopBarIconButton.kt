@@ -37,16 +37,18 @@ import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 
-fun Modifier.customEmberShadow(shape: Shape): Modifier = this.shadow(
-    elevation = 14.dp,
+val DefaultEmberShadowElevation = 14.dp
+
+fun Modifier.customEmberShadow(
+    shape: Shape,
+    elevation: Dp = DefaultEmberShadowElevation
+): Modifier = this.shadow(
+    elevation = elevation,
     shape = shape,
     spotColor = Color.Black.copy(alpha = 0.35f),
     ambientColor = Color.Black.copy(alpha = 0.20f)
 )
 
-// indication = null is unreliable on Compose Multiplatform (known ripple-resolution quirk) -
-// an explicit no-op IndicationNodeFactory consistently suppresses the ripple on both Android and
-// desktop. Modifier.Node-based per the current (non-deprecated) Indication API.
 object NoRippleIndicationNodeFactory : IndicationNodeFactory {
     private class NoRippleIndicationNode : Modifier.Node(), DrawModifierNode {
         override fun ContentDrawScope.draw() {
@@ -122,6 +124,7 @@ fun TopBarIconButton(
     hazeStyle: HazeStyle? = null,
     size: Dp = 44.dp,
     iconSize: Dp = 22.dp,
+    shadowElevation: Dp = DefaultEmberShadowElevation,
     onClick: () -> Unit
 ) {
     val resolvedStyle = hazeStyle ?: EmberBlur.Regular
@@ -131,7 +134,7 @@ fun TopBarIconButton(
         contentColor = tint,
         modifier = Modifier
             .size(size)
-            .customEmberShadow(CircleShape)
+            .customEmberShadow(CircleShape, shadowElevation)
             .clip(CircleShape)
             .emberBlur(hazeState, resolvedStyle)
             .clickable(
@@ -166,6 +169,7 @@ fun TopBarIconButton(
     hazeStyle: HazeStyle? = null,
     size: Dp = 44.dp,
     iconSize: Dp = 22.dp,
+    shadowElevation: Dp = DefaultEmberShadowElevation,
     onClick: () -> Unit
 ) {
     TopBarIconButton(
@@ -177,6 +181,7 @@ fun TopBarIconButton(
         hazeStyle = hazeStyle,
         size = size,
         iconSize = iconSize,
+        shadowElevation = shadowElevation,
         onClick = onClick
     )
 }
@@ -196,7 +201,8 @@ fun TopBarIconButtonGroup(
     tint: Color,
     hazeState: HazeState? = null,
     hazeStyle: HazeStyle? = null,
-    horizontalPadding: Dp = 6.dp
+    horizontalPadding: Dp = 6.dp,
+    shadowElevation: Dp = DefaultEmberShadowElevation
 ) {
     val resolvedStyle = hazeStyle ?: EmberBlur.Regular
     Surface(
@@ -205,7 +211,7 @@ fun TopBarIconButtonGroup(
         contentColor = tint,
         modifier = Modifier
             .height(44.dp)
-            .customEmberShadow(CircleShape)
+            .customEmberShadow(CircleShape, shadowElevation)
             .clip(CircleShape)
             .emberBlur(hazeState, resolvedStyle)
             .border(

@@ -2,6 +2,7 @@ package com.ben.ember.presentation.mobile.home
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -29,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import com.ben.ember.presentation.shared.rememberStableStatusBarsPadding
 import com.ben.ember.presentation.shared.stableStatusBarsPadding
@@ -45,6 +47,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.ben.ember.data.local.prefs.SyncConstants
 import com.ben.ember.data.local.room.FolderEntity
 import com.ben.ember.data.local.room.NoteMetadataEntity
 import com.ben.ember.domain.model.NoteContent
@@ -93,6 +96,21 @@ import org.jetbrains.compose.resources.painterResource
 
 private val HORIZONTAL_PADDING = 16.dp
 private val DefaultCornerShape = RoundedCornerShape(12.dp)
+
+@Composable
+private fun SectionToggleIcon(isExpanded: Boolean, contentDescription: String) {
+    val rotation by animateFloatAsState(
+        targetValue = if (isExpanded) 0f else -90f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "sectionToggleRotation"
+    )
+    Icon(
+        imageVector = Icons.Default.KeyboardArrowDown,
+        contentDescription = contentDescription,
+        modifier = Modifier.padding(start = 4.dp).size(20.dp).graphicsLayer { rotationZ = rotation },
+        tint = MaterialTheme.colorScheme.onSurface
+    )
+}
 
 @Composable
 private fun Modifier.mouseScrollable(scrollState: ScrollableState): Modifier {
@@ -253,9 +271,9 @@ fun HomeScreen(
     var showTemplatesSheet by remember { mutableStateOf(false) }
     var showTemplatesMenu by remember { mutableStateOf(false) }
 
-    var isFavoritesExpanded by remember { mutableStateOf(true) }
-    var isNotesExpanded by remember { mutableStateOf(true) }
-    var isRecentsExpanded by remember { mutableStateOf(true) }
+    val isFavoritesExpanded by viewModel.isFavoritesSectionExpanded.collectAsState()
+    val isNotesExpanded by viewModel.isNotesSectionExpanded.collectAsState()
+    val isRecentsExpanded by viewModel.isRecentsSectionExpanded.collectAsState()
 
     val favListState = rememberLazyListState()
     val recentListState = rememberLazyListState()
@@ -371,7 +389,7 @@ fun HomeScreen(
                                 Row(
                                     modifier = Modifier.clip(RoundedCornerShape(4.dp))
                                         .noRippleClickable {
-                                            isFavoritesExpanded = !isFavoritesExpanded
+                                            viewModel.toggleHomeSection(SyncConstants.HOME_SECTION_FAVORITES)
                                         }.padding(end = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
@@ -381,12 +399,7 @@ fun HomeScreen(
                                         fontWeight = FontWeight.SemiBold,
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
-                                    Icon(
-                                        imageVector = if (isFavoritesExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                        contentDescription = "Toggle Favorites",
-                                        modifier = Modifier.padding(start = 4.dp).size(20.dp),
-                                        tint = MaterialTheme.colorScheme.onSurface
-                                    )
+                                    SectionToggleIcon(isFavoritesExpanded, "Toggle Favorites")
                                 }
                             }
                         }
@@ -420,19 +433,14 @@ fun HomeScreen(
                     if (gridItems.isNotEmpty() || !isSelectionMode) {
                         item(span = StaggeredGridItemSpan.FullLine) {
                             Row(modifier = Modifier.fillMaxWidth().padding(start = HORIZONTAL_PADDING, end = HORIZONTAL_PADDING, top = 14.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                                Row(modifier = Modifier.clip(RoundedCornerShape(4.dp)).noRippleClickable { isNotesExpanded = !isNotesExpanded }.padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Row(modifier = Modifier.clip(RoundedCornerShape(4.dp)).noRippleClickable { viewModel.toggleHomeSection(SyncConstants.HOME_SECTION_NOTES) }.padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Text(
                                         "Notes",
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.SemiBold,
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
-                                    Icon(
-                                        imageVector = if (isNotesExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                        contentDescription = "Toggle Notes",
-                                        modifier = Modifier.padding(start = 4.dp).size(20.dp),
-                                        tint = MaterialTheme.colorScheme.onSurface
-                                    )
+                                    SectionToggleIcon(isNotesExpanded, "Toggle Notes")
                                 }
                                 if (!isSelectionMode) {
                                     Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -697,7 +705,7 @@ fun HomeScreen(
                                 Row(
                                     modifier = Modifier.clip(RoundedCornerShape(4.dp))
                                         .noRippleClickable {
-                                            isRecentsExpanded = !isRecentsExpanded
+                                            viewModel.toggleHomeSection(SyncConstants.HOME_SECTION_RECENTS)
                                         }.padding(end = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
@@ -707,12 +715,7 @@ fun HomeScreen(
                                         fontWeight = FontWeight.SemiBold,
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
-                                    Icon(
-                                        imageVector = if (isRecentsExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                        contentDescription = "Toggle Recents",
-                                        modifier = Modifier.padding(start = 4.dp).size(20.dp),
-                                        tint = MaterialTheme.colorScheme.onSurface
-                                    )
+                                    SectionToggleIcon(isRecentsExpanded, "Toggle Recents")
                                 }
                             }
                         }
