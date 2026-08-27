@@ -31,6 +31,7 @@ import com.ben.ember.presentation.shared.stableStatusBarsPadding
 import com.ben.ember.presentation.shared.components.EmberBottomSheet
 import com.ben.ember.presentation.shared.components.EmberButtonPrimary
 import com.ben.ember.presentation.shared.components.EmberButtonSecondary
+import com.ben.ember.presentation.shared.components.SelectedOptionBackground
 import com.ben.ember.presentation.shared.components.TopBarIconButton
 import com.ben.ember.presentation.sync.SyncPairingDialog
 import com.ben.ember.presentation.sync.SyncScannerDialog
@@ -571,39 +572,40 @@ fun SettingsScreen(
         EmberBottomSheet(
             expanded = true,
             onDismiss = { showFontStyleSheet = false },
-            title = "Font Style"
+            title = "Font Style",
+            contentHorizontalPadding = 0.dp
         ) {
             val selectedFontStyle = runCatching { FontStylePreference.valueOf(fontStylePreference) }
                 .getOrDefault(FontStylePreference.POPPINS)
 
             Column(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
                 FontStylePreference.entries.forEachIndexed { index, option ->
+                    val isSelectedFontStyle = option == selectedFontStyle
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .padding(horizontal = 8.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(
+                                if (isSelectedFontStyle) SelectedOptionBackground else Color.Transparent
+                            )
                             .clickable {
                                 viewModel.setFontStylePreference(option.name)
                                 showFontStyleSheet = false
                             }
-                            .padding(horizontal = 20.dp, vertical = 14.dp),
+                            .padding(horizontal = 12.dp, vertical = 14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
                             text = option.displayName,
                             fontFamily = fontFamilyFor(option),
                             style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            color = if (isSelectedFontStyle)
+                                MaterialTheme.colorScheme.primary
+                            else
+                                MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.weight(1f)
                         )
-
-                        if (option == selectedFontStyle) {
-                            Icon(
-                                imageVector = Icons.Default.Check,
-                                contentDescription = "Selected",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
                     }
 
                     if (index != FontStylePreference.entries.lastIndex) {
@@ -623,38 +625,39 @@ fun SettingsScreen(
             expanded = true,
             onDismiss = { showSubNoteOpenModeSheet = false },
             title = "Subnote Opening",
-            subtitle = "Choose how notes linked inside another note (subnotes) open on desktop."
+            subtitle = "Choose how notes linked inside another note (subnotes) open on desktop.",
+            contentHorizontalPadding = 0.dp
         ) {
             val selectedMode = runCatching { SubNoteOpenMode.valueOf(subNoteOpenMode) }
                 .getOrDefault(SubNoteOpenMode.SIDE_PANEL)
 
             Column(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
                 SubNoteOpenMode.entries.forEachIndexed { index, option ->
+                    val isSelectedMode = option == selectedMode
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .padding(horizontal = 8.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(
+                                if (isSelectedMode) SelectedOptionBackground else Color.Transparent
+                            )
                             .clickable {
                                 viewModel.setSubNoteOpenMode(option.name)
                                 showSubNoteOpenModeSheet = false
                             }
-                            .padding(horizontal = 20.dp, vertical = 14.dp),
+                            .padding(horizontal = 12.dp, vertical = 14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
                             text = option.displayName,
                             style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            color = if (isSelectedMode)
+                                MaterialTheme.colorScheme.primary
+                            else
+                                MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.weight(1f)
                         )
-
-                        if (option == selectedMode) {
-                            Icon(
-                                imageVector = Icons.Default.Check,
-                                contentDescription = "Selected",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
                     }
 
                     if (index != SubNoteOpenMode.entries.lastIndex) {
@@ -806,8 +809,11 @@ fun SettingsSelectionRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .padding(horizontal = 8.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (isSelected) SelectedOptionBackground else Color.Transparent)
             .clickable { onClick() }
-            .padding(horizontal = 14.dp, vertical = 12.dp)
+            .padding(horizontal = 6.dp, vertical = 12.dp)
             .padding(start = 50.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -817,15 +823,6 @@ fun SettingsSelectionRow(
             color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f)
         )
-
-        if (isSelected) {
-            Icon(
-                imageVector = Icons.Default.Check,
-                contentDescription = "Selected",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(18.dp)
-            )
-        }
     }
 }
 

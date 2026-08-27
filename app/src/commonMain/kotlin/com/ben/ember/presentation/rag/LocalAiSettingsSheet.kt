@@ -10,12 +10,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -27,7 +26,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
@@ -82,78 +80,72 @@ internal fun LocalAiSettingsSheet(
         expanded = expanded,
         onDismiss = onDismiss,
         title = "Local AI",
-        subtitle = "Manage the on-device models used to generate replies.",
+        subtitle = "Manage the on-device models.",
     ) { _ ->
-        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 36.dp)) {
+            val currentDownloadProgress = downloadProgress
+            val isDownloading = currentDownloadProgress is ModelDownloadProgress.Downloading
+
             ModelOptionCard(
                 icon = null,
-                title = if (isResumable && downloadProgress !is ModelDownloadProgress.Downloading)
-                    "Resume qwen2.5-1.5b-instruct-q8_0 download"
-                else
-                    "Download qwen2.5-1.5b-instruct-q8_0",
-                subtitle = when (val progress = downloadProgress) {
-                    is ModelDownloadProgress.Downloading -> "Downloading… ${(progress.fraction * 100).toInt()}%"
-                    is ModelDownloadProgress.Failed -> if (isResumable) "${progress.message} Tap to resume." else progress.message
-                    ModelDownloadProgress.Paused -> "Paused — tap to resume the download."
-                    else -> when {
-                        isDefaultModelInstalled -> "Recommended — already downloaded."
-                        isResumable -> "Paused — tap to resume the download."
-                        else -> "Recommended — balanced quality and speed."
-                    }
+                title = "qwen2.5-1.5b-instruct-q8_0",
+                subtitle = when (currentDownloadProgress) {
+                    is ModelDownloadProgress.Downloading -> "Downloading… ${(currentDownloadProgress.fraction * 100).toInt()}%"
+                    is ModelDownloadProgress.Failed -> currentDownloadProgress.message
+                    ModelDownloadProgress.Paused -> "Paused."
+                    else -> if (isDefaultModelInstalled)
+                        "Recommended - already downloaded."
+                    else
+                        "Recommended - balanced quality and speed."
                 },
-                onClick = {
-                    if (downloadProgress !is ModelDownloadProgress.Downloading && !isDefaultModelInstalled) {
-                        viewModel.downloadGeneratorModel()
-                    }
-                }
+                onClick = {}
             )
 
-            val currentDownloadProgress = downloadProgress
-            if (currentDownloadProgress is ModelDownloadProgress.Downloading) {
-                Spacer(Modifier.height(8.dp))
-                LinearProgressIndicator(
-                    progress = { currentDownloadProgress.fraction },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(4.dp)
-                        .clip(RoundedCornerShape(2.dp)),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                )
-                TextButton(
-                    onClick = { viewModel.pauseGeneratorModelDownload() },
+            if (isDownloading || !isDefaultModelInstalled) {
+                Spacer(Modifier.height(10.dp))
+                EmberButtonPrimary(
+                    text = when {
+                        isDownloading -> "Pause Download"
+                        isResumable -> "Resume Download"
+                        else -> "Download"
+                    },
+                    onClick = {
+                        if (isDownloading) {
+                            viewModel.pauseGeneratorModelDownload()
+                        } else {
+                            viewModel.downloadGeneratorModel()
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Pause Download", style = MaterialTheme.typography.bodyLarge)
-                }
+                )
             }
 
             Spacer(Modifier.height(10.dp))
 
-            ModelOptionCard(
-                icon = null,
-                title = "Upload your own model",
-                subtitle = when (val upload = uploadState) {
-                    LocalModelUploadState.Uploading -> "Copying model file… ${(uploadProgress * 100).toInt()}%"
-                    LocalModelUploadState.Success -> "Uploaded successfully."
-                    is LocalModelUploadState.Failed -> upload.message
-                    LocalModelUploadState.Idle -> "Add another custom GGUF model from your device."
-                },
-                onClick = {
-                    if (uploadState !is LocalModelUploadState.Uploading) showUploadWarning = true
-                }
+            val currentUploadState = uploadState
+            val isUploading = currentUploadState is LocalModelUploadState.Uploading
+
+            EmberButtonPrimary(
+                text = if (isUploading)
+                    "Copying model file… ${(uploadProgress * 100).toInt()}%"
+                else
+                    "Upload your own model",
+                enabled = !isUploading,
+                onClick = { showUploadWarning = true },
+                modifier = Modifier.fillMaxWidth()
             )
 
-            if (uploadState is LocalModelUploadState.Uploading) {
-                Spacer(Modifier.height(8.dp))
-                LinearProgressIndicator(
-                    progress = { uploadProgress },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(4.dp)
-                        .clip(RoundedCornerShape(2.dp)),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+            val uploadStatusMessage = when (currentUploadState) {
+                LocalModelUploadState.Success -> "Uploaded successfully."
+                is LocalModelUploadState.Failed -> currentUploadState.message
+                else -> null
+            }
+            if (uploadStatusMessage != null) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = uploadStatusMessage,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
             }
 
@@ -180,9 +172,9 @@ internal fun LocalAiSettingsSheet(
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                text = "Applies to whichever local model is currently selected — the default (4096) suits the bundled Qwen model. Using a different model? Set this to its actual training context length.",
+                text = "Applies to the selected model. 4096 suits Qwen - for other models, use their training context length.",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
             )
 
             if (installedLocalModels.isNotEmpty()) {
@@ -198,19 +190,26 @@ internal fun LocalAiSettingsSheet(
                     val isPendingDeletion = model.fileName in pendingDeletionFileNames
                     ModelOptionCard(
                         title = model.displayName,
-                        subtitle = when {
-                            isPendingDeletion -> "Deleted — will be removed permanently on next app restart."
-                            model.fileName == selectedLocalModelFileName -> "Currently used to generate replies."
-                            else -> "Tap to use this model."
-                        },
+                        titleMaxLines = 1,
+                        subtitle = if (isPendingDeletion)
+                            "Deleted — will be removed permanently on next app restart."
+                        else
+                            null,
                         onClick = {
                             if (!isPendingDeletion) viewModel.selectLocalModel(model.fileName)
                         },
                         trailing = {
                             if (isPendingDeletion) {
-                                TextButton(onClick = { viewModel.restoreLocalModel(model.fileName) }) {
-                                    Text("Restore", style = MaterialTheme.typography.bodyLarge)
-                                }
+                                Spacer(Modifier.width(6.dp))
+                                Icon(
+                                    Icons.Default.Restore,
+                                    contentDescription = "Restore model",
+                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                    modifier = Modifier
+                                        .size(20.dp)
+                                        .clickable { viewModel.restoreLocalModel(model.fileName) }
+                                )
+                                Spacer(Modifier.width(5.dp))
                             } else {
                                 Spacer(Modifier.width(6.dp))
                                 Icon(

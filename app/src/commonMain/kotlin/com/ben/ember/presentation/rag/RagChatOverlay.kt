@@ -2,9 +2,11 @@ package com.ben.ember.presentation.rag
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -22,12 +24,9 @@ import com.ben.ember.presentation.shared.rememberStableStatusBarsPadding
 import com.ben.ember.presentation.shared.stableStatusBarsPadding
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
@@ -75,6 +74,7 @@ import com.ben.ember.presentation.shared.components.EmberButtonPrimary
 import com.ben.ember.presentation.shared.components.EmberButtonSecondary
 import com.ben.ember.presentation.shared.components.EmberTextField
 import com.ben.ember.presentation.shared.components.MarkdownText
+import com.ben.ember.presentation.shared.components.SelectedOptionBackground
 import com.ben.ember.presentation.shared.components.TopBarIconButton
 import com.ben.ember.presentation.shared.components.emberBlur
 import dev.chrisbanes.haze.HazeState
@@ -107,7 +107,7 @@ fun RagChatScreen(
             sharedTransitionScope = sharedTransitionScope,
             chatAnimatedVisibilityScope = animatedContentScope,
             onPickDocument = onPickDocument,
-            contentModifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize()
         )
     }
 }
@@ -132,7 +132,7 @@ fun RagChatPanel(
             onDismiss = onDismiss,
             isVisible = true,
             onPickDocument = onPickDocument,
-            contentModifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize()
         )
     }
 }
@@ -140,10 +140,10 @@ fun RagChatPanel(
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun RagChatContent(
+    modifier: Modifier,
     viewModel: RagViewModel,
     onDismiss: () -> Unit,
     isVisible: Boolean,
-    contentModifier: Modifier,
     onPickDocument: (onPathSelected: (String) -> Unit) -> Unit = {},
     sharedTransitionScope: SharedTransitionScope? = null,
     chatAnimatedVisibilityScope: AnimatedVisibilityScope? = null
@@ -162,14 +162,14 @@ private fun RagChatContent(
     val chatListNestedScrollConnection = remember {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                if (source == NestedScrollSource.Drag && available.y != 0f) {
+                if (source == NestedScrollSource.UserInput && available.y != 0f) {
                     userScrolledAwayFromBottom = true
                 }
                 return Offset.Zero
             }
 
             override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                if (source == NestedScrollSource.Drag && !listState.canScrollForward) {
+                if (source == NestedScrollSource.UserInput && !listState.canScrollForward) {
                     userScrolledAwayFromBottom = false
                 }
                 return Offset.Zero
@@ -216,7 +216,7 @@ private fun RagChatContent(
 
     val sidePadding = if (isDesktopPlatform) 32.dp else 16.dp
 
-    Box(modifier = contentModifier) {
+    Box(modifier = modifier) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -471,29 +471,19 @@ private fun ModelUnavailablePrompt(
             color = MaterialTheme.colorScheme.onBackground,
             textAlign = TextAlign.Center
         )
-        Spacer(Modifier.height(6.dp))
-        Text(
-            text = when {
-                isDownloading -> "The on-device model is downloading. You can chat as soon as it finishes."
-                isExternalModeSelected -> "Ember is set to use a cloud provider, but no working API key is saved. Add one, or switch to the on-device model."
-                else -> "Ember has no AI available right now. Run one privately on this device, or connect a cloud provider with your own API key."
-            },
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.Center
-        )
         Spacer(Modifier.height(32.dp))
 
         ModelOptionCard(
 //            icon = { Icon(Icons.Default.Download, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp)) },
             title = "Run AI on this device",
-            subtitle = when (val progress = downloadProgress) {
-                is ModelDownloadProgress.Downloading -> "Downloading… ${(progress.fraction * 100).toInt()}% — tap to manage"
+            subtitle = when (downloadProgress) {
+                is ModelDownloadProgress.Downloading -> "Downloading… ${(downloadProgress.fraction * 100).toInt()}% — tap to manage"
                 is ModelDownloadProgress.Failed -> "Download stopped. Tap to try again."
                 ModelDownloadProgress.Paused -> "Paused. Tap to resume the download."
                 else -> "Private and offline. Download or add your own model."
             },
-            onClick = onDownloadClick
+            onClick = onDownloadClick,
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp)
         )
         Spacer(Modifier.height(10.dp))
 
@@ -501,10 +491,27 @@ private fun ModelUnavailablePrompt(
 //            icon = { Icon(Icons.Default.Key, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp)) },
             title = "Connect a cloud provider",
             subtitle = "Use your own API key with OpenAI, Claude, Gemini and more.",
-            onClick = onApiKeyClick
+            onClick = onApiKeyClick,
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp)
         )
     }
 }
+
+private val SheetContentHorizontalPadding = 20.dp
+
+private val OptionRowOuterPadding = 8.dp
+
+private val OptionRowPadding = PaddingValues(
+    horizontal = SheetContentHorizontalPadding - OptionRowOuterPadding,
+    vertical = 14.dp
+)
+
+@Composable
+private fun Modifier.clickableWithoutMobileRipple(onClick: () -> Unit): Modifier = clickable(
+    interactionSource = remember { MutableInteractionSource() },
+    indication = if (isDesktopPlatform) LocalIndication.current else null,
+    onClick = onClick
+)
 
 @Composable
 internal fun ModelOptionCard(
@@ -512,20 +519,25 @@ internal fun ModelOptionCard(
     title: String,
     subtitle: String?,
     onClick: () -> Unit,
-    trailing: (@Composable () -> Unit)? = null
+    trailing: (@Composable () -> Unit)? = null,
+    contentPadding: PaddingValues = PaddingValues(vertical = 12.dp),
+    titleMaxLines: Int = Int.MAX_VALUE,
+    containerColor: Color = Color.Transparent,
+    titleColor: Color = MaterialTheme.colorScheme.onSurface,
+    modifier: Modifier = Modifier
 ) {
     Surface(
         shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surface,
+        color = containerColor,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
+            .clickableWithoutMobileRipple(onClick)
     ) {
         Row(
-            modifier = Modifier.padding(vertical = 12.dp, horizontal = 12.dp),
+            modifier = Modifier.padding(contentPadding),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
@@ -536,7 +548,9 @@ internal fun ModelOptionCard(
                 Text(
                     text = title,
                     style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = titleColor,
+                    maxLines = titleMaxLines,
+                    overflow = TextOverflow.Ellipsis
                 )
                 if (subtitle != null) {
                     Text(
@@ -558,15 +572,21 @@ private fun RagDesktopMenuItem(
     icon: (@Composable () -> Unit)? = null,
     text: String,
     isDestructive: Boolean = false,
+    isSelected: Boolean = false,
     trailing: (@Composable () -> Unit)? = null,
     onClick: () -> Unit
 ) {
-    val textColor = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+    val textColor = when {
+        isDestructive -> MaterialTheme.colorScheme.error
+        isSelected -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.onSurface
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp, vertical = 2.dp)
             .clip(RoundedCornerShape(12.dp))
+            .background(if (isSelected) SelectedOptionBackground else Color.Transparent)
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -771,7 +791,6 @@ private fun ChatInputBar(
         label = "sendColor"
     )
 
-    val defaultBgColor = MaterialTheme.colorScheme.background.copy(alpha = 0.65f)
     val barShape = RoundedCornerShape(28.dp)
 
     val minHeight = 96.dp
@@ -1003,11 +1022,8 @@ private fun ModelPickerPill(viewModel: RagViewModel) {
                     installedLocalModels.forEach { model ->
                         RagDesktopMenuItem(
                             text = model.displayName,
-                            trailing = {
-                                if (aiGenerationMode == AiGenerationMode.LOCAL && selectedLocalModelFileName == model.fileName) {
-                                    ActiveIndicator()
-                                }
-                            },
+                            isSelected = aiGenerationMode == AiGenerationMode.LOCAL &&
+                                    selectedLocalModelFileName == model.fileName,
                             onClick = { showPicker = false; viewModel.selectLocalModel(model.fileName) }
                         )
                     }
@@ -1018,11 +1034,8 @@ private fun ModelPickerPill(viewModel: RagViewModel) {
                             if (isConfigured) {
                                 RagDesktopMenuItem(
                                     text = config?.model?.takeIf { it.isNotBlank() } ?: provider.displayName,
-                                    trailing = {
-                                        if (aiGenerationMode == AiGenerationMode.EXTERNAL && selectedExternalAiProvider == provider) {
-                                            ActiveIndicator()
-                                        }
-                                    },
+                                    isSelected = aiGenerationMode == AiGenerationMode.EXTERNAL &&
+                                            selectedExternalAiProvider == provider,
                                     onClick = { showPicker = false; viewModel.selectExternalProvider(provider) }
                                 )
                             }
@@ -1038,19 +1051,28 @@ private fun ModelPickerPill(viewModel: RagViewModel) {
             expanded = showPicker,
             onDismiss = { showPicker = false },
             title = "Choose AI Model",
+            contentHorizontalPadding = 0.dp,
         ) { closeAnd ->
             Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
                 installedLocalModels.forEach { model ->
+                    val isSelectedModel = aiGenerationMode == AiGenerationMode.LOCAL &&
+                            selectedLocalModelFileName == model.fileName
                     ModelOptionCard(
                         icon = null,
                         title = model.displayName,
+                        titleMaxLines = 1,
                         subtitle = null,
+                        contentPadding = OptionRowPadding,
+                        containerColor = if (isSelectedModel)
+                            SelectedOptionBackground
+                        else
+                            Color.Transparent,
+                        titleColor = if (isSelectedModel)
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.onSurface,
                         onClick = { closeAnd { viewModel.selectLocalModel(model.fileName) } },
-                        trailing = {
-                            if (aiGenerationMode == AiGenerationMode.LOCAL && selectedLocalModelFileName == model.fileName) {
-                                ActiveIndicator()
-                            }
-                        }
+                        modifier = Modifier.padding(horizontal = OptionRowOuterPadding)
                     )
                     Spacer(Modifier.height(10.dp))
                 }
@@ -1060,16 +1082,24 @@ private fun ModelPickerPill(viewModel: RagViewModel) {
                         val config = externalConfigs[provider]
                         val isConfigured = !config?.apiKey.isNullOrBlank()
                         if (isConfigured) {
+                            val isSelectedProvider = aiGenerationMode == AiGenerationMode.EXTERNAL &&
+                                    selectedExternalAiProvider == provider
                             ModelOptionCard(
                                 icon = null,
                                 title = config?.model?.takeIf { it.isNotBlank() } ?: provider.displayName,
+                                titleMaxLines = 1,
                                 subtitle = null,
+                                contentPadding = OptionRowPadding,
+                                containerColor = if (isSelectedProvider)
+                                    SelectedOptionBackground
+                                else
+                                    Color.Transparent,
+                                titleColor = if (isSelectedProvider)
+                                    MaterialTheme.colorScheme.primary
+                                else
+                                    MaterialTheme.colorScheme.onSurface,
                                 onClick = { closeAnd { viewModel.selectExternalProvider(provider) } },
-                                trailing = {
-                                    if (aiGenerationMode == AiGenerationMode.EXTERNAL && selectedExternalAiProvider == provider) {
-                                        ActiveIndicator()
-                                    }
-                                }
+                                modifier = Modifier.padding(horizontal = OptionRowOuterPadding)
                             )
                             Spacer(Modifier.height(10.dp))
                         }
@@ -1208,17 +1238,17 @@ private fun AiSettingsMenuContent(
                 )
                 RagDesktopMenuItem(
                     text = "Default",
-                    trailing = { if (knowledgeMode == KnowledgeMode.DEFAULT) ActiveIndicator() },
+                    isSelected = knowledgeMode == KnowledgeMode.DEFAULT,
                     onClick = { onDismiss(); viewModel.selectKnowledgeMode(KnowledgeMode.DEFAULT) }
                 )
                 RagDesktopMenuItem(
                     text = "Only notes knowledge",
-                    trailing = { if (knowledgeMode == KnowledgeMode.NOTES_ONLY) ActiveIndicator() },
+                    isSelected = knowledgeMode == KnowledgeMode.NOTES_ONLY,
                     onClick = { onDismiss(); viewModel.selectKnowledgeMode(KnowledgeMode.NOTES_ONLY) }
                 )
                 RagDesktopMenuItem(
                     text = "Only real-world knowledge",
-                    trailing = { if (knowledgeMode == KnowledgeMode.WORLD_ONLY) ActiveIndicator() },
+                    isSelected = knowledgeMode == KnowledgeMode.WORLD_ONLY,
                     onClick = { onDismiss(); viewModel.selectKnowledgeMode(KnowledgeMode.WORLD_ONLY) }
                 )
                 HorizontalDivider(
@@ -1234,23 +1264,13 @@ private fun AiSettingsMenuContent(
                 responseLengthOptions.forEach { option ->
                     RagDesktopMenuItem(
                         text = option.label,
-                        trailing = { if (selectedMaxOutputTokens == option.tokens) ActiveIndicator() },
+                        isSelected = selectedMaxOutputTokens == option.tokens,
                         onClick = { onDismiss(); viewModel.selectMaxOutputTokens(option.tokens) }
                     )
                 }
             }
         }
     }
-}
-
-@Composable
-internal fun ActiveIndicator() {
-    Icon(
-        Icons.Default.Check,
-        contentDescription = "Active",
-        tint = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.size(18.dp)
-    )
 }
 
 // External AI settings sheet
@@ -1290,7 +1310,7 @@ private fun ExternalAiSettingsSheet(
             apiKeyInput = ""
         }
 
-        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 36.dp)) {
             Text(
                 text = "Provider",
                 style = MaterialTheme.typography.labelSmall,
@@ -1406,33 +1426,46 @@ private fun ExternalAiSettingsSheet(
             }
 
             if (showDeleteConfirm) {
-                AlertDialog(
+                EmberAlertDialog(
                     onDismissRequest = { showDeleteConfirm = false },
-                    title = { Text("Delete this API key?", style = MaterialTheme.typography.titleLarge) },
-                    text = {
-                        Text(
-                            "The saved key and settings for this provider will be removed from this device.",
-                            style = MaterialTheme.typography.labelSmall
+                    title = "Delete this API key?"
+                ) {
+                    Text(
+                        text = "The saved key and settings for this provider will be removed from this device.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                    Spacer(Modifier.height(20.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        EmberButtonSecondary(
+                            text = "Cancel",
+                            onClick = { showDeleteConfirm = false },
+                            modifier = Modifier.weight(1f)
                         )
-                    },
-                    confirmButton = {
-                        TextButton(onClick = {
-                            viewModel.deleteExternalAiConfig(selectedProvider)
-                            loadedConfig = null
-                            apiKeyInput = ""
-                            modelInput = ""
-                            baseUrlInput = ""
-                            showDeleteConfirm = false
-                        }) {
-                            Text("Delete", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.error)
-                        }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { showDeleteConfirm = false }) {
-                            Text("Cancel", style = MaterialTheme.typography.bodyLarge)
+                        Button(
+                            onClick = {
+                                viewModel.deleteExternalAiConfig(selectedProvider)
+                                loadedConfig = null
+                                apiKeyInput = ""
+                                modelInput = ""
+                                baseUrlInput = ""
+                                showDeleteConfirm = false
+                            },
+                            modifier = Modifier.weight(1f).height(46.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error,
+                                contentColor = MaterialTheme.colorScheme.onError
+                            ),
+                            elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
+                        ) {
+                            Text("Delete", style = MaterialTheme.typography.bodyLarge)
                         }
                     }
-                )
+                }
             }
         }
     }
@@ -1451,7 +1484,7 @@ private fun ProviderChip(
         shadowElevation = 0.dp,
         modifier = Modifier
             .clip(RoundedCornerShape(10.dp))
-            .clickable(onClick = onClick)
+            .clickableWithoutMobileRipple(onClick)
     ) {
         Text(
             text = label,
@@ -1477,6 +1510,7 @@ private fun FineTuningSheet(
         expanded = expanded,
         onDismiss = onDismiss,
         title = "Fine-tuning",
+        contentHorizontalPadding = 0.dp,
     ) { closeAnd ->
 
         Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
@@ -1484,6 +1518,7 @@ private fun FineTuningSheet(
                 text = "Knowledge Source",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                modifier = Modifier.padding(horizontal = SheetContentHorizontalPadding)
             )
             Spacer(Modifier.height(8.dp))
             KnowledgeModeOption(
@@ -1510,6 +1545,7 @@ private fun FineTuningSheet(
                 text = "Response Length",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                modifier = Modifier.padding(horizontal = SheetContentHorizontalPadding)
             )
             Spacer(Modifier.height(8.dp))
             responseLengthOptions.forEach { option ->
@@ -1542,16 +1578,17 @@ private fun KnowledgeModeOption(
 ) {
     Surface(
         shape = RoundedCornerShape(12.dp),
-        color = Color.Transparent,
+        color = if (selected) SelectedOptionBackground else Color.Transparent,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
         modifier = Modifier
             .fillMaxWidth()
+            .padding(horizontal = OptionRowOuterPadding)
             .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
+            .clickableWithoutMobileRipple(onClick)
     ) {
         Row(
-            modifier = Modifier.padding(vertical = 12.dp),
+            modifier = Modifier.padding(OptionRowPadding),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
@@ -1559,7 +1596,10 @@ private fun KnowledgeModeOption(
                 Text(
                     text = title,
                     style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = if (selected)
+                        MaterialTheme.colorScheme.primary
+                    else
+                        MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                     text = subtitle,
@@ -1567,7 +1607,6 @@ private fun KnowledgeModeOption(
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                 )
             }
-            if (selected) ActiveIndicator()
         }
     }
 }
@@ -1584,6 +1623,7 @@ private fun ChatHistorySheet(
         expanded = expanded,
         onDismiss = onDismiss,
         title = "Chat History",
+        contentHorizontalPadding = 0.dp,
     ) { closeAnd ->
         ChatHistoryMenuContent(viewModel = viewModel, closeAnd = closeAnd)
     }
@@ -1597,7 +1637,7 @@ private fun ChatHistoryMenuContent(
     val sessions by viewModel.sessions.collectAsState()
     val currentSessionId by viewModel.currentSessionId.collectAsState()
     var searchQuery by remember { mutableStateOf("") }
-    val rowHorizontalPadding = if (isDesktopPlatform) 12.dp else 0.dp
+    val rowHorizontalPadding = if (isDesktopPlatform) 12.dp else SheetContentHorizontalPadding
 
     Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
         Spacer(Modifier.height(10.dp))
@@ -1632,10 +1672,13 @@ private fun ChatHistoryMenuContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
-                    .clickable { closeAnd { viewModel.clearChat() } }
+                    .clickableWithoutMobileRipple { closeAnd { viewModel.clearChat() } }
             ) {
                 Row(
-                    modifier = Modifier.padding(vertical = 8.dp),
+                    modifier = Modifier.padding(
+                        horizontal = SheetContentHorizontalPadding,
+                        vertical = 8.dp
+                    ),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
@@ -1656,7 +1699,7 @@ private fun ChatHistoryMenuContent(
         HorizontalDivider(
             modifier = Modifier.padding(
                 vertical = 10.dp,
-                horizontal = if (isDesktopPlatform) 16.dp else 0.dp
+                horizontal = if (isDesktopPlatform) 16.dp else SheetContentHorizontalPadding
             ),
             color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
         )
@@ -1671,7 +1714,6 @@ private fun ChatHistoryMenuContent(
             text = "Recent Chats",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-            modifier = Modifier.padding(horizontal = rowHorizontalPadding + 6.dp)
         )
         Spacer(Modifier.height(8.dp))
 
@@ -1742,18 +1784,26 @@ private fun ChatSessionRow(
 
     Surface(
         shape = RoundedCornerShape(12.dp),
-        color = Color.Transparent,
+        color = if (isActive) SelectedOptionBackground else Color.Transparent,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
         modifier = Modifier
             .fillMaxWidth()
-            .then(if (isDesktopPlatform) Modifier.padding(horizontal = 8.dp, vertical = 2.dp) else Modifier)
+            .then(
+                if (isDesktopPlatform)
+                    Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                else
+                    Modifier.padding(horizontal = OptionRowOuterPadding)
+            )
             .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
+            .clickableWithoutMobileRipple(onClick)
     ) {
         Row(
             modifier = Modifier.padding(
-                horizontal = if (isDesktopPlatform) 12.dp else 0.dp,
+                horizontal = if (isDesktopPlatform)
+                    12.dp
+                else
+                    SheetContentHorizontalPadding - OptionRowOuterPadding,
                 vertical = if (isDesktopPlatform) 10.dp else 12.dp
             ),
             verticalAlignment = Alignment.CenterVertically,
@@ -1763,7 +1813,10 @@ private fun ChatSessionRow(
                 Text(
                     text = session.title,
                     style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = if (isActive)
+                        MaterialTheme.colorScheme.primary
+                    else
+                        MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -1775,7 +1828,6 @@ private fun ChatSessionRow(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            if (isActive) ActiveIndicator()
             Box {
                 Icon(
                     Icons.Default.MoreVert,
@@ -1783,7 +1835,7 @@ private fun ChatSessionRow(
                     tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     modifier = Modifier
                         .size(20.dp)
-                        .clickable { showMenu = true }
+                        .clickableWithoutMobileRipple { showMenu = true }
                 )
 
                 if (isDesktopPlatform) {

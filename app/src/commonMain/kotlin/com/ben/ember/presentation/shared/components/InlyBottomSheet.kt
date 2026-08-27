@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -46,6 +47,7 @@ fun EmberBottomSheet(
     subtitle: String? = null,
     applyNavPadding: Boolean = false,
     headerAction: EmberBottomSheetAction? = null,
+    contentHorizontalPadding: Dp = SheetHorizontalPadding,
     content: @Composable ColumnScope.(closeAnd: (() -> Unit) -> Unit) -> Unit
 ) {
     if (!expanded) return
@@ -56,6 +58,7 @@ fun EmberBottomSheet(
             title = title,
             subtitle = subtitle,
             headerAction = headerAction,
+            contentHorizontalPadding = contentHorizontalPadding,
             content = content
         )
     } else {
@@ -65,6 +68,7 @@ fun EmberBottomSheet(
             subtitle = subtitle,
             applyNavPadding = applyNavPadding,
             headerAction = headerAction,
+            contentHorizontalPadding = contentHorizontalPadding,
             content = content
         )
     }
@@ -76,6 +80,7 @@ private fun EmberFloatingDialog(
     title: String?,
     subtitle: String?,
     headerAction: EmberBottomSheetAction? = null,
+    contentHorizontalPadding: Dp,
     content: @Composable ColumnScope.(closeAnd: (() -> Unit) -> Unit) -> Unit
 ) {
     fun closeAnd(action: () -> Unit) {
@@ -158,7 +163,7 @@ private fun EmberFloatingDialog(
                         .fillMaxWidth()
                         .heightIn(max = 560.dp)
                         .verticalScroll(rememberScrollState())
-                        .padding(horizontal = SheetHorizontalPadding)
+                        .padding(horizontal = contentHorizontalPadding)
                         .padding(bottom = 20.dp)
                 ) {
                     content { action -> closeAnd(action) }
@@ -176,6 +181,7 @@ private fun EmberModalBottomSheet(
     subtitle: String?,
     applyNavPadding: Boolean,
     headerAction: EmberBottomSheetAction? = null,
+    contentHorizontalPadding: Dp,
     content: @Composable ColumnScope.(closeAnd: (() -> Unit) -> Unit) -> Unit
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -294,7 +300,7 @@ private fun EmberModalBottomSheet(
                         .fillMaxWidth()
                         .weight(1f, fill = false)
                         .verticalScroll(rememberScrollState())
-                        .padding(horizontal = SheetHorizontalPadding)
+                        .padding(horizontal = contentHorizontalPadding)
                 ) {
                     content { action -> closeAnd(action) }
                 }

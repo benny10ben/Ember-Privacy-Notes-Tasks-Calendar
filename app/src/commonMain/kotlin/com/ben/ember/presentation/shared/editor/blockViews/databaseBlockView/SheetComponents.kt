@@ -14,8 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalRippleConfiguration
@@ -34,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.ben.ember.domain.util.isDesktopPlatform
+import com.ben.ember.presentation.shared.components.SelectedOptionBackground
 
 internal object NoRippleIndicationNodeFactory : IndicationNodeFactory {
     override fun create(interactionSource: InteractionSource): DelegatableNode = object : Modifier.Node() {}
@@ -94,17 +93,13 @@ fun SheetMenuRow(
             .fillMaxWidth()
             .padding(vertical = 2.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(Color.Transparent)
+            .background(if (selected) SelectedOptionBackground else Color.Transparent)
             .clickable { onClick() }
-            .padding(vertical = 10.dp).padding(horizontal = if (isDesktopPlatform) 12.dp else 0.dp)
-            .padding(end = if (selected) 12.dp else 0.dp),
+            .padding(vertical = 10.dp).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(icon, null, tint = color, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(12.dp))
         Text(text, style = MaterialTheme.typography.bodyLarge, color = color, modifier = Modifier.weight(1f))
-        if (selected) {
-            Icon(Icons.Default.Check, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-        }
     }
 }
