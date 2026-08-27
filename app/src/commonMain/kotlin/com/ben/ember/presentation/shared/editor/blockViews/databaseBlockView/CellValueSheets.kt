@@ -5,6 +5,7 @@ package com.ben.ember.presentation.shared.editor.blockViews.databaseBlockView
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import com.ben.ember.presentation.shared.components.SelectedOptionBackground
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -391,24 +392,25 @@ internal fun CalculateSheet(context: DatabaseSheetContext) {
             .verticalScroll(rememberScrollState())
             .animateContentSize()
     ) {
+        val isNoneSelected = currentAggregation == "None"
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(if (isNoneSelected) SelectedOptionBackground else Color.Transparent)
                 .clickable { commit(null) }
-                .padding(vertical = 12.dp)
-                .padding(end = 12.dp),
+                .padding(vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text("None", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
-            if (currentAggregation == "None") {
-                Icon(
-                    painterResource(Res.drawable.check),
-                    null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
+            Text(
+                "None",
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (isNoneSelected)
+                    MaterialTheme.colorScheme.primary
+                else
+                    MaterialTheme.colorScheme.onSurface
+            )
         }
 
         val groups = buildList {
@@ -445,21 +447,21 @@ internal fun CalculateSheet(context: DatabaseSheetContext) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (isSelected) SelectedOptionBackground else Color.Transparent)
                             .clickable { commit(option) }
-                            .padding(start = 20.dp, top = 8.dp, bottom = 8.dp)
-                            .padding(end = if (isSelected) 12.dp else 0.dp),
+                            .padding(start = 20.dp, end = 12.dp, top = 8.dp, bottom = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text(option, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
-                        if (isSelected) {
-                            Icon(
-                                painterResource(Res.drawable.check),
-                                null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
+                        Text(
+                            option,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = if (isSelected)
+                                MaterialTheme.colorScheme.primary
+                            else
+                                MaterialTheme.colorScheme.onSurface
+                        )
                     }
                 }
             }

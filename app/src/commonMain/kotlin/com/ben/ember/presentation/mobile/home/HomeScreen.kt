@@ -54,6 +54,7 @@ import com.ben.ember.presentation.mobile.daily.TaskDaySection
 import com.ben.ember.presentation.shared.UserSettings
 import com.ben.ember.presentation.shared.components.EmberBlur
 import com.ben.ember.presentation.shared.components.EmberBottomSheet
+import com.ben.ember.presentation.shared.components.SelectedOptionBackground
 import com.ben.ember.presentation.shared.components.EmberBottomSheetAction
 import com.ben.ember.presentation.shared.components.EmberDesktopMenu
 import com.ben.ember.presentation.shared.components.KmpBackHandler
@@ -1018,7 +1019,7 @@ private fun DesktopSortOptionItem(text: String, isSelected: Boolean, onClick: ()
             .fillMaxWidth()
             .padding(horizontal = 8.dp, vertical = 2.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(Color.Transparent)
+            .background(if (isSelected) SelectedOptionBackground else Color.Transparent)
             .clickable { onClick() }
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1029,12 +1030,6 @@ private fun DesktopSortOptionItem(text: String, isSelected: Boolean, onClick: ()
             style = MaterialTheme.typography.bodyLarge,
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
             color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-        )
-        if (isSelected) Icon(
-            Icons.Default.Check,
-            "Selected",
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(16.dp)
         )
     }
 }
@@ -1502,7 +1497,12 @@ fun TemplatesDesktopMenu(
 
 @Composable
 fun SortBottomSheet(expanded: Boolean, currentSortType: SortType, currentSortOrder: SortOrder, onDismiss: () -> Unit, onSortChanged: (SortType, SortOrder) -> Unit) {
-    EmberBottomSheet(expanded = expanded, onDismiss = onDismiss, title = "Sort by") { closeAnd ->
+    EmberBottomSheet(
+        expanded = expanded,
+        onDismiss = onDismiss,
+        title = "Sort by",
+        contentHorizontalPadding = 0.dp
+    ) { closeAnd ->
         Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
             SortOptionItem(
                 "Last Edited",
@@ -1524,7 +1524,7 @@ fun SortBottomSheet(expanded: Boolean, currentSortType: SortType, currentSortOrd
                 closeAnd { onSortChanged(SortType.MANUAL, currentSortOrder) }
             }
             HorizontalDivider(
-                modifier = Modifier.padding(vertical = 6.dp),
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
                 color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
             )
             SortOptionItem(
@@ -1545,12 +1545,11 @@ private fun SortOptionItem(text: String, isSelected: Boolean, onClick: () -> Uni
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 2.dp)
+            .padding(horizontal = 8.dp, vertical = 2.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(Color.Transparent)
+            .background(if (isSelected) SelectedOptionBackground else Color.Transparent)
             .noRippleClickable { onClick() }
-            .padding(vertical = 10.dp)
-            .padding(end = if (isSelected) 12.dp else 0.dp),
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
@@ -1559,12 +1558,6 @@ private fun SortOptionItem(text: String, isSelected: Boolean, onClick: () -> Uni
             style = MaterialTheme.typography.bodyLarge,
             fontWeight = FontWeight.Normal,
             color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-        )
-        if (isSelected) Icon(
-            Icons.Default.Check,
-            "Selected",
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(18.dp)
         )
     }
 }
