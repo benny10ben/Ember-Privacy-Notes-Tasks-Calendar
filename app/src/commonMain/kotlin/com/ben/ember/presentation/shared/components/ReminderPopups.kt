@@ -402,7 +402,7 @@ private fun CustomCalendarHeader(
 @Composable
 private fun CalendarWeekdayRow() {
     val weekdays = listOf("S", "M", "T", "W", "T", "F", "S")
-    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+    Row(modifier = Modifier.fillMaxWidth()) {
         weekdays.forEach { label ->
             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                 Text(
@@ -433,7 +433,7 @@ private fun CustomCalendarGrid(
         }.chunked(7)
     }
 
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         cells.forEach { week ->
             Row(modifier = Modifier.fillMaxWidth()) {
                 week.forEach { day ->
@@ -452,11 +452,11 @@ private fun CustomCalendarGrid(
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .clip(CircleShape)
+                                    .clip(RoundedCornerShape(10.dp))
                                     .then(
                                         when {
                                             isSelected -> Modifier.background(MaterialTheme.colorScheme.primary)
-                                            isToday -> Modifier.border(1.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                                            isToday -> Modifier.border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(10.dp))
                                             else -> Modifier
                                         }
                                     )
