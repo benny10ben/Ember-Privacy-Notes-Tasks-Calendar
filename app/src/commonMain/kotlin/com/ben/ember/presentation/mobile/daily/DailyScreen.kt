@@ -560,6 +560,13 @@ fun DailyScreen(
         }
     }
 
+    var weekStripBottomOffset by remember { mutableStateOf(bottomContentPadding) }
+    LaunchedEffect(bottomContentPadding) {
+        if (bottomContentPadding > 0.dp) weekStripBottomOffset = bottomContentPadding
+    }
+    val weekStripHideDistancePx = with(density) { (weekStripBottomOffset + 8.dp).roundToPx() }
+    val isBottomBarOnScreen = bottomContentPadding > 0.dp
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets(0)
@@ -576,13 +583,19 @@ fun DailyScreen(
                 }
 
                 AnimatedVisibility(
-                    visible = !isSelectionMode && !isKeyboardOpen,
-                    enter = fadeIn(tween(200)),
-                    exit = fadeOut(tween(200)),
+                    visible = !isSelectionMode && !isKeyboardOpen && isBottomBarOnScreen,
+                    enter = slideInVertically(
+                        initialOffsetY = { it + weekStripHideDistancePx },
+                        animationSpec = tween(durationMillis = 250, delayMillis = 100, easing = FastOutSlowInEasing)
+                    ) + fadeIn(tween(durationMillis = 250, delayMillis = 100)),
+                    exit = slideOutVertically(
+                        targetOffsetY = { it + weekStripHideDistancePx },
+                        animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing)
+                    ) + fadeOut(tween(200)),
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .zIndex(1f)
-                        .padding(bottom = bottomContentPadding + 8.dp)
+                        .padding(bottom = weekStripBottomOffset + 8.dp)
                 ) {
                     DailyBottomWeekStrip(
                         selectedDate = selectedDate,

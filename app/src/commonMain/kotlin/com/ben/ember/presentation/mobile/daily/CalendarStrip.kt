@@ -130,22 +130,28 @@ fun CollapsedWeekStrip(
     }
 }
 
+private const val DAYS_AROUND_ANCHOR = 20
+
 @Composable
 fun DailyBottomWeekStrip(
+    modifier: Modifier = Modifier,
     selectedDate: LocalDate,
     onDateSelected: (LocalDate) -> Unit,
     hazeState: HazeState,
-    isCompact: Boolean = false,
-    modifier: Modifier = Modifier
+    isCompact: Boolean = false
 ) {
     var anchorDate by remember { mutableStateOf(selectedDate) }
     LaunchedEffect(selectedDate) {
         if (abs(anchorDate.daysUntil(selectedDate)) > 10) anchorDate = selectedDate
     }
 
-    val dates = remember(anchorDate) { (-20..20).map { anchorDate.plus(it, DateTimeUnit.DAY) } }
+    val dates = remember(anchorDate) {
+        (-DAYS_AROUND_ANCHOR..DAYS_AROUND_ANCHOR).map { anchorDate.plus(it, DateTimeUnit.DAY) }
+    }
     val today = remember { Clock.System.todayIn(TimeZone.currentSystemDefault()) }
-    val listState = rememberLazyListState()
+    val listState = rememberLazyListState(
+        initialFirstVisibleItemIndex = DAYS_AROUND_ANCHOR - 1
+    )
 
     val sizeSpec = tween<Dp>(durationMillis = 350, easing = FastOutSlowInEasing)
     val pillWidth = 74.dp
@@ -167,10 +173,17 @@ fun DailyBottomWeekStrip(
     }
 
     val selectedIndex = remember(dates, selectedDate) { dates.indexOf(selectedDate) }
+    var hasCompletedFirstScroll by remember { mutableStateOf(false) }
     LaunchedEffect(selectedIndex, isExpanded, anchorDate) {
         if (!isExpanded && selectedIndex != -1) {
+            val targetIndex = (selectedIndex - 1).coerceAtLeast(0)
             isProgrammaticScroll = true
-            listState.animateScrollToItem((selectedIndex - 1).coerceAtLeast(0))
+            if (hasCompletedFirstScroll) {
+                listState.animateScrollToItem(targetIndex)
+            } else {
+                listState.scrollToItem(targetIndex)
+                hasCompletedFirstScroll = true
+            }
             isProgrammaticScroll = false
         }
     }

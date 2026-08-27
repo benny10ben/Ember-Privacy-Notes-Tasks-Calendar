@@ -18,6 +18,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
@@ -123,7 +124,10 @@ fun EmberApp(
             currentRoute == Screen.Home.route ||
             currentRoute == Screen.Note.route
     val isBottomBarVisible = isTopLevelScreen && !isSelectionActive
-    var bottomBarHeightDp by remember { mutableStateOf(0.dp) }
+    val navigationBarBottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val expectedBottomBarHeight = 58.dp + navigationBarBottomInset
+    var measuredBottomBarHeight by remember { mutableStateOf<Dp?>(null) }
+    val bottomBarHeightDp = measuredBottomBarHeight ?: expectedBottomBarHeight
     var suppressBottomBarEnterAnimation by remember { mutableStateOf(true) }
     LaunchedEffect(isBottomBarVisible) {
         if (isBottomBarVisible) suppressBottomBarEnterAnimation = false
@@ -847,7 +851,7 @@ fun EmberApp(
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
                                 .onGloballyPositioned { coords ->
-                                    bottomBarHeightDp = with(density) { coords.size.height.toDp() }
+                                    measuredBottomBarHeight = with(density) { coords.size.height.toDp() }
                                 }
                         ) {
                             EmberBottomBar(
