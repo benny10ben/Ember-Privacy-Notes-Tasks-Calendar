@@ -422,7 +422,7 @@ fun DesktopMainScreen(
                         Icon(painterResource(Res.drawable.sidebar), "Collapse sidebar", tint = MaterialTheme.colorScheme.onSurface)
                     }
                     Spacer(Modifier.weight(1f))
-                    Box(modifier = Modifier.padding(end = 10.dp)) {
+                    Box(modifier = Modifier.padding(end = 8.dp)) {
                         TopBarIconButton(
                             icon = painterResource(Res.drawable.history2),
                             contentDescription = "Open timeline",
