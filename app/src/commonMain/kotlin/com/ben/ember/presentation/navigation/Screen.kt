@@ -26,7 +26,6 @@ sealed class Screen(val route: String, val title: String? = null, val icon: Imag
     object Bookmarks : Screen("bookmarks")
     object Images : Screen("images")
     object Documents : Screen("documents")
-    object Search : Screen("search_screen")
     object Calendar : Screen("calendar_screen")
 
     object Settings : Screen("settings")

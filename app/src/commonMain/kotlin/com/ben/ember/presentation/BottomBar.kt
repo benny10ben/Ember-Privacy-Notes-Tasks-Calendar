@@ -208,13 +208,6 @@ fun EmberBottomBar(
                         icon = painterResource(Res.drawable.search),
                         isSelected = false,
                         modifier = Modifier.weight(1f).height(navItemHeight),
-                        iconModifier = with(sharedTransitionScope) {
-                            Modifier.sharedElement(
-                                sharedContentState = rememberSharedContentState(key = "searchIcon"),
-                                animatedVisibilityScope = bottomBarAnimatedVisibilityScope,
-                                boundsTransform = { _, _ -> tween(durationMillis = 300, easing = FastOutSlowInEasing) }
-                            )
-                        },
                         onClick = onSearchClick
                     )
                     if (!isDesktopPlatform) {

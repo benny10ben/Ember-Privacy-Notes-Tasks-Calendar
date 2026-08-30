@@ -6,7 +6,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
@@ -72,7 +71,7 @@ import com.ben.ember.presentation.mobile.home.overview.images.ImagesScreen
 import com.ben.ember.presentation.mobile.home.overview.tasks.TasksScreen
 import com.ben.ember.presentation.mobile.home.rememberDesktopListDragState
 import com.ben.ember.presentation.mobile.home.desktopListDragTracker
-import com.ben.ember.presentation.search.SearchScreen
+import com.ben.ember.presentation.search.SearchDialog
 import com.ben.ember.presentation.trash.TrashScreen
 import dev.chrisbanes.haze.HazeState
 import kotlinx.datetime.Clock
@@ -99,8 +98,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.onPointerEvent
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.ben.ember.presentation.shared.components.EmberBlur
 import dev.chrisbanes.haze.hazeSource
 import ember.app.generated.resources.Res
@@ -425,7 +422,7 @@ fun DesktopMainScreen(
                         Icon(painterResource(Res.drawable.sidebar), "Collapse sidebar", tint = MaterialTheme.colorScheme.onSurface)
                     }
                     Spacer(Modifier.weight(1f))
-                    Box(modifier = Modifier.padding(end = 4.dp)) {
+                    Box(modifier = Modifier.padding(end = 10.dp)) {
                         TopBarIconButton(
                             icon = painterResource(Res.drawable.history2),
                             contentDescription = "Open timeline",
@@ -1132,31 +1129,12 @@ fun DesktopMainScreen(
                 }
             }
 
-            // Search dialog: centered modal instead of a full right-panel screen
             if (showSearchDialog) {
-                Dialog(
-                    onDismissRequest = { showSearchDialog = false },
-                    properties = DialogProperties(usePlatformDefaultWidth = false)
-                ) {
-                    SharedTransitionLayout {
-                        AnimatedVisibility(visible = true) {
-                            Surface(
-                                modifier = Modifier.width(560.dp).heightIn(max = 640.dp),
-                                shape = DesktopPanelShape,
-                                color = MaterialTheme.colorScheme.surface,
-                                shadowElevation = 24.dp
-                            ) {
-                                SearchScreen(
-                                    onBack = { showSearchDialog = false },
-                                    onNoteClick = { noteId -> showSearchDialog = false; openNote(noteId) },
-                                    onDailyNoteClick = { dateString -> showSearchDialog = false; openDaily(LocalDate.parse(dateString)) },
-                                    sharedTransitionScope = this@SharedTransitionLayout,
-                                    searchIconAnimatedVisibilityScope = this@AnimatedVisibility
-                                )
-                            }
-                        }
-                    }
-                }
+                SearchDialog(
+                    onDismiss = { showSearchDialog = false },
+                    onNoteClick = { noteId -> showSearchDialog = false; openNote(noteId) },
+                    onDailyNoteClick = { dateString -> showSearchDialog = false; openDaily(LocalDate.parse(dateString)) }
+                )
             }
 
             SnackbarHost(hostState = snackbarHostState, modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 66.dp)) { data ->

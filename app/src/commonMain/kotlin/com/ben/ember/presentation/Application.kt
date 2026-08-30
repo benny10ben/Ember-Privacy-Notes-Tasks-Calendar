@@ -44,6 +44,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.ben.ember.presentation.mobile.home.HomeScreen
+import com.ben.ember.presentation.search.SearchDialog
 import com.ben.ember.presentation.share.ShareReceiverSheet
 import com.ben.ember.presentation.share.ShareViewModel
 import dev.chrisbanes.haze.hazeSource
@@ -99,6 +100,7 @@ fun EmberApp(
 
     var activeTab by remember { mutableStateOf(Screen.Daily.route) }
     var isBottomBarCompact by remember { mutableStateOf(false) }
+    var showSearchDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(currentRoute) {
         if (currentRoute == Screen.Daily.route || currentRoute == Screen.Home.route) {
@@ -539,51 +541,6 @@ fun EmberApp(
                         }
 
                         composable(
-                            route = Screen.Search.route,
-                            enterTransition = {
-                                slideIntoContainer(
-                                    AnimatedContentTransitionScope.SlideDirection.Left,
-                                    tween(300)
-                                )
-                            },
-                            exitTransition = {
-                                slideOutOfContainer(
-                                    AnimatedContentTransitionScope.SlideDirection.Left,
-                                    tween(300)
-                                )
-                            },
-                            popEnterTransition = {
-                                slideIntoContainer(
-                                    AnimatedContentTransitionScope.SlideDirection.Right,
-                                    tween(300)
-                                )
-                            },
-                            popExitTransition = {
-                                slideOutOfContainer(
-                                    AnimatedContentTransitionScope.SlideDirection.Right,
-                                    tween(300)
-                                )
-                            }
-                        ) {
-                            com.ben.ember.presentation.search.SearchScreen(
-                                onBack = { navController.popBackStack() },
-                                onNoteClick = { noteId ->
-                                    navController.navigate(Screen.Note.createRoute(noteId)) {
-                                        popUpTo(Screen.Search.route) { inclusive = true }
-                                    }
-                                },
-                                onDailyNoteClick = { dateString ->
-                                    navController.navigate(Screen.Daily.createRoute(dateString)) {
-                                        popUpTo(navController.graph.id) { inclusive = true }
-                                        launchSingleTop = true
-                                    }
-                                },
-                                sharedTransitionScope = sharedTransitionScope,
-                                searchIconAnimatedVisibilityScope = this,
-                            )
-                        }
-
-                        composable(
                             route = Screen.Images.route,
                             enterTransition = {
                                 slideIntoContainer(
@@ -863,7 +820,7 @@ fun EmberApp(
                                 activeTab = activeTab,
                                 onAiIconTap = openAiChat,
                                 isAiEnabled = !isAiDisabled,
-                                onSearchClick = { navController.navigate(Screen.Search.route) },
+                                onSearchClick = { showSearchDialog = true },
                                 onMicClick = {
                                     if (isVoiceTaskListening) {
                                         HomeViewModel.stopVoiceTaskListening()
@@ -878,6 +835,23 @@ fun EmberApp(
                                 isCompact = isBottomBarCompact
                             )
                         }
+                    }
+
+                    if (showSearchDialog) {
+                        SearchDialog(
+                            onDismiss = { showSearchDialog = false },
+                            onNoteClick = { noteId ->
+                                showSearchDialog = false
+                                navController.navigate(Screen.Note.createRoute(noteId))
+                            },
+                            onDailyNoteClick = { dateString ->
+                                showSearchDialog = false
+                                navController.navigate(Screen.Daily.createRoute(dateString)) {
+                                    popUpTo(navController.graph.id) { inclusive = true }
+                                    launchSingleTop = true
+                                }
+                            }
+                        )
                     }
 
                     ShareReceiverSheet(
