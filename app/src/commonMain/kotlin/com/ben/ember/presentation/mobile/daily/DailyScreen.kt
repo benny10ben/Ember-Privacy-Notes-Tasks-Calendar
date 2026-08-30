@@ -728,7 +728,7 @@ private fun DailyTopBar(
 
             // Right Side: Icons
             Row(
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically)
             {
                 TopBarIconButton(
