@@ -81,6 +81,7 @@ import com.ben.ember.presentation.shared.components.TopBarIconButton
 import com.ben.ember.presentation.shared.components.emberBlur
 import com.ben.ember.presentation.shared.components.fullScreenDialogProperties
 import com.ben.ember.presentation.shared.editor.blockViews.databaseBlockView.buildNoteLinkAnnotatedString
+import com.ben.ember.ui.theme.LocalAppIsDark
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import ember.app.generated.resources.Res
@@ -178,7 +179,10 @@ fun DailyTimelineDialog(
                 modifier = Modifier
                     .fillMaxSize()
                     .hazeSource(hazeState)
-                    .background(MaterialTheme.colorScheme.surface)
+                    .background(
+                        if (LocalAppIsDark.current) MaterialTheme.colorScheme.surface
+                        else MaterialTheme.colorScheme.background
+                    )
             ) {
                 TimelineList(
                     rows = rows,
@@ -293,7 +297,7 @@ private fun TimelineSearchBar(
                             Text(
                                 text = "Search the timeline",
                                 style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                         }
                         innerTextField()
@@ -305,7 +309,7 @@ private fun TimelineSearchBar(
                 Text(
                     text = "${currentMatchPosition + 1}/$matchCount",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.padding(end = 4.dp)
                 )
                 SearchBarActionIcon(
@@ -420,14 +424,14 @@ private fun TimelineList(
                         text = timelineDayLabel(row.date, today),
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = if (isSearchMatch) FontWeight.Bold else null,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
 
                 is TimelineRow.EmptyDay -> Text(
                     text = "Nothing on this day yet.",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                    color = MaterialTheme.colorScheme.onSurface,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
                 )
@@ -463,7 +467,7 @@ private fun TimelineList(
             Text(
                 text = "Nothing written yet.",
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                color = MaterialTheme.colorScheme.onSurface
             )
         }
     }
@@ -496,7 +500,7 @@ private fun TimelineBlockContent(block: NoteBlock, isSearchMatch: Boolean) {
             TimelineText(
                 block = block,
                 text = block.text,
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                color = MaterialTheme.colorScheme.primary,
                 baseStyle = FontStyle.Italic,
                 isSearchMatch = isSearchMatch
             )
@@ -620,7 +624,7 @@ private fun TimelinePrefixedText(
         Text(
             text = prefix,
             style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+            color = MaterialTheme.colorScheme.primary
         )
         Spacer(modifier = Modifier.width(10.dp))
         TimelineText(block = block, text = text, isSearchMatch = isSearchMatch)
