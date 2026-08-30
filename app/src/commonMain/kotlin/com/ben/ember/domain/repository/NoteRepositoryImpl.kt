@@ -182,6 +182,15 @@ class NoteRepositoryImpl(
         }
     }
 
+    override suspend fun getSavedDailyNoteDates(): List<String> =
+        withContext(Dispatchers.IO) {
+            noteDao.getAllDailyNoteMetadata()
+                .filter { it.trashedAt == null }
+                .mapNotNull { it.dateString }
+                .filter { it != "global_pinned" && it.isNotBlank() }
+                .distinct()
+        }
+
     override suspend fun dedupeDuplicateDailyNotes(): Int =
         withContext(Dispatchers.IO) {
             val duplicateGroups = noteDao.getAllDailyNoteMetadata()

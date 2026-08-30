@@ -63,6 +63,7 @@ import com.ben.ember.presentation.calendar.RecurrenceScopeChooser
 import com.ben.ember.presentation.shared.UserSettings
 import com.ben.ember.presentation.shared.components.EmberBlur
 import com.ben.ember.presentation.shared.components.EmberBottomSheet
+import com.ben.ember.presentation.shared.components.TopBarIconButton
 import com.ben.ember.presentation.shared.components.TopBarIconButtonGroup
 import com.ben.ember.presentation.shared.components.TopBarIconButtonItem
 import com.ben.ember.presentation.shared.components.rememberKeyboardHandoff
@@ -75,6 +76,7 @@ import dev.chrisbanes.haze.hazeSource
 import ember.app.generated.resources.Res
 import ember.app.generated.resources.calendar
 import ember.app.generated.resources.ellipsis
+import ember.app.generated.resources.history2
 import ember.app.generated.resources.inbox
 import kotlinx.datetime.toLocalDateTime
 import org.jetbrains.compose.resources.painterResource
@@ -138,6 +140,9 @@ fun DailyScreen(
 
     var showScheduledTasksSheet by remember { mutableStateOf(false) }
     var showCalendarSheet by remember { mutableStateOf(false) }
+    var showTimelineDialog by remember { mutableStateOf(false) }
+    val timelineDays by viewModel.timelineDays.collectAsState()
+    val isTimelineLoading by viewModel.isTimelineLoading.collectAsState()
 
     // User Settings & Sync State
     var showSettingsMenu by remember { mutableStateOf(false) }
@@ -608,6 +613,10 @@ fun DailyScreen(
                 DailyTopBar(
                     selectedDate = selectedDate,
                     onCalendarIconClick = { showCalendarSheet = true },
+                    onTimelineClick = {
+                        viewModel.loadTimeline()
+                        showTimelineDialog = true
+                    },
                     onNotificationsClick = { showScheduledTasksSheet = true },
                     onOpenCalendarScreenClick = onNavigateToCalendar,
                     hazeState = hazeState,
@@ -634,6 +643,24 @@ fun DailyScreen(
                 )
             }
 
+            if (showTimelineDialog) {
+                DailyTimelineDialog(
+                    days = timelineDays,
+                    isLoading = isTimelineLoading,
+                    anchorDate = selectedDate,
+                    today = initialDate,
+                    onDismiss = {
+                        showTimelineDialog = false
+                        viewModel.clearTimeline()
+                    },
+                    onBlockClick = { date, blockId ->
+                        showTimelineDialog = false
+                        viewModel.clearTimeline()
+                        viewModel.openTimelineBlock(date, blockId)
+                    }
+                )
+            }
+
             if (showCalendarSheet) {
                 DailyCalendarSheet(
                     selectedDate = selectedDate,
@@ -652,6 +679,7 @@ fun DailyScreen(
 private fun DailyTopBar(
     selectedDate: LocalDate,
     onCalendarIconClick: () -> Unit,
+    onTimelineClick: () -> Unit,
     onNotificationsClick: () -> Unit,
     onOpenCalendarScreenClick: () -> Unit,
     hazeState: HazeState,
@@ -667,7 +695,7 @@ private fun DailyTopBar(
             .fillMaxWidth()
             .pointerInput(Unit) { detectTapGestures {} }
             .stableStatusBarsPadding()
-            .padding(top = 8.dp, bottom = 10.dp)
+            .padding(top = 10.dp, bottom = 10.dp)
     ) {
         Row(
             modifier = Modifier
@@ -703,6 +731,16 @@ private fun DailyTopBar(
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically)
             {
+                TopBarIconButton(
+                    icon = painterResource(Res.drawable.history2),
+                    contentDescription = "Open timeline",
+                    bgColor = Color.Transparent,
+                    tint = MaterialTheme.colorScheme.primary,
+                    hazeState = hazeState,
+                    hazeStyle = EmberBlur.Regular,
+                    onClick = onTimelineClick
+                )
+
                 Box {
                     TopBarIconButtonGroup(
                         bgColor = Color.Transparent,

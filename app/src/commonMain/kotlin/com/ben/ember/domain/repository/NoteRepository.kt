@@ -57,6 +57,7 @@ interface NoteRepository {
     // Daily Tab operations
     suspend fun getDailyNoteMetadata(dateString: String): NoteMetadataEntity?
     suspend fun getDailyNote(dateString: String): NoteContent?
+    suspend fun getSavedDailyNoteDates(): List<String>
     suspend fun saveDailyNote(dateString: String, content: NoteContent, updatedAt: Long? = null, remoteMeta: NoteMetadataEntity? = null)
     fun refreshDailyNoteCache(dateString: String, content: NoteContent)
     suspend fun dedupeDuplicateDailyNotes(): Int

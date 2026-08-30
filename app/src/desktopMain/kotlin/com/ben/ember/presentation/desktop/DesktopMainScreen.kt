@@ -50,6 +50,7 @@ import com.ben.ember.presentation.calendar.CalendarScreen
 import com.ben.ember.presentation.mobile.daily.CollapsedWeekStrip
 import com.ben.ember.presentation.mobile.daily.DailyEditorPane
 import com.ben.ember.presentation.mobile.daily.DailyEditorViewModel
+import com.ben.ember.presentation.mobile.daily.DailyTimelineDialog
 import com.ben.ember.presentation.mobile.daily.TaskDaySection
 import com.ben.ember.presentation.mobile.home.DRAG_PREFIX_FOLDER
 import com.ben.ember.presentation.mobile.home.DRAG_PREFIX_NOTE
@@ -110,6 +111,7 @@ import ember.app.generated.resources.calendar
 import ember.app.generated.resources.sidebar
 import ember.app.generated.resources.check_square
 import ember.app.generated.resources.ellipsis
+import ember.app.generated.resources.history2
 import ember.app.generated.resources.pen_square
 import ember.app.generated.resources.folder_plus
 import ember.app.generated.resources.images
@@ -314,6 +316,9 @@ fun DesktopMainScreen(
 
     // Sheets
     var showScheduledTasksSheet by remember { mutableStateOf(false) }
+    var showTimelineDialog by remember { mutableStateOf(false) }
+    val timelineDays by dailyViewModel.timelineDays.collectAsState()
+    val isTimelineLoading by dailyViewModel.isTimelineLoading.collectAsState()
     var showSearchDialog by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         DesktopSearchShortcutBus.requests.collect { showSearchDialog = true }
@@ -420,6 +425,20 @@ fun DesktopMainScreen(
                         Icon(painterResource(Res.drawable.sidebar), "Collapse sidebar", tint = MaterialTheme.colorScheme.onSurface)
                     }
                     Spacer(Modifier.weight(1f))
+                    Box(modifier = Modifier.padding(end = 4.dp)) {
+                        TopBarIconButton(
+                            icon = painterResource(Res.drawable.history2),
+                            contentDescription = "Open timeline",
+                            bgColor = Color.Transparent,
+                            tint = MaterialTheme.colorScheme.primary,
+                            hazeState = hazeState,
+                            hazeStyle = EmberBlur.Regular,
+                            onClick = {
+                                dailyViewModel.loadTimeline()
+                                showTimelineDialog = true
+                            }
+                        )
+                    }
                     Box {
                         TopBarIconButtonGroup(
                             bgColor = Color.Transparent,
@@ -1079,6 +1098,25 @@ fun DesktopMainScreen(
             }
 
             // Sheets
+            if (showTimelineDialog) {
+                DailyTimelineDialog(
+                    days = timelineDays,
+                    isLoading = isTimelineLoading,
+                    anchorDate = selectedDate,
+                    today = today,
+                    onDismiss = {
+                        showTimelineDialog = false
+                        dailyViewModel.clearTimeline()
+                    },
+                    onBlockClick = { date, blockId ->
+                        showTimelineDialog = false
+                        dailyViewModel.clearTimeline()
+                        openDaily(date)
+                        dailyViewModel.openTimelineBlock(date, blockId)
+                    }
+                )
+            }
+
             if (showScheduledTasksSheet) {
                 val todayTasks = calendarTaskMap[today] ?: emptyList()
                 val tomorrowTasks = calendarTaskMap[today.plus(1, DateTimeUnit.DAY)] ?: emptyList()

@@ -15,11 +15,14 @@ import com.ben.ember.domain.util.SyncEventBus
 import com.ben.ember.domain.util.VoiceTaskEventBus
 import com.ben.ember.presentation.reminders.ReminderScheduler
 import com.ben.ember.presentation.shared.editor.BaseEditorViewModel
+import com.ben.ember.presentation.shared.editor.FocusRequest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -203,6 +206,85 @@ class DailyEditorViewModel(
 
     fun evictPreviewCache(keepDates: Set<String>) {
         _previewCache.update { current -> current.filterKeys { it in keepDates } }
+    }
+
+    // Timeline (read-only recap of every day that actually has content)
+    private val _timelineDays = MutableStateFlow<List<DailyTimelineDay>>(emptyList())
+    val timelineDays: StateFlow<List<DailyTimelineDay>> = _timelineDays.asStateFlow()
+
+    private val _isTimelineLoading = MutableStateFlow(false)
+    val isTimelineLoading: StateFlow<Boolean> = _isTimelineLoading.asStateFlow()
+
+    private var timelineLoadJob: Job? = null
+    private var timelineFocusJob: Job? = null
+
+    fun loadTimeline() {
+        timelineLoadJob?.cancel()
+        timelineLoadJob = viewModelScope.launch {
+            _isTimelineLoading.value = true
+            try {
+                val anchorDate = _selectedDate.value
+                val liveDateString = _loadedDateString.value
+                val liveBlocks = _blocks.value.toList()
+
+                val days = withContext(Dispatchers.IO) {
+                    val dates = repository.getSavedDailyNoteDates()
+                        .mapNotNull { runCatching { LocalDate.parse(it) }.getOrNull() }
+                        .toMutableSet()
+                    dates.add(anchorDate)
+
+                    dates.sorted().mapNotNull { date ->
+                        val dateString = date.toString()
+                        val sourceBlocks = if (dateString == liveDateString) {
+                            liveBlocks
+                        } else {
+                            repository.getDailyNote(dateString)?.blocks ?: emptyList()
+                        }
+                        val readableBlocks = sourceBlocks.filter {
+                            !it.isDeleted && !it.isPinned && !isBlockEmptyForTimeline(it)
+                        }
+                        when {
+                            readableBlocks.isNotEmpty() ->
+                                DailyTimelineDay(date, recalculateNumberedLists(readableBlocks))
+                            date == anchorDate -> DailyTimelineDay(date, emptyList())
+                            else -> null
+                        }
+                    }
+                }
+                _timelineDays.value = days
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                e.printStackTrace()
+                _timelineDays.value = emptyList()
+            } finally {
+                _isTimelineLoading.value = false
+            }
+        }
+    }
+
+    fun clearTimeline() {
+        timelineLoadJob?.cancel()
+        timelineLoadJob = null
+        _timelineDays.value = emptyList()
+        _isTimelineLoading.value = false
+    }
+
+    // Jumps the daily editor to the tapped timeline block: switching days reloads asynchronously,
+    // so the focus request has to wait until that day's blocks are actually in memory.
+    fun openTimelineBlock(date: LocalDate, blockId: String) {
+        val dateString = date.toString()
+        selectDate(date)
+        timelineFocusJob?.cancel()
+        timelineFocusJob = viewModelScope.launch {
+            val isDayReady = withTimeoutOrNull(5000L.milliseconds) {
+                _loadedDateString.first { it == dateString }
+                true
+            } ?: false
+            if (!isDayReady) return@launch
+            if (_blocks.value.none { it.id == blockId }) return@launch
+            _focusRequest.value = FocusRequest(id = blockId)
+        }
     }
 
     override fun scheduleAutosave() {
@@ -729,4 +811,31 @@ class DailyEditorViewModel(
             }
         }
     }
+}
+// One day of the read-only timeline: the date plus every block on it that renders something.
+data class DailyTimelineDay(
+    val date: LocalDate,
+    val blocks: List<NoteBlock>
+)
+
+// The daily editor always keeps a trailing empty text block for typing, and media blocks can exist
+// without a file while their picker is still open - none of those should show up in the timeline.
+private fun isBlockEmptyForTimeline(block: NoteBlock): Boolean = when (block) {
+    is TextBlock -> block.text.isBlank()
+    is HeadingBlock -> block.text.isBlank()
+    is QuoteBlock -> block.text.isBlank()
+    is CheckboxBlock -> block.text.isBlank()
+    is BulletedListBlock -> block.text.isBlank()
+    is NumberedListBlock -> block.text.isBlank()
+    is ToggleBlock -> block.text.isBlank()
+    is CodeBlock -> block.code.isBlank()
+    is BookmarkBlock -> block.url.isBlank()
+    is ImageBlock -> block.localFilePath.isNullOrBlank()
+    is DocumentBlock -> block.localFilePath.isNullOrBlank()
+    is VoiceBlock -> block.localFilePath.isNullOrBlank()
+    is SketchBlock -> block.strokes.isEmpty()
+    is TableBlock -> block.rows.all { row -> row.all { cell -> cell.isBlank() } }
+    is SolidDividerBlock -> true
+    is ThreeDotDividerBlock -> true
+    else -> false
 }
