@@ -19,10 +19,6 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.FormatSize
-import androidx.compose.material.icons.filled.FormatAlignLeft
-import androidx.compose.material.icons.filled.FormatAlignRight
-import androidx.compose.material.icons.filled.FormatAlignCenter
-import androidx.compose.material.icons.filled.FormatAlignJustify
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -119,6 +115,10 @@ import ember.app.generated.resources.share
 import ember.app.generated.resources.ghost_smile
 import ember.app.generated.resources.trash
 import ember.app.generated.resources.square_arrow_out_up_right
+import ember.app.generated.resources.textalign_center2
+import ember.app.generated.resources.textalign_justifycenter2
+import ember.app.generated.resources.textalign_left2
+import ember.app.generated.resources.textalign_right2
 import org.jetbrains.compose.resources.painterResource
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -1508,10 +1508,10 @@ private fun DesktopMenuItem(
 }
 
 private val ALIGNMENT_OPTIONS = listOf(
-    TextAlignment.LEFT to Icons.Default.FormatAlignLeft,
-    TextAlignment.RIGHT to Icons.Default.FormatAlignRight,
-    TextAlignment.CENTER to Icons.Default.FormatAlignCenter,
-    TextAlignment.JUSTIFY to Icons.Default.FormatAlignJustify
+    TextAlignment.LEFT to Res.drawable.textalign_left2,
+    TextAlignment.RIGHT to Res.drawable.textalign_right2,
+    TextAlignment.CENTER to Res.drawable.textalign_center2,
+    TextAlignment.JUSTIFY to Res.drawable.textalign_justifycenter2
 )
 
 @Composable
@@ -1535,10 +1535,10 @@ private fun AlignmentIconRow(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = icon,
+                    painter = painterResource(icon),
                     contentDescription = alignment.name,
                     tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(18.dp)
                 )
             }
         }
@@ -1619,7 +1619,7 @@ fun NoteOptionsBottomSheet(
 
             if (!isEditingTemplate) {
                 HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 4.dp, horizontal = 20.dp),
+                    modifier = Modifier.padding(vertical = 4.dp),
                     color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
                 )
                 BottomSheetOptionItem(
@@ -1629,7 +1629,7 @@ fun NoteOptionsBottomSheet(
             }
 
             HorizontalDivider(
-                modifier = Modifier.padding(vertical = 4.dp, horizontal = 20.dp),
+                modifier = Modifier.padding(vertical = 4.dp),
                 color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
             )
 

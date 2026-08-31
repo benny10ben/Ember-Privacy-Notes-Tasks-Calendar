@@ -79,8 +79,44 @@ import com.ben.ember.presentation.shared.components.EmberBlur
 import com.ben.ember.presentation.shared.components.emberBlur
 import com.ben.ember.presentation.shared.components.EmberVerticalScrollbar
 import com.ben.ember.presentation.shared.components.smoothWheelScroll
+import ember.app.generated.resources.Res
+import ember.app.generated.resources.arrow_right2
+import ember.app.generated.resources.at
+import ember.app.generated.resources.bold
+import ember.app.generated.resources.bookmark
+import ember.app.generated.resources.check_square
+import ember.app.generated.resources.code
+import ember.app.generated.resources.doc_text
+import ember.app.generated.resources.ellipsis
+import ember.app.generated.resources.file_text
+import ember.app.generated.resources.format_bold
+import ember.app.generated.resources.image
+import ember.app.generated.resources.indent_left
+import ember.app.generated.resources.indent_right
+import ember.app.generated.resources.italic
+import ember.app.generated.resources.keyboard
+import ember.app.generated.resources.link
+import ember.app.generated.resources.microphone
+import ember.app.generated.resources.minus
+import ember.app.generated.resources.mouse_square2
+import ember.app.generated.resources.ordered_list
+import ember.app.generated.resources.plus
+import ember.app.generated.resources.quote_down2
+import ember.app.generated.resources.redo_circle
+import ember.app.generated.resources.square_kanban
+import ember.app.generated.resources.table
+import ember.app.generated.resources.text_x
+import ember.app.generated.resources.textalign_center2
+import ember.app.generated.resources.textalign_justifycenter2
+import ember.app.generated.resources.textalign_left2
+import ember.app.generated.resources.textalign_right2
+import ember.app.generated.resources.underline
+import ember.app.generated.resources.undo_circle
+import ember.app.generated.resources.unordered_list
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableSet
+import org.jetbrains.compose.resources.DrawableResource
+import org.jetbrains.compose.resources.painterResource
 import kotlin.math.abs
 
 private val DefaultCornerShape = RoundedCornerShape(12.dp)
@@ -115,11 +151,26 @@ private class ClearanceAwareBringIntoViewSpec(
     }
 }
 
+val SlashMenuIconSlot = 18.dp
+val SlashMenuIconSize = 16.dp
+
+sealed interface SlashMenuIcon {
+    data class Drawable(val resource: DrawableResource, val size: Dp = SlashMenuIconSize) : SlashMenuIcon
+    data class Vector(val image: ImageVector, val size: Dp = SlashMenuIconSlot) : SlashMenuIcon
+    data class Label(val text: String) : SlashMenuIcon
+}
+
 data class SlashMenuItemData(
     val label: String,
-    val icon: ImageVector,
+    val icon: SlashMenuIcon,
     val action: () -> Unit
 )
+
+fun SlashMenuItemData(label: String, icon: DrawableResource, size: Dp = SlashMenuIconSize, action: () -> Unit) =
+    SlashMenuItemData(label, SlashMenuIcon.Drawable(icon, size), action)
+
+fun SlashMenuItemData(label: String, icon: ImageVector, size: Dp = SlashMenuIconSlot, action: () -> Unit) =
+    SlashMenuItemData(label, SlashMenuIcon.Vector(icon, size), action)
 
 data class SlashMenuSectionData(
     val title: String,
@@ -776,6 +827,7 @@ fun EditorToolbar(
     val keyboardController = LocalSoftwareKeyboardController.current
     val tint = MaterialTheme.colorScheme.primary
     val iconSize = 19.dp
+    val customIconSize = 18.dp
 
     KmpBackHandler(enabled = mobileMenuState != MobileMenuState.MAIN) {
         onMenuStateChange(MobileMenuState.MAIN)
@@ -803,7 +855,7 @@ fun EditorToolbar(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 8.dp, vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Row(
                                 modifier = Modifier
@@ -814,10 +866,10 @@ fun EditorToolbar(
                             ) {
                                 if (showHistory) {
                                     ToolbarButton(enabled = canUndo, onClick = onUndo) {
-                                        Icon(Icons.AutoMirrored.Filled.Undo, "Undo", tint = if (canUndo) tint else tint.copy(alpha = 0.3f), modifier = Modifier.size(iconSize))
+                                        Icon(painterResource(Res.drawable.undo_circle), "Undo", tint = if (canUndo) tint else tint.copy(alpha = 0.3f), modifier = Modifier.size(customIconSize))
                                     }
                                     ToolbarButton(enabled = canRedo, onClick = onRedo) {
-                                        Icon(Icons.AutoMirrored.Filled.Redo, "Redo", tint = if (canRedo) tint else tint.copy(alpha = 0.3f), modifier = Modifier.size(iconSize))
+                                        Icon(painterResource(Res.drawable.redo_circle), "Redo", tint = if (canRedo) tint else tint.copy(alpha = 0.3f), modifier = Modifier.size(customIconSize))
                                     }
                                     ToolbarDivider(tint)
                                 }
@@ -827,14 +879,14 @@ fun EditorToolbar(
                                         EditorEventBus.insertMentionEvent.tryEmit(it)
                                     }
                                 }) {
-                                    Icon(Icons.Default.AlternateEmail, "Link to note", tint = tint, modifier = Modifier.size(iconSize))
+                                    Icon(painterResource(Res.drawable.at), "Link to note", tint = tint, modifier = Modifier.size(customIconSize))
                                 }
 
                                 ToolbarButton(onClick = {
                                     keyboardController?.hide()
                                     onSelectCurrentBlock()
                                 }) {
-                                    Icon(Icons.Default.AdsClick, "Select Block", tint = tint, modifier = Modifier.size(iconSize))
+                                    Icon(painterResource(Res.drawable.mouse_square2), "Select Block", tint = tint, modifier = Modifier.size(customIconSize - 2.dp))
                                 }
 
                                 ToolbarDivider(tint)
@@ -845,64 +897,64 @@ fun EditorToolbar(
                                 ToolbarLabel("H1", tint) { onChangeBlockType("h1") }
                                 ToolbarLabel("H2", tint) { onChangeBlockType("h2") }
                                 ToolbarButton(onClick = { onChangeBlockType("checkbox") }) {
-                                    Icon(Icons.Default.CheckBox, "Checkbox", tint = tint, modifier = Modifier.size(iconSize))
+                                    Icon(painterResource(Res.drawable.check_square), "Checkbox", tint = tint, modifier = Modifier.size(customIconSize - 2.dp))
                                 }
                                 ToolbarButton(onClick = { onChangeBlockType("bullet") }) {
-                                    Icon(Icons.Default.FormatListBulleted, "Bulleted list", tint = tint, modifier = Modifier.size(iconSize))
+                                    Icon(painterResource(Res.drawable.unordered_list), "Bulleted list", tint = tint, modifier = Modifier.size(customIconSize - 2.dp))
                                 }
                                 ToolbarButton(onClick = { onChangeBlockType("number") }) {
-                                    Icon(Icons.Default.FormatListNumbered, "Numbered list", tint = tint, modifier = Modifier.size(iconSize))
+                                    Icon(painterResource(Res.drawable.ordered_list), "Numbered list", tint = tint, modifier = Modifier.size(customIconSize - 3.dp))
                                 }
                                 ToolbarButton(onClick = { onChangeBlockType("toggle") }) {
-                                    Icon(Icons.Default.ChevronRight, "Toggle list", tint = tint, modifier = Modifier.size(iconSize))
+                                    Icon(painterResource(Res.drawable.arrow_right2), "Toggle list", tint = tint, modifier = Modifier.size(customIconSize))
                                 }
                                 ToolbarButton(onClick = { onChangeBlockType("quote") }) {
-                                    Icon(Icons.Default.FormatQuote, "Quote", tint = tint, modifier = Modifier.size(iconSize))
+                                    Icon(painterResource(Res.drawable.quote_down2), "Quote", tint = tint, modifier = Modifier.size(customIconSize - 3.dp))
                                 }
                                 ToolbarButton(onClick = { onChangeBlockType("code") }) {
-                                    Icon(Icons.Default.Code, "Code", tint = tint, modifier = Modifier.size(iconSize))
+                                    Icon(painterResource(Res.drawable.code), "Code", tint = tint, modifier = Modifier.size(customIconSize))
                                 }
 
                                 ToolbarDivider(tint)
 
                                 ToolbarButton(onClick = { onToggleFormat("bold") }) {
-                                    Icon(Icons.Default.FormatBold, "Bold", tint = tint, modifier = Modifier.size(iconSize))
+                                    Icon(painterResource(Res.drawable.format_bold), "Bold", tint = tint, modifier = Modifier.size(customIconSize - 4.dp))
                                 }
                                 ToolbarButton(onClick = { onToggleFormat("italic") }) {
-                                    Icon(Icons.Default.FormatItalic, "Italic", tint = tint, modifier = Modifier.size(iconSize))
+                                    Icon(painterResource(Res.drawable.italic), "Italic", tint = tint, modifier = Modifier.size(customIconSize - 4.dp))
                                 }
                                 ToolbarButton(onClick = { onToggleFormat("strike") }) {
-                                    Icon(Icons.Default.StrikethroughS, "Strikethrough", tint = tint, modifier = Modifier.size(iconSize))
+                                    Icon(painterResource(Res.drawable.text_x), "Strikethrough", tint = tint, modifier = Modifier.size(customIconSize - 2.dp))
                                 }
                                 ToolbarButton(onClick = { onToggleFormat("underline") }) {
-                                    Icon(Icons.Default.FormatUnderlined, "Underline", tint = tint, modifier = Modifier.size(iconSize))
+                                    Icon(painterResource(Res.drawable.underline), "Underline", tint = tint, modifier = Modifier.size(customIconSize - 2.dp))
                                 }
 
                                 ToolbarDivider(tint)
 
                                 ToolbarButton(onClick = { onSetAlignment(TextAlignment.LEFT) }) {
-                                    Icon(Icons.Default.FormatAlignLeft, "Align left", tint = tint, modifier = Modifier.size(iconSize))
+                                    Icon(painterResource(Res.drawable.textalign_left2), "Align left", tint = tint, modifier = Modifier.size(customIconSize))
                                 }
                                 ToolbarButton(onClick = { onSetAlignment(TextAlignment.RIGHT) }) {
-                                    Icon(Icons.Default.FormatAlignRight, "Align right", tint = tint, modifier = Modifier.size(iconSize))
+                                    Icon(painterResource(Res.drawable.textalign_right2), "Align right", tint = tint, modifier = Modifier.size(customIconSize))
                                 }
                                 ToolbarButton(onClick = { onSetAlignment(TextAlignment.CENTER) }) {
-                                    Icon(Icons.Default.FormatAlignCenter, "Align center", tint = tint, modifier = Modifier.size(iconSize))
+                                    Icon(painterResource(Res.drawable.textalign_center2), "Align center", tint = tint, modifier = Modifier.size(customIconSize))
                                 }
                                 ToolbarButton(onClick = { onSetAlignment(TextAlignment.JUSTIFY) }) {
-                                    Icon(Icons.Default.FormatAlignJustify, "Justify", tint = tint, modifier = Modifier.size(iconSize))
+                                    Icon(painterResource(Res.drawable.textalign_justifycenter2), "Justify", tint = tint, modifier = Modifier.size(customIconSize))
                                 }
 
                                 ToolbarDivider(tint)
 
                                 ToolbarButton(onClick = { EditorEventBus.insertSlashEvent.tryEmit(Unit) }) {
-                                    Icon(Icons.Default.Add, "More blocks", tint = tint, modifier = Modifier.size(iconSize + 1.dp))
+                                    Icon(painterResource(Res.drawable.plus), "More blocks", tint = tint, modifier = Modifier.size(customIconSize - 1.dp))
                                 }
                             }
 
                             ToolbarDivider(tint)
                             ToolbarButton(onClick = { keyboardController?.hide() }) {
-                                Icon(Icons.Default.KeyboardHide, "Close Keyboard", tint = tint, modifier = Modifier.size(iconSize))
+                                Icon(painterResource(Res.drawable.keyboard), "Close Keyboard", tint = tint, modifier = Modifier.size(customIconSize))
                             }
                         }
                     }
@@ -977,6 +1029,8 @@ fun EditorToolbar(
     }
 }
 
+private val ToolbarButtonSize = 34.dp
+
 @Composable
 private fun ToolbarButton(
     enabled: Boolean = true,
@@ -985,9 +1039,9 @@ private fun ToolbarButton(
 ) {
     Box(
         modifier = Modifier
+            .size(ToolbarButtonSize)
             .clip(CircleShape)
-            .clickable(enabled = enabled) { onClick() }
-            .padding(8.dp),
+            .clickable(enabled = enabled) { onClick() },
         contentAlignment = Alignment.Center
     ) {
         content()
@@ -998,9 +1052,11 @@ private fun ToolbarButton(
 private fun ToolbarLabel(label: String, tint: Color, onClick: () -> Unit) {
     Box(
         modifier = Modifier
+            .height(ToolbarButtonSize)
+            .defaultMinSize(minWidth = ToolbarButtonSize)
             .clip(CircleShape)
             .clickable { onClick() }
-            .padding(horizontal = 8.dp, vertical = 8.dp),
+            .padding(horizontal = 8.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(label, style = MaterialTheme.typography.labelSmall, color = tint)
@@ -1062,43 +1118,43 @@ fun DesktopSlashMenuContent(
         listOf(
             SlashMenuSectionData("Basic Blocks", listOf(
                 SlashMenuItemData("Text", Icons.AutoMirrored.Filled.Subject) { onChangeBlockType("text") },
-                SlashMenuItemData("Heading 1", Icons.Default.Title) { onChangeBlockType("h1") },
-                SlashMenuItemData("Heading 2", Icons.Default.Title) { onChangeBlockType("h2") },
-                SlashMenuItemData("To-do List", Icons.Default.CheckBox) { onChangeBlockType("checkbox") },
-                SlashMenuItemData("Bulleted List", Icons.Default.FormatListBulleted) { onChangeBlockType("bullet") },
-                SlashMenuItemData("Numbered List", Icons.Default.FormatListNumbered) { onChangeBlockType("number") },
-                SlashMenuItemData("Toggle List", Icons.Default.ChevronRight) { onChangeBlockType("toggle") },
-                SlashMenuItemData("Quote", Icons.Default.FormatQuote) { onChangeBlockType("quote") },
-                SlashMenuItemData("Code Block", Icons.Default.Code) { onChangeBlockType("code") }
+                SlashMenuItemData("Heading 1", SlashMenuIcon.Label("H1")) { onChangeBlockType("h1") },
+                SlashMenuItemData("Heading 2", SlashMenuIcon.Label("H2")) { onChangeBlockType("h2") },
+                SlashMenuItemData("To-do List", Res.drawable.check_square) { onChangeBlockType("checkbox") },
+                SlashMenuItemData("Bulleted List", Res.drawable.unordered_list, 15.dp) { onChangeBlockType("bullet") },
+                SlashMenuItemData("Numbered List", Res.drawable.ordered_list, 14.dp) { onChangeBlockType("number") },
+                SlashMenuItemData("Toggle List", Res.drawable.arrow_right2) { onChangeBlockType("toggle") },
+                SlashMenuItemData("Quote", Res.drawable.quote_down2, 14.dp) { onChangeBlockType("quote") },
+                SlashMenuItemData("Code Block", Res.drawable.code) { onChangeBlockType("code") }
             )),
             SlashMenuSectionData("Media & Links", listOf(
-                SlashMenuItemData("Voice Note", Icons.Default.Mic) { onChangeBlockType("voice") },
-                SlashMenuItemData("Image", Icons.Default.Image) { onInsertMediaBlock("image") },
-                SlashMenuItemData("Document / File", Icons.Default.InsertDriveFile) { onInsertMediaBlock("document") },
-                SlashMenuItemData("Web Bookmark", Icons.Default.BookmarkBorder) { onInsertMediaBlock("bookmark") },
-                SlashMenuItemData("Database / Table", Icons.Default.TableChart) { onInsertMediaBlock("database") },
-                SlashMenuItemData("Simple Table", Icons.Default.GridOn) { onInsertMediaBlock("table") },
-                SlashMenuItemData("Link to Note", Icons.Default.Description) { onInsertMediaBlock("linked_note") }
+                SlashMenuItemData("Voice Note", Res.drawable.microphone) { onChangeBlockType("voice") },
+                SlashMenuItemData("Image", Res.drawable.image) { onInsertMediaBlock("image") },
+                SlashMenuItemData("Document / File", Res.drawable.file_text) { onInsertMediaBlock("document") },
+                SlashMenuItemData("Web Bookmark", Res.drawable.bookmark) { onInsertMediaBlock("bookmark") },
+                SlashMenuItemData("Database / Table", Res.drawable.square_kanban) { onInsertMediaBlock("database") },
+                SlashMenuItemData("Simple Table", Res.drawable.table) { onInsertMediaBlock("table") },
+                SlashMenuItemData("Link to Note", Res.drawable.link) { onInsertMediaBlock("linked_note") }
             )),
             SlashMenuSectionData("Inline Text Formatting", listOf(
-                SlashMenuItemData("Bold Text", Icons.Default.FormatBold) { onToggleFormat("bold") },
-                SlashMenuItemData("Italic Text", Icons.Default.FormatItalic) { onToggleFormat("italic") },
-                SlashMenuItemData("Underline Text", Icons.Default.FormatUnderlined) { onToggleFormat("underline") },
-                SlashMenuItemData("Strikethrough Text", Icons.Default.StrikethroughS) { onToggleFormat("strike") }
+                SlashMenuItemData("Bold Text", Res.drawable.format_bold, 13.dp) { onToggleFormat("bold") },
+                SlashMenuItemData("Italic Text", Res.drawable.italic, 13.dp) { onToggleFormat("italic") },
+                SlashMenuItemData("Underline Text", Res.drawable.underline, 15.dp) { onToggleFormat("underline") },
+                SlashMenuItemData("Strikethrough Text", Res.drawable.text_x, 15.dp) { onToggleFormat("strike") }
             )),
             SlashMenuSectionData("Alignment", listOf(
-                SlashMenuItemData("Align Left", Icons.Default.FormatAlignLeft) { onSetAlignment(TextAlignment.LEFT) },
-                SlashMenuItemData("Align Right", Icons.Default.FormatAlignRight) { onSetAlignment(TextAlignment.RIGHT) },
-                SlashMenuItemData("Align Center", Icons.Default.FormatAlignCenter) { onSetAlignment(TextAlignment.CENTER) },
-                SlashMenuItemData("Justify", Icons.Default.FormatAlignJustify) { onSetAlignment(TextAlignment.JUSTIFY) }
+                SlashMenuItemData("Align Left", Res.drawable.textalign_left2) { onSetAlignment(TextAlignment.LEFT) },
+                SlashMenuItemData("Align Right", Res.drawable.textalign_right2) { onSetAlignment(TextAlignment.RIGHT) },
+                SlashMenuItemData("Align Center", Res.drawable.textalign_center2) { onSetAlignment(TextAlignment.CENTER) },
+                SlashMenuItemData("Justify", Res.drawable.textalign_justifycenter2) { onSetAlignment(TextAlignment.JUSTIFY) }
             )),
             SlashMenuSectionData("Indentation", listOf(
-                SlashMenuItemData("Decrease Indent", Icons.AutoMirrored.Filled.FormatIndentDecrease) { onAdjustIndentation(false) },
-                SlashMenuItemData("Increase Indent", Icons.AutoMirrored.Filled.FormatIndentIncrease) { onAdjustIndentation(true) }
+                SlashMenuItemData("Decrease Indent", Res.drawable.indent_right) { onAdjustIndentation(false) },
+                SlashMenuItemData("Increase Indent", Res.drawable.indent_left) { onAdjustIndentation(true) }
             )),
             SlashMenuSectionData("Dividers", listOf(
-                SlashMenuItemData("Solid Line", Icons.Default.HorizontalRule) { onChangeBlockType("divider_solid") },
-                SlashMenuItemData("Three Dots", Icons.Default.MoreHoriz) { onChangeBlockType("divider_dots") }
+                SlashMenuItemData("Solid Line", Res.drawable.minus) { onChangeBlockType("divider_solid") },
+                SlashMenuItemData("Three Dots", Res.drawable.ellipsis) { onChangeBlockType("divider_dots") }
             )),
 //            SlashMenuSectionData("Plugins & Embeds", listOf(
 //                SlashMenuItemData("Sketch Board", Icons.Default.Draw) { onInsertMediaBlock("sketch") }
@@ -1143,7 +1199,7 @@ fun DesktopSlashMenuContent(
 @Composable
 private fun SlashMenuItem(
     text: String,
-    icon: ImageVector,
+    icon: SlashMenuIcon,
     onClick: () -> Unit
 ) {
     Row(
@@ -1155,12 +1211,30 @@ private fun SlashMenuItem(
             .padding(horizontal = 12.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.size(18.dp)
-        )
+        Box(
+            modifier = Modifier.size(SlashMenuIconSlot),
+            contentAlignment = Alignment.Center
+        ) {
+            when (icon) {
+                is SlashMenuIcon.Drawable -> Icon(
+                    painterResource(icon.resource),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(icon.size)
+                )
+                is SlashMenuIcon.Vector -> Icon(
+                    icon.image,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(icon.size)
+                )
+                is SlashMenuIcon.Label -> Text(
+                    icon.text,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
         Spacer(modifier = Modifier.width(12.dp))
         Text(
             text,
@@ -1173,7 +1247,7 @@ private fun SlashMenuItem(
 @Composable
 private fun SlashMenuHeader(title: String) {
     Text(
-        text = title.uppercase(),
+        text = title,
         style = MaterialTheme.typography.labelSmall,
         fontWeight = FontWeight.SemiBold,
         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
@@ -1244,6 +1318,11 @@ fun BlockSelectionPill(
                 .customEmberShadow(DefaultCornerShape)
                 .clip(DefaultCornerShape)
                 .emberBlur(hazeState, EmberBlur.Regular)
+                .border(
+                    width = 0.5.dp,
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                    shape = DefaultCornerShape
+                )
         ) {
             val scrollState = rememberScrollState()
             val divider = @Composable {
@@ -1339,6 +1418,7 @@ fun BlockStyleBar(
 ) {
     val tint = MaterialTheme.colorScheme.primary
     val iconSize = 19.dp
+    val customIconSize = 18.dp
 
     AnimatedVisibility(
         visible = isVisible,
@@ -1354,6 +1434,11 @@ fun BlockStyleBar(
                 .customEmberShadow(DefaultCornerShape)
                 .clip(DefaultCornerShape)
                 .emberBlur(hazeState, EmberBlur.Regular)
+                .border(
+                    width = 0.5.dp,
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                    shape = DefaultCornerShape
+                )
         ) {
             CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 36.dp) {
                 Row(
@@ -1369,61 +1454,61 @@ fun BlockStyleBar(
                     ToolbarLabel("H1", tint) { onChangeBlockType("h1") }
                     ToolbarLabel("H2", tint) { onChangeBlockType("h2") }
                     ToolbarButton(onClick = { onChangeBlockType("checkbox") }) {
-                        Icon(Icons.Default.CheckBox, "Checkbox", tint = tint, modifier = Modifier.size(iconSize))
+                        Icon(painterResource(Res.drawable.check_square), "Checkbox", tint = tint, modifier = Modifier.size(customIconSize - 2.dp))
                     }
                     ToolbarButton(onClick = { onChangeBlockType("bullet") }) {
-                        Icon(Icons.Default.FormatListBulleted, "Bulleted list", tint = tint, modifier = Modifier.size(iconSize))
+                        Icon(painterResource(Res.drawable.unordered_list), "Bulleted list", tint = tint, modifier = Modifier.size(customIconSize - 2.dp))
                     }
                     ToolbarButton(onClick = { onChangeBlockType("number") }) {
-                        Icon(Icons.Default.FormatListNumbered, "Numbered list", tint = tint, modifier = Modifier.size(iconSize))
+                        Icon(painterResource(Res.drawable.ordered_list), "Numbered list", tint = tint, modifier = Modifier.size(customIconSize - 3.dp))
                     }
                     ToolbarButton(onClick = { onChangeBlockType("toggle") }) {
-                        Icon(Icons.Default.ChevronRight, "Toggle list", tint = tint, modifier = Modifier.size(iconSize))
+                        Icon(painterResource(Res.drawable.arrow_right2), "Toggle list", tint = tint, modifier = Modifier.size(customIconSize))
                     }
                     ToolbarButton(onClick = { onChangeBlockType("quote") }) {
-                        Icon(Icons.Default.FormatQuote, "Quote", tint = tint, modifier = Modifier.size(iconSize))
+                        Icon(painterResource(Res.drawable.quote_down2), "Quote", tint = tint, modifier = Modifier.size(customIconSize - 3.dp))
                     }
                     ToolbarButton(onClick = { onChangeBlockType("code") }) {
-                        Icon(Icons.Default.Code, "Code", tint = tint, modifier = Modifier.size(iconSize))
+                        Icon(painterResource(Res.drawable.code), "Code", tint = tint, modifier = Modifier.size(customIconSize))
                     }
 
                     ToolbarDivider(tint)
 
                     ToolbarButton(onClick = { onToggleFormat("bold") }) {
-                        Icon(Icons.Default.FormatBold, "Bold", tint = tint, modifier = Modifier.size(iconSize))
+                        Icon(painterResource(Res.drawable.format_bold), "Bold", tint = tint, modifier = Modifier.size(customIconSize - 4.dp))
                     }
                     ToolbarButton(onClick = { onToggleFormat("italic") }) {
-                        Icon(Icons.Default.FormatItalic, "Italic", tint = tint, modifier = Modifier.size(iconSize))
+                        Icon(painterResource(Res.drawable.italic), "Italic", tint = tint, modifier = Modifier.size(customIconSize - 4.dp))
                     }
                     ToolbarButton(onClick = { onToggleFormat("strike") }) {
-                        Icon(Icons.Default.StrikethroughS, "Strikethrough", tint = tint, modifier = Modifier.size(iconSize))
+                        Icon(painterResource(Res.drawable.text_x), "Strikethrough", tint = tint, modifier = Modifier.size(customIconSize - 2.dp))
                     }
                     ToolbarButton(onClick = { onToggleFormat("underline") }) {
-                        Icon(Icons.Default.FormatUnderlined, "Underline", tint = tint, modifier = Modifier.size(iconSize))
+                        Icon(painterResource(Res.drawable.underline), "Underline", tint = tint, modifier = Modifier.size(customIconSize - 2.dp))
                     }
 
                     ToolbarDivider(tint)
 
                     ToolbarButton(onClick = { onSetAlignment(TextAlignment.LEFT) }) {
-                        Icon(Icons.Default.FormatAlignLeft, "Align left", tint = tint, modifier = Modifier.size(iconSize))
+                        Icon(painterResource(Res.drawable.textalign_left2), "Align left", tint = tint, modifier = Modifier.size(customIconSize))
                     }
                     ToolbarButton(onClick = { onSetAlignment(TextAlignment.RIGHT) }) {
-                        Icon(Icons.Default.FormatAlignRight, "Align right", tint = tint, modifier = Modifier.size(iconSize))
+                        Icon(painterResource(Res.drawable.textalign_right2), "Align right", tint = tint, modifier = Modifier.size(customIconSize))
                     }
                     ToolbarButton(onClick = { onSetAlignment(TextAlignment.CENTER) }) {
-                        Icon(Icons.Default.FormatAlignCenter, "Align center", tint = tint, modifier = Modifier.size(iconSize))
+                        Icon(painterResource(Res.drawable.textalign_center2), "Align center", tint = tint, modifier = Modifier.size(customIconSize))
                     }
                     ToolbarButton(onClick = { onSetAlignment(TextAlignment.JUSTIFY) }) {
-                        Icon(Icons.Default.FormatAlignJustify, "Justify", tint = tint, modifier = Modifier.size(iconSize))
+                        Icon(painterResource(Res.drawable.textalign_justifycenter2), "Justify", tint = tint, modifier = Modifier.size(customIconSize))
                     }
 
                     ToolbarDivider(tint)
 
                     ToolbarButton(onClick = { onAdjustIndentation(false) }) {
-                        Icon(Icons.AutoMirrored.Filled.FormatIndentDecrease, "Decrease indent", tint = tint, modifier = Modifier.size(iconSize))
+                        Icon(painterResource(Res.drawable.indent_right), "Decrease indent", tint = tint, modifier = Modifier.size(customIconSize))
                     }
                     ToolbarButton(onClick = { onAdjustIndentation(true) }) {
-                        Icon(Icons.AutoMirrored.Filled.FormatIndentIncrease, "Increase indent", tint = tint, modifier = Modifier.size(iconSize))
+                        Icon(painterResource(Res.drawable.indent_left), "Increase indent", tint = tint, modifier = Modifier.size(customIconSize))
                     }
                 }
             }

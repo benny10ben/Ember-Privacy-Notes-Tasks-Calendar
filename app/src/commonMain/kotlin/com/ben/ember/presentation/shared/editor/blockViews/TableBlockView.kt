@@ -69,7 +69,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.input.pointer.PointerEventTimeoutCancellationException
 import androidx.compose.ui.input.pointer.pointerInput
@@ -100,11 +100,22 @@ import ember.app.generated.resources.arrow_down
 import ember.app.generated.resources.arrow_left
 import ember.app.generated.resources.arrow_right
 import ember.app.generated.resources.arrow_up
+import ember.app.generated.resources.code
+import ember.app.generated.resources.format_bold
+import ember.app.generated.resources.italic
+import ember.app.generated.resources.link
+import ember.app.generated.resources.mail
 import ember.app.generated.resources.minus
 import ember.app.generated.resources.move_left
 import ember.app.generated.resources.move_right
+import ember.app.generated.resources.phone
 import ember.app.generated.resources.plus
+import ember.app.generated.resources.text_x
+import ember.app.generated.resources.textalign_center2
+import ember.app.generated.resources.textalign_left2
+import ember.app.generated.resources.textalign_right2
 import ember.app.generated.resources.trash
+import ember.app.generated.resources.underline
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
@@ -731,35 +742,35 @@ private fun TableStyleSheetContent(
 
         StyleSectionLabel("Format")
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            StyleToggleButton(Icons.Default.FormatBold, style.isBold) { onStyleChange(style.copy(isBold = !style.isBold)) }
-            StyleToggleButton(Icons.Default.FormatItalic, style.isItalic) { onStyleChange(style.copy(isItalic = !style.isItalic)) }
-            StyleToggleButton(Icons.Default.FormatUnderlined, style.isUnderlined) { onStyleChange(style.copy(isUnderlined = !style.isUnderlined)) }
-            StyleToggleButton(Icons.Default.StrikethroughS, style.isStrikeThrough) { onStyleChange(style.copy(isStrikeThrough = !style.isStrikeThrough)) }
-            StyleToggleButton(Icons.Default.Code, style.isCode) { onStyleChange(style.copy(isCode = !style.isCode)) }
+            StyleToggleButton(painterResource(Res.drawable.format_bold), style.isBold, 14.dp) { onStyleChange(style.copy(isBold = !style.isBold)) }
+            StyleToggleButton(painterResource(Res.drawable.italic), style.isItalic, 14.dp) { onStyleChange(style.copy(isItalic = !style.isItalic)) }
+            StyleToggleButton(painterResource(Res.drawable.underline), style.isUnderlined, 16.dp) { onStyleChange(style.copy(isUnderlined = !style.isUnderlined)) }
+            StyleToggleButton(painterResource(Res.drawable.text_x), style.isStrikeThrough, 16.dp) { onStyleChange(style.copy(isStrikeThrough = !style.isStrikeThrough)) }
+            StyleToggleButton(painterResource(Res.drawable.code), style.isCode) { onStyleChange(style.copy(isCode = !style.isCode)) }
         }
 
         StyleSectionLabel("Content Type")
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            StyleToggleButton(Icons.Default.Link, style.contentType == TableCellContentType.LINK) {
+            StyleToggleButton(painterResource(Res.drawable.link), style.contentType == TableCellContentType.LINK) {
                 onStyleChange(style.copy(contentType = if (style.contentType == TableCellContentType.LINK) TableCellContentType.NONE else TableCellContentType.LINK))
             }
-            StyleToggleButton(Icons.Default.Phone, style.contentType == TableCellContentType.PHONE) {
+            StyleToggleButton(painterResource(Res.drawable.phone), style.contentType == TableCellContentType.PHONE) {
                 onStyleChange(style.copy(contentType = if (style.contentType == TableCellContentType.PHONE) TableCellContentType.NONE else TableCellContentType.PHONE))
             }
-            StyleToggleButton(Icons.Default.Email, style.contentType == TableCellContentType.EMAIL) {
+            StyleToggleButton(painterResource(Res.drawable.mail), style.contentType == TableCellContentType.EMAIL) {
                 onStyleChange(style.copy(contentType = if (style.contentType == TableCellContentType.EMAIL) TableCellContentType.NONE else TableCellContentType.EMAIL))
             }
         }
 
         StyleSectionLabel("Alignment")
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            StyleToggleButton(Icons.Default.FormatAlignLeft, style.alignment == TextAlignment.LEFT) {
+            StyleToggleButton(painterResource(Res.drawable.textalign_left2), style.alignment == TextAlignment.LEFT) {
                 onStyleChange(style.copy(alignment = if (style.alignment == TextAlignment.LEFT) null else TextAlignment.LEFT))
             }
-            StyleToggleButton(Icons.Default.FormatAlignCenter, style.alignment == TextAlignment.CENTER) {
+            StyleToggleButton(painterResource(Res.drawable.textalign_center2), style.alignment == TextAlignment.CENTER) {
                 onStyleChange(style.copy(alignment = if (style.alignment == TextAlignment.CENTER) null else TextAlignment.CENTER))
             }
-            StyleToggleButton(Icons.Default.FormatAlignRight, style.alignment == TextAlignment.RIGHT) {
+            StyleToggleButton(painterResource(Res.drawable.textalign_right2), style.alignment == TextAlignment.RIGHT) {
                 onStyleChange(style.copy(alignment = if (style.alignment == TextAlignment.RIGHT) null else TextAlignment.RIGHT))
             }
         }
@@ -825,7 +836,7 @@ private fun ColorSwatchRow(selectedHex: String?, onSelect: (String?) -> Unit) {
 }
 
 @Composable
-private fun StyleToggleButton(icon: ImageVector, isActive: Boolean, onClick: () -> Unit) {
+private fun StyleToggleButton(icon: Painter, isActive: Boolean, iconSize: Dp = 18.dp, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .size(36.dp)
@@ -837,7 +848,7 @@ private fun StyleToggleButton(icon: ImageVector, isActive: Boolean, onClick: () 
         Icon(
             icon,
             contentDescription = null,
-            modifier = Modifier.size(18.dp),
+            modifier = Modifier.size(iconSize),
             tint = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
         )
     }

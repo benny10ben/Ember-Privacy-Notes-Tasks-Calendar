@@ -42,7 +42,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -88,6 +87,7 @@ import com.ben.ember.presentation.customEmberShadow
 import com.ben.ember.presentation.shared.components.EmberBlur
 import com.ben.ember.presentation.shared.components.EmberBottomSheet
 import com.ben.ember.presentation.shared.components.EmberDesktopMenu
+import com.ben.ember.presentation.shared.components.SelectedOptionBackground
 import com.ben.ember.presentation.shared.components.TopBarIconButton
 import com.ben.ember.presentation.shared.components.emberBlur
 import com.ben.ember.presentation.shared.components.EmberVerticalScrollbar
@@ -371,7 +371,8 @@ fun CalendarScreen(
     EmberBottomSheet(
         expanded = showViewsSheet,
         onDismiss = { showViewsSheet = false },
-        title = "View"
+        title = "View",
+        contentHorizontalPadding = 0.dp
     ) {
       CompositionLocalProvider(
         LocalIndication provides NoRippleIndicationNodeFactory,
@@ -1409,12 +1410,14 @@ private fun ViewModeRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding( vertical = 2.dp)
+            .padding(
+                horizontal = if (isDesktopPlatform) 0.dp else 8.dp,
+                vertical = 2.dp
+            )
             .clip(RoundedCornerShape(12.dp))
-            .background(Color.Transparent)
+            .background(if (isSelected) SelectedOptionBackground else Color.Transparent)
             .clickable(onClick = onClick)
-            .padding(vertical = 10.dp,  horizontal = if (isDesktopPlatform) 12.dp else 0.dp)
-            .padding(end = if (isSelected) 12.dp else 0.dp),
+            .padding(vertical = 10.dp, horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
@@ -1424,14 +1427,6 @@ private fun ViewModeRow(
             color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f)
         )
-        if (isSelected) {
-            Icon(
-                imageVector = Icons.Default.Check,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(18.dp)
-            )
-        }
     }
 }
 
