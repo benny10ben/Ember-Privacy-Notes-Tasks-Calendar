@@ -48,6 +48,8 @@ import com.ben.ember.data.local.prefs.SyncConstants
 import com.ben.ember.data.local.room.FolderEntity
 import com.ben.ember.data.local.room.NoteMetadataEntity
 import com.ben.ember.domain.model.NoteContent
+import com.ben.ember.domain.util.WidgetComposeRequest
+import com.ben.ember.domain.util.WidgetComposeRequestBus
 import com.ben.ember.domain.util.isDesktopPlatform
 import com.ben.ember.presentation.mobile.daily.DailyEditorViewModel
 import com.ben.ember.presentation.mobile.daily.TaskDaySection
@@ -250,6 +252,17 @@ fun HomeScreen(
     // Mobile sheet + desktop popup toggles for the Templates menu opened from the New Note flow.
     var showTemplatesSheet by remember { mutableStateOf(false) }
     var showTemplatesMenu by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        if (WidgetComposeRequestBus.consume(WidgetComposeRequest.NEW_NOTE)) {
+            if (isDesktopPlatform) {
+                addNoteInput = ""
+                showAddNotePopup = true
+            } else {
+                showAddNoteDialog = true
+            }
+        }
+    }
 
     val isFavoritesExpanded by viewModel.isFavoritesSectionExpanded.collectAsState()
     val isNotesExpanded by viewModel.isNotesSectionExpanded.collectAsState()

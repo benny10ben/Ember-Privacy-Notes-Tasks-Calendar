@@ -113,6 +113,19 @@
         </receiver>
 
         <receiver
+            android:name=".presentation.widget.notelist.NoteListWidgetReceiver"
+            android:enabled="true"
+            android:exported="true"
+            android:label="@string/note_list_widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/note_list_widget_info" />
+        </receiver>
+
+        <receiver
             android:name=".presentation.widget.tasks.TasksWidgetActionReceiver"
             android:enabled="true"
             android:exported="false">

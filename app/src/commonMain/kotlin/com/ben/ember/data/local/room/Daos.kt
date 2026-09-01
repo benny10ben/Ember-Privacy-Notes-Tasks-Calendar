@@ -77,6 +77,9 @@ interface NoteDao {
     @Query("SELECT * FROM notes_metadata WHERE noteId = :id LIMIT 1")
     fun observeNoteById(id: String): Flow<NoteMetadataEntity?>
 
+    @Query("SELECT * FROM notes_metadata WHERE isDaily = 0 AND trashedAt IS NULL AND isSubNote = 0 AND isTemplate = 0 ORDER BY updatedAt DESC LIMIT :limit")
+    suspend fun getRecentNotes(limit: Int): List<NoteMetadataEntity>
+
     @Query("UPDATE notes_metadata SET trashedAt = NULL, updatedAt = :updatedAt WHERE noteId = :noteId")
     suspend fun restoreNote(noteId: String, updatedAt: Long)
 

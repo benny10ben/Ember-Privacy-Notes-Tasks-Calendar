@@ -27,7 +27,10 @@ import com.ben.ember.domain.util.WidgetNavigationBus
 import com.ben.ember.domain.util.ShareEventBus
 import com.ben.ember.presentation.shared.editor.ActiveEditorRegistry
 import com.ben.ember.presentation.widget.note.refreshNoteWidgets
+import com.ben.ember.presentation.widget.notelist.refreshNoteListWidgets
 import com.ben.ember.presentation.widget.tasks.refreshTaskWidgets
+import com.ben.ember.presentation.widget.widgetHomeScreenExtra
+import com.ben.ember.presentation.widget.widgetNewNoteExtra
 import com.ben.ember.presentation.widget.widgetNewTaskExtra
 import com.ben.ember.presentation.widget.widgetNoteIdExtra
 import com.ben.ember.presentation.widget.widgetTasksScreenExtra
@@ -129,6 +132,7 @@ class MainActivity : ComponentActivity() {
                         ActiveEditorRegistry.flushAllPending()
                         refreshNoteWidgets(this@MainActivity)
                         refreshTaskWidgets(this@MainActivity)
+                        refreshNoteListWidgets(this@MainActivity)
                     }
                 }
                 else -> {}
@@ -391,6 +395,15 @@ class MainActivity : ComponentActivity() {
                 WidgetComposeRequestBus.request(WidgetComposeRequest.NEW_TASK)
             }
             return Screen.Reminders.route
+        }
+
+        if (intent.getBooleanExtra(widgetHomeScreenExtra, false)) {
+            intent.removeExtra(widgetHomeScreenExtra)
+            if (intent.getBooleanExtra(widgetNewNoteExtra, false)) {
+                intent.removeExtra(widgetNewNoteExtra)
+                WidgetComposeRequestBus.request(WidgetComposeRequest.NEW_NOTE)
+            }
+            return Screen.Home.route
         }
 
         return null

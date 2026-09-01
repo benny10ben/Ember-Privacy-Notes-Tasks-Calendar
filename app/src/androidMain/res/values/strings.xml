@@ -4,4 +4,6 @@
     <string name="note_widget_description">Pin a single note to your home screen</string>
     <string name="tasks_widget_label">Tasks</string>
     <string name="tasks_widget_description">See and tick off your tasks from the home screen</string>
+    <string name="note_list_widget_label">Notes</string>
+    <string name="note_list_widget_description">Browse your notes from the home screen</string>
 </resources>

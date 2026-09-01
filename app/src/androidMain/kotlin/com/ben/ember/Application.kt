@@ -40,6 +40,7 @@ class EmberApplication : Application() {
             isReady = true
             getKoin().get<com.ben.ember.presentation.widget.note.NoteWidgetCoordinator>().start()
             getKoin().get<com.ben.ember.presentation.widget.tasks.TasksWidgetCoordinator>().start()
+            getKoin().get<com.ben.ember.presentation.widget.notelist.NoteListWidgetCoordinator>().start()
         }
 
     }
