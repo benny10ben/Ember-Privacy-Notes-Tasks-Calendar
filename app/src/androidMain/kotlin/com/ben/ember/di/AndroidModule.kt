@@ -101,8 +101,23 @@ val androidModule = module {
     single<TagDao> { get<AppDatabase>().tagDao() }
     single<BlockDao> { get<AppDatabase>().blockDao() }
 
+    single {
+        com.ben.ember.presentation.widget.note.WidgetContentReader(
+            noteDao = get(),
+            blockDao = get(),
+            noteRepository = get()
+        )
+    }
+
     single { com.ben.ember.presentation.widget.WidgetNoteSource(noteDao = get()) }
 
+    single {
+        com.ben.ember.presentation.widget.note.NoteWidgetCoordinator(
+            context = androidContext(),
+            noteRepository = get(),
+            contentReader = get()
+        )
+    }
     single<CalendarTaskDao> { get<AppDatabase>().calendarTaskDao() }
     single<com.ben.ember.data.local.room.CalendarEventExceptionDao> { get<AppDatabase>().calendarEventExceptionDao() }
     single<ImageBlockDao> { get<AppDatabase>().imageBlockDao() }

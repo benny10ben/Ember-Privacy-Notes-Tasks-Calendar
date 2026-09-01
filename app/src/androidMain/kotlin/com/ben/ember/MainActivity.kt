@@ -21,7 +21,11 @@ import coil3.compose.setSingletonImageLoaderFactory
 import coil3.network.ktor3.KtorNetworkFetcherFactory
 import coil3.request.crossfade
 import com.ben.ember.domain.model.PendingShare
+import com.ben.ember.domain.util.WidgetNavigationBus
 import com.ben.ember.domain.util.ShareEventBus
+import com.ben.ember.presentation.shared.editor.ActiveEditorRegistry
+import com.ben.ember.presentation.widget.note.refreshNoteWidgets
+import com.ben.ember.presentation.widget.widgetNoteIdExtra
 import com.ben.ember.presentation.EmberApp
 import com.ben.ember.ui.theme.EmberTheme
 import io.ktor.client.HttpClient
@@ -100,6 +104,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         (application as? EmberApplication)?.warmUpAiEngineOnce()
 
+        val routeForThisLaunch = consumeWidgetRoute(intent) ?: Screen.Daily.route
+
         handleIntent(intent)
         backupScheduler.toString()
 
@@ -114,6 +120,10 @@ class MainActivity : ComponentActivity() {
                 }
                 Lifecycle.Event.ON_PAUSE -> {
                     syncViewModel.stopForegroundWatchdog()
+                    lifecycleScope.launch(Dispatchers.Default) {
+                        ActiveEditorRegistry.flushAllPending()
+                        refreshNoteWidgets(this@MainActivity)
+                    }
                 }
                 else -> {}
             }
@@ -267,7 +277,8 @@ class MainActivity : ComponentActivity() {
                         }
 
                         EmberApp(
-                            startRoute = Screen.Daily.route,
+                            startRoute = routeForThisLaunch,
+                            onExitApp = { finish() },
                             onPickImage = { callback ->
                                 imagePickerCallback = callback
                                 pickImage.launch("image/*")
@@ -354,11 +365,25 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        consumeWidgetRoute(intent)?.let { route -> WidgetNavigationBus.requestRoute(route) }
         handleIntent(intent)
+    }
+
+    private fun consumeWidgetRoute(intent: Intent?): String? {
+        intent ?: return null
+
+        val noteId = intent.getStringExtra(widgetNoteIdExtra)?.takeIf { it.isNotBlank() }
+        if (noteId != null) {
+            intent.removeExtra(widgetNoteIdExtra)
+            return Screen.Note.createRoute(noteId)
+        }
+
+        return null
     }
 
     private fun handleIntent(intent: Intent?) {
         intent ?: return
+
         when (intent.action) {
             Intent.ACTION_SEND -> handleSingleShare(intent)
             Intent.ACTION_SEND_MULTIPLE -> handleMultipleShare(intent)

@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">Ember</string>
+    <string name="note_widget_label">Note</string>
+    <string name="note_widget_description">Pin a single note to your home screen</string>
 </resources>

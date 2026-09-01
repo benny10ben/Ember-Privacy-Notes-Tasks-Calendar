@@ -450,7 +450,7 @@ fun EmberApp(
                         ) { backStackEntry ->
                             _root_ide_package_.com.ben.ember.presentation.mobile.home.note.NoteScreen(
                                 noteId = backStackEntry.savedStateHandle.get<String>("noteId") ?: "",
-                                onNavigateBack = { navController.popBackStack() },
+                                onNavigateBack = { if (!navController.popBackStack()) onExitApp() },
                                 onNavigateToEditor = { subNoteId ->
                                     navController.navigate(Screen.Note.createRoute(subNoteId))
                                 },

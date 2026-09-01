@@ -38,6 +38,7 @@ class EmberApplication : Application() {
             getKoin().get<AppDatabase>()
             getKoin().get<SharedPreferences>()
             isReady = true
+            getKoin().get<com.ben.ember.presentation.widget.note.NoteWidgetCoordinator>().start()
         }
 
     }
