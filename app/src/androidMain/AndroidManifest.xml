@@ -99,6 +99,29 @@
                 android:resource="@xml/note_widget_info" />
         </receiver>
 
+        <receiver
+            android:name=".presentation.widget.tasks.TasksWidgetReceiver"
+            android:enabled="true"
+            android:exported="true"
+            android:label="@string/tasks_widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/tasks_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".presentation.widget.tasks.TasksWidgetActionReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.ben.ember.widget.tasks.TOGGLE_COMPLETED_VIEW" />
+                <action android:name="com.ben.ember.widget.tasks.TOGGLE_TASK" />
+            </intent-filter>
+        </receiver>
+
         <activity
             android:name=".presentation.widget.note.NoteWidgetPickerActivity"
             android:exported="true"

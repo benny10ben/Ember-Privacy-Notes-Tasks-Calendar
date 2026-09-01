@@ -492,7 +492,7 @@ fun EmberApp(
                             }
                         ) {
                             _root_ide_package_.com.ben.ember.presentation.mobile.home.overview.tasks.TasksScreen(
-                                onNavigateBack = { navController.popBackStack() },
+                                onNavigateBack = { if (!navController.popBackStack()) onExitApp() },
                                 onNavigateToEditor = { noteId ->
                                     navController.navigate(
                                         Screen.Note.createRoute(

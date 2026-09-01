@@ -37,6 +37,8 @@ import com.ben.ember.domain.model.FilterConfig
 import com.ben.ember.domain.model.GalleryCardSize
 import com.ben.ember.domain.model.NoteBlock
 import com.ben.ember.domain.model.TextAlignment
+import com.ben.ember.domain.util.WidgetComposeRequest
+import com.ben.ember.domain.util.WidgetComposeRequestBus
 import com.ben.ember.domain.util.isDesktopPlatform
 import com.ben.ember.presentation.shared.components.EmberBlur
 import com.ben.ember.presentation.shared.components.KmpBackHandler
@@ -140,6 +142,9 @@ fun TasksScreen(
 
     LaunchedEffect(Unit) {
         viewModel.loadAllTasks()
+        if (WidgetComposeRequestBus.consume(WidgetComposeRequest.NEW_TASK)) {
+            viewModel.insertNewReminder()
+        }
     }
 
     val topPadding = if (isDesktopPlatform) 80.dp else 110.dp

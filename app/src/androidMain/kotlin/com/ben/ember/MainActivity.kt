@@ -21,11 +21,16 @@ import coil3.compose.setSingletonImageLoaderFactory
 import coil3.network.ktor3.KtorNetworkFetcherFactory
 import coil3.request.crossfade
 import com.ben.ember.domain.model.PendingShare
+import com.ben.ember.domain.util.WidgetComposeRequest
+import com.ben.ember.domain.util.WidgetComposeRequestBus
 import com.ben.ember.domain.util.WidgetNavigationBus
 import com.ben.ember.domain.util.ShareEventBus
 import com.ben.ember.presentation.shared.editor.ActiveEditorRegistry
 import com.ben.ember.presentation.widget.note.refreshNoteWidgets
+import com.ben.ember.presentation.widget.tasks.refreshTaskWidgets
+import com.ben.ember.presentation.widget.widgetNewTaskExtra
 import com.ben.ember.presentation.widget.widgetNoteIdExtra
+import com.ben.ember.presentation.widget.widgetTasksScreenExtra
 import com.ben.ember.presentation.EmberApp
 import com.ben.ember.ui.theme.EmberTheme
 import io.ktor.client.HttpClient
@@ -123,6 +128,7 @@ class MainActivity : ComponentActivity() {
                     lifecycleScope.launch(Dispatchers.Default) {
                         ActiveEditorRegistry.flushAllPending()
                         refreshNoteWidgets(this@MainActivity)
+                        refreshTaskWidgets(this@MainActivity)
                     }
                 }
                 else -> {}
@@ -376,6 +382,15 @@ class MainActivity : ComponentActivity() {
         if (noteId != null) {
             intent.removeExtra(widgetNoteIdExtra)
             return Screen.Note.createRoute(noteId)
+        }
+
+        if (intent.getBooleanExtra(widgetTasksScreenExtra, false)) {
+            intent.removeExtra(widgetTasksScreenExtra)
+            if (intent.getBooleanExtra(widgetNewTaskExtra, false)) {
+                intent.removeExtra(widgetNewTaskExtra)
+                WidgetComposeRequestBus.request(WidgetComposeRequest.NEW_TASK)
+            }
+            return Screen.Reminders.route
         }
 
         return null

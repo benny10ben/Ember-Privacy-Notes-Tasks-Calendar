@@ -2,4 +2,6 @@
     <string name="app_name">Ember</string>
     <string name="note_widget_label">Note</string>
     <string name="note_widget_description">Pin a single note to your home screen</string>
+    <string name="tasks_widget_label">Tasks</string>
+    <string name="tasks_widget_description">See and tick off your tasks from the home screen</string>
 </resources>

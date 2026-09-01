@@ -216,6 +216,9 @@ interface CalendarTaskDao {
 
     @Query("SELECT * FROM calendar_tasks")
     fun getAllTasksFlow(): Flow<List<CalendarTaskEntity>>
+
+    @Query("SELECT * FROM calendar_tasks")
+    suspend fun getAllTasks(): List<CalendarTaskEntity>
 }
 
 @Dao
