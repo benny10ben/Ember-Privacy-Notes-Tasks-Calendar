@@ -80,14 +80,16 @@ import com.ben.ember.presentation.shared.components.emberBlur
 import com.ben.ember.presentation.shared.components.EmberVerticalScrollbar
 import com.ben.ember.presentation.shared.components.smoothWheelScroll
 import ember.app.generated.resources.Res
+import ember.app.generated.resources.arrow_down
 import ember.app.generated.resources.arrow_right2
+import ember.app.generated.resources.arrow_up
 import ember.app.generated.resources.at
-import ember.app.generated.resources.bold
 import ember.app.generated.resources.bookmark
 import ember.app.generated.resources.check_square
 import ember.app.generated.resources.code
-import ember.app.generated.resources.doc_text
+import ember.app.generated.resources.copy
 import ember.app.generated.resources.ellipsis
+import ember.app.generated.resources.eye3
 import ember.app.generated.resources.file_text
 import ember.app.generated.resources.format_bold
 import ember.app.generated.resources.image
@@ -103,16 +105,21 @@ import ember.app.generated.resources.ordered_list
 import ember.app.generated.resources.plus
 import ember.app.generated.resources.quote_down2
 import ember.app.generated.resources.redo_circle
+import ember.app.generated.resources.scissor2
 import ember.app.generated.resources.square_kanban
 import ember.app.generated.resources.table
+import ember.app.generated.resources.text_tool_2
 import ember.app.generated.resources.text_x
 import ember.app.generated.resources.textalign_center2
 import ember.app.generated.resources.textalign_justifycenter2
 import ember.app.generated.resources.textalign_left2
 import ember.app.generated.resources.textalign_right2
+import ember.app.generated.resources.thumbtack
+import ember.app.generated.resources.trash
 import ember.app.generated.resources.underline
 import ember.app.generated.resources.undo_circle
 import ember.app.generated.resources.unordered_list
+import ember.app.generated.resources.x
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableSet
 import org.jetbrains.compose.resources.DrawableResource
@@ -1299,9 +1306,7 @@ fun BlockSelectionPill(
 ) {
     val selectedLinkedNoteBlock = selectedBlocks.singleOrNull() as? LinkedNoteBlock
     var showLinkedNoteOptions by remember { mutableStateOf(false) }
-    val isDesktop = isDesktopPlatform
 
-    val pillColor = if (isDesktop) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.surface.copy(alpha = 0.75f)
     val tint = MaterialTheme.colorScheme.primary
 
     AnimatedVisibility(
@@ -1337,8 +1342,8 @@ fun BlockSelectionPill(
                 horizontalArrangement = Arrangement.spacedBy(20.dp)
             ) {
                 val iconSize = 18.dp
-                Icon(Icons.Default.Close, null, modifier = Modifier.size(iconSize).clickable { onClearSelection() }, tint = tint)
-                Text("$selectedCount", style = MaterialTheme.typography.titleLarge, color = tint)
+                Icon(painterResource(Res.drawable.x), null, modifier = Modifier.size(iconSize).clickable { onClearSelection() }, tint = tint)
+                Text("$selectedCount", style = MaterialTheme.typography.bodyLarge, color = tint)
                 divider()
 
                 Box(
@@ -1350,7 +1355,7 @@ fun BlockSelectionPill(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        Icons.Default.PushPin,
+                        painterResource(Res.drawable.thumbtack),
                         if (isSelectionPinned) "Unpin Block" else "Pin Block",
                         modifier = Modifier.size(iconSize),
                         tint = tint
@@ -1361,9 +1366,9 @@ fun BlockSelectionPill(
                 if (selectedLinkedNoteBlock != null) {
                     Box {
                         Icon(
-                            Icons.Default.Visibility,
+                            painterResource(Res.drawable.eye3),
                             "Preview",
-                            modifier = Modifier.size(iconSize).clickable { showLinkedNoteOptions = true },
+                            modifier = Modifier.size(iconSize + 3.dp).clickable { showLinkedNoteOptions = true },
                             tint = tint
                         )
                         LinkedNoteOptionsMenu(
@@ -1387,19 +1392,19 @@ fun BlockSelectionPill(
                             .padding(4.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(Icons.Default.FormatSize, "Style Selected Blocks", modifier = Modifier.size(iconSize), tint = tint)
+                        Icon(painterResource(Res.drawable.text_tool_2), "Style Selected Blocks", modifier = Modifier.size(iconSize + 3.dp), tint = tint)
                     }
                     divider()
                 }
 
-                Icon(Icons.Default.SelectAll, "Select All", modifier = Modifier.size(iconSize).clickable { onSelectAll() }, tint = tint)
-                Icon(Icons.Default.ContentCopy, "Copy", modifier = Modifier.size(iconSize).clickable { onCopy() }, tint = tint)
-                Icon(Icons.Default.ContentCut, "Cut", modifier = Modifier.size(iconSize).clickable { onCut() }, tint = tint)
+                Icon(Icons.Default.SelectAll, "Select All", modifier = Modifier.size(iconSize + 3.dp).clickable { onSelectAll() }, tint = tint)
+                Icon(painterResource(Res.drawable.copy), "Copy", modifier = Modifier.size(iconSize).clickable { onCopy() }, tint = tint)
+                Icon(painterResource(Res.drawable.scissor2), "Cut", modifier = Modifier.size(iconSize).clickable { onCut() }, tint = tint)
                 divider()
-                Icon(Icons.Default.ArrowUpward, "Add above", modifier = Modifier.size(iconSize).clickable { onAddBlockAbove() }, tint = tint)
-                Icon(Icons.Default.ArrowDownward, "Add below", modifier = Modifier.size(iconSize).clickable { onAddBlockBelow() }, tint = tint)
+                Icon(painterResource(Res.drawable.arrow_up), "Add above", modifier = Modifier.size(iconSize).clickable { onAddBlockAbove() }, tint = tint)
+                Icon(painterResource(Res.drawable.arrow_down), "Add below", modifier = Modifier.size(iconSize).clickable { onAddBlockBelow() }, tint = tint)
                 divider()
-                Icon(Icons.Default.Delete, "Delete", modifier = Modifier.size(iconSize).clickable { onDelete() }, tint = tint)
+                Icon(painterResource(Res.drawable.trash), "Delete", modifier = Modifier.size(iconSize).clickable { onDelete() }, tint = tint)
             }
         }
     }

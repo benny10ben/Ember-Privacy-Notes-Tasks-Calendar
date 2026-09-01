@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -27,7 +28,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import com.ben.ember.presentation.shared.rememberStableStatusBarsPadding
@@ -65,7 +65,6 @@ import com.ben.ember.presentation.shared.components.TopBarIconButtonItem
 import com.ben.ember.presentation.shared.components.smoothWheelScroll
 import com.ben.ember.presentation.sync.SyncViewModel
 import com.ben.ember.domain.util.showNativeToast
-import com.ben.ember.ui.theme.LocalAppIsDark
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.isActive
@@ -79,6 +78,8 @@ import org.koin.compose.viewmodel.koinViewModel
 import com.ben.ember.presentation.shared.components.EmberButtonPrimary
 import com.ben.ember.presentation.shared.components.EmberButtonSecondary
 import com.ben.ember.presentation.shared.components.EmberTextField
+import com.ben.ember.presentation.shared.components.customEmberShadow
+import com.ben.ember.presentation.shared.components.emberBlur
 import ember.app.generated.resources.Res
 import ember.app.generated.resources.arrow_up_down
 import ember.app.generated.resources.calendar
@@ -88,10 +89,10 @@ import ember.app.generated.resources.file_text
 import ember.app.generated.resources.inbox
 import ember.app.generated.resources.pen
 import ember.app.generated.resources.pen_square
-import ember.app.generated.resources.folder
 import ember.app.generated.resources.folder_plus
 import ember.app.generated.resources.template
 import ember.app.generated.resources.trash
+import ember.app.generated.resources.x
 import org.jetbrains.compose.resources.painterResource
 
 private val HORIZONTAL_PADDING = 16.dp
@@ -801,7 +802,8 @@ fun HomeScreen(
                 selectedCount = selectedNoteIds.size + selectedFolderIds.size,
                 onClearSelection = { viewModel.clearSelection() },
                 onDelete = { viewModel.deleteSelectedItems() },
-                modifier = Modifier.align(Alignment.BottomCenter)
+                modifier = Modifier.align(Alignment.BottomCenter),
+                hazeState = hazeState
             )
 
             if (!isDesktopPlatform) {
@@ -1225,12 +1227,29 @@ fun NoteCard(
 }
 
 @Composable
-fun NotesSelectionPill(isVisible: Boolean, selectedCount: Int, onClearSelection: () -> Unit, onDelete: () -> Unit, modifier: Modifier = Modifier) {
-    val isDark = LocalAppIsDark.current
-    val pillColor = if (isDark) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.primary
-    val tint = if (isDark) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onPrimary
-    AnimatedVisibility(visible = isVisible, enter = slideInVertically(initialOffsetY = { it }) + fadeIn(), exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(), modifier = modifier.padding(horizontal = 24.dp)) {
-        Surface(shape = DefaultCornerShape, color = pillColor, modifier = Modifier.padding(bottom = 28.dp).shadow(6.dp, DefaultCornerShape, spotColor = Color.Black.copy(alpha = 0.2f))) {
+fun NotesSelectionPill(isVisible: Boolean, selectedCount: Int, onClearSelection: () -> Unit, onDelete: () -> Unit, hazeState: HazeState, modifier: Modifier = Modifier) {
+    val tint = MaterialTheme.colorScheme.primary
+
+    AnimatedVisibility(
+        visible = isVisible,
+        enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+        exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+        modifier = modifier.padding(horizontal = 24.dp)
+    ) {
+        Surface(
+            shape = DefaultCornerShape,
+            color = Color.Transparent,
+            modifier = Modifier
+                .padding(bottom = 32.dp)
+                .customEmberShadow(DefaultCornerShape)
+                .clip(DefaultCornerShape)
+                .emberBlur(hazeState, EmberBlur.Regular)
+                .border(
+                    width = 0.5.dp,
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                    shape = DefaultCornerShape
+                )
+        ) {
             val pillScroll = rememberScrollState()
             Row(
                 modifier = Modifier.horizontalScroll(pillScroll)
@@ -1239,20 +1258,19 @@ fun NotesSelectionPill(isVisible: Boolean, selectedCount: Int, onClearSelection:
                 horizontalArrangement = Arrangement.spacedBy(20.dp)
             ) {
                 Icon(
-                    Icons.Default.Close,
+                    painterResource(Res.drawable.x),
                     "Clear",
                     modifier = Modifier.size(18.dp).noRippleClickable { onClearSelection() },
                     tint = tint
                 )
                 Text(
                     "$selectedCount",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.bodyLarge,
                     color = tint
                 )
                 Box(Modifier.width(1.dp).height(18.dp).background(tint.copy(alpha = 0.2f)))
                 Icon(
-                    Icons.Default.Delete,
+                    painterResource(Res.drawable.trash),
                     "Move to Trash",
                     modifier = Modifier.size(18.dp).noRippleClickable { onDelete() },
                     tint = tint

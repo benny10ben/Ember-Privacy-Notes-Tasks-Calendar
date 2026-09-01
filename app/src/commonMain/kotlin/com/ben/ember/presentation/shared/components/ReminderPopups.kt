@@ -366,15 +366,16 @@ private fun CustomCalendarHeader(
     onNextMonth: () -> Unit
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Row(
             modifier = Modifier
+                .padding(start = 16.dp)
                 .clip(RoundedCornerShape(8.dp))
                 .clickable(onClick = onHeaderClick)
-                .padding(vertical = 6.dp, horizontal = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
                 text = "${MonthNames[viewMonth]} $viewYear",
@@ -389,11 +390,11 @@ private fun CustomCalendarHeader(
                 tint = MaterialTheme.colorScheme.onSurface
             )
         }
-        Spacer(modifier = Modifier.weight(1f))
-        IconButton(onClick = onPreviousMonth) {
+        Spacer(modifier = Modifier.weight(1f).padding(end = 2.dp))
+        IconButton(onClick = onPreviousMonth, modifier = Modifier.size(32.dp)) {
             Icon(Icons.Default.ChevronLeft, contentDescription = "Previous month")
         }
-        IconButton(onClick = onNextMonth) {
+        IconButton(onClick = onNextMonth, modifier = Modifier.size(32.dp).padding(end = 2.dp)) {
             Icon(Icons.Default.ChevronRight, contentDescription = "Next month")
         }
     }
@@ -407,7 +408,8 @@ private fun CalendarWeekdayRow() {
             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                 Text(
                     text = label,
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
             }

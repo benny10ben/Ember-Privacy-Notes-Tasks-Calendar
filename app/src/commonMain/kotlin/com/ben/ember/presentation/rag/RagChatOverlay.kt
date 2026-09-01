@@ -24,13 +24,11 @@ import com.ben.ember.presentation.shared.rememberStableStatusBarsPadding
 import com.ben.ember.presentation.shared.stableStatusBarsPadding
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
@@ -42,6 +40,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -81,6 +80,9 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import ember.app.generated.resources.Res
 import ember.app.generated.resources.chevron_left
+import ember.app.generated.resources.cog
+import ember.app.generated.resources.copy
+import ember.app.generated.resources.pen
 import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.painterResource
 import kotlin.time.Duration.Companion.milliseconds
@@ -722,13 +724,13 @@ fun ChatBubble(
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 MessageActionIcon(
-                    icon = Icons.Default.ContentCopy,
+                    icon = painterResource(Res.drawable.copy),
                     contentDescription = "Copy",
                     onClick = { clipboardManager.setText(AnnotatedString(message.text)) }
                 )
                 if (onEditClick != null) {
                     MessageActionIcon(
-                        icon = Icons.Default.Edit,
+                        icon = painterResource(Res.drawable.pen),
                         contentDescription = "Edit prompt",
                         onClick = onEditClick
                     )
@@ -740,7 +742,7 @@ fun ChatBubble(
 
 @Composable
 private fun MessageActionIcon(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: Painter,
     contentDescription: String,
     onClick: () -> Unit
 ) {
@@ -900,7 +902,7 @@ private fun ChatInputBar(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                Icons.Default.Settings,
+                                painterResource(Res.drawable.cog),
                                 contentDescription = "AI settings",
                                 tint = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier
@@ -1714,6 +1716,7 @@ private fun ChatHistoryMenuContent(
             text = "Recent Chats",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            modifier = Modifier.padding(horizontal = SheetContentHorizontalPadding)
         )
         Spacer(Modifier.height(8.dp))
 
