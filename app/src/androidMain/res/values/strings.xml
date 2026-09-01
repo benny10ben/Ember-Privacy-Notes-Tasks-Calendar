@@ -12,4 +12,6 @@
     <string name="today_tasks_widget_description">See what is planned for today at a glance</string>
     <string name="calendar_widget_label">Calendar</string>
     <string name="calendar_widget_description">A month at a glance, with a dot for every task</string>
+    <string name="calendar_agenda_widget_label">Calendar and events</string>
+    <string name="calendar_agenda_widget_description">A month beside the events planned in it</string>
 </resources>

@@ -135,6 +135,25 @@ data class EventEditorState(
     val isEditing: Boolean = original == null
 )
 
+fun CalendarEvent.toEditorState(): EventEditorState {
+    val startedAt = Instant.fromEpochMilliseconds(reminderTimestamp)
+        .toLocalDateTime(TimeZone.currentSystemDefault())
+
+    return EventEditorState(
+        original = this,
+        name = text,
+        date = startedAt.date,
+        hour = startedAt.hour,
+        minute = startedAt.minute,
+        categoryId = categoryId,
+        durationMinutes = durationMinutes,
+        url = url.orEmpty(),
+        description = description.orEmpty(),
+        recurrenceRule = recurrenceRule
+    )
+}
+
+
 fun EventEditorState.toEpochMillis(): Long {
     val localDateTime = LocalDateTime(date.year, date.monthNumber, date.dayOfMonth, hour, minute)
     return localDateTime.toInstant(TimeZone.currentSystemDefault()).toEpochMilliseconds()

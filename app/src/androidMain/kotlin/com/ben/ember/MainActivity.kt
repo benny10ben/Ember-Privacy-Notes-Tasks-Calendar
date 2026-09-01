@@ -24,16 +24,19 @@ import com.ben.ember.domain.model.PendingShare
 import com.ben.ember.domain.util.WidgetComposeRequest
 import com.ben.ember.domain.util.WidgetComposeRequestBus
 import com.ben.ember.domain.util.WidgetCalendarDateBus
+import com.ben.ember.domain.util.WidgetCalendarEventBus
 import com.ben.ember.domain.util.WidgetNavigationBus
 import com.ben.ember.domain.util.ShareEventBus
 import com.ben.ember.presentation.shared.editor.ActiveEditorRegistry
 import com.ben.ember.presentation.widget.calendar.refreshCalendarWidgets
+import com.ben.ember.presentation.widget.calendaragenda.refreshCalendarAgendaWidgets
 import com.ben.ember.presentation.widget.note.refreshNoteWidgets
 import com.ben.ember.presentation.widget.notelist.refreshNoteListWidgets
 import com.ben.ember.presentation.widget.noteshortcut.refreshNoteShortcutWidgets
 import com.ben.ember.presentation.widget.todaytasks.refreshTodayTasksWidgets
 import com.ben.ember.presentation.widget.tasks.refreshTaskWidgets
 import com.ben.ember.presentation.widget.calendarDateUriScheme
+import com.ben.ember.presentation.widget.calendarEventUriScheme
 import com.ben.ember.presentation.widget.widgetDailyDateExtra
 import com.ben.ember.presentation.widget.widgetDailyScreenExtra
 import com.ben.ember.presentation.widget.widgetHomeScreenExtra
@@ -143,6 +146,7 @@ class MainActivity : ComponentActivity() {
                         refreshNoteShortcutWidgets(this@MainActivity)
                         refreshTodayTasksWidgets(this@MainActivity)
                         refreshCalendarWidgets(this@MainActivity)
+                        refreshCalendarAgendaWidgets(this@MainActivity)
                     }
                 }
                 else -> {}
@@ -405,6 +409,16 @@ class MainActivity : ComponentActivity() {
                 WidgetComposeRequestBus.request(WidgetComposeRequest.NEW_TASK)
             }
             return Screen.Reminders.route
+        }
+
+        val calendarEvent = intent.data
+            ?.takeIf { uri -> uri.scheme == calendarEventUriScheme }
+            ?.lastPathSegment
+            ?.takeIf { it.isNotBlank() }
+
+        if (calendarEvent != null) {
+            WidgetCalendarEventBus.requestEvent(calendarEvent)
+            return Screen.Calendar.route
         }
 
         val calendarDate = intent.data

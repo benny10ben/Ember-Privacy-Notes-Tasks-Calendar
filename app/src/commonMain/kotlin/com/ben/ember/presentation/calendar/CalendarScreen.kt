@@ -38,6 +38,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import com.ben.ember.domain.util.WidgetCalendarDateBus
+import com.ben.ember.domain.util.WidgetCalendarEventBus
 import com.ben.ember.presentation.shared.stableStatusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -100,6 +101,7 @@ import ember.app.generated.resources.chevron_left
 import ember.app.generated.resources.tablet
 import ember.app.generated.resources.widget2
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.Instant
@@ -151,6 +153,17 @@ fun CalendarScreen(
     val density = LocalDensity.current
     var topBarHeightPx by remember { mutableFloatStateOf(0f) }
     val topBarHeightDp = with(density) { topBarHeightPx.toDp() }
+
+    LaunchedEffect(Unit) {
+        WidgetCalendarEventBus.requestedEvents.collect { requestedBlockId ->
+            WidgetCalendarEventBus.consumeRequestedEvent()
+            val event = viewModel.eventForBlock(requestedBlockId).first()
+            if (event != null) {
+                selectedDate = LocalDate.parse(event.dateString)
+                eventEditorState = event.toEditorState()
+            }
+        }
+    }
 
     LaunchedEffect(Unit) {
         WidgetCalendarDateBus.requestedDates.collect { requestedDate ->
@@ -215,20 +228,7 @@ fun CalendarScreen(
                     .background(MaterialTheme.colorScheme.background)
             ) {
                 val onEventClick: (CalendarEvent) -> Unit = { event ->
-                    val dt = Instant.fromEpochMilliseconds(event.reminderTimestamp)
-                        .toLocalDateTime(TimeZone.currentSystemDefault())
-                    eventEditorState = EventEditorState(
-                        original = event,
-                        name = event.text,
-                        date = dt.date,
-                        hour = dt.hour,
-                        minute = dt.minute,
-                        categoryId = event.categoryId,
-                        durationMinutes = event.durationMinutes,
-                        url = event.url.orEmpty(),
-                        description = event.description.orEmpty(),
-                        recurrenceRule = event.recurrenceRule
-                    )
+                    eventEditorState = event.toEditorState()
                 }
 
                 when (viewMode) {
