@@ -41,6 +41,7 @@ class EmberApplication : Application() {
             getKoin().get<com.ben.ember.presentation.widget.note.NoteWidgetCoordinator>().start()
             getKoin().get<com.ben.ember.presentation.widget.tasks.TasksWidgetCoordinator>().start()
             getKoin().get<com.ben.ember.presentation.widget.notelist.NoteListWidgetCoordinator>().start()
+            getKoin().get<com.ben.ember.presentation.widget.noteshortcut.NoteShortcutWidgetCoordinator>().start()
         }
 
     }

@@ -28,6 +28,7 @@ import com.ben.ember.domain.util.ShareEventBus
 import com.ben.ember.presentation.shared.editor.ActiveEditorRegistry
 import com.ben.ember.presentation.widget.note.refreshNoteWidgets
 import com.ben.ember.presentation.widget.notelist.refreshNoteListWidgets
+import com.ben.ember.presentation.widget.noteshortcut.refreshNoteShortcutWidgets
 import com.ben.ember.presentation.widget.tasks.refreshTaskWidgets
 import com.ben.ember.presentation.widget.widgetHomeScreenExtra
 import com.ben.ember.presentation.widget.widgetNewNoteExtra
@@ -133,6 +134,7 @@ class MainActivity : ComponentActivity() {
                         refreshNoteWidgets(this@MainActivity)
                         refreshTaskWidgets(this@MainActivity)
                         refreshNoteListWidgets(this@MainActivity)
+                        refreshNoteShortcutWidgets(this@MainActivity)
                     }
                 }
                 else -> {}

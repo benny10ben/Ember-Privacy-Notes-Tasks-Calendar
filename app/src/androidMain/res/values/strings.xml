@@ -6,4 +6,6 @@
     <string name="tasks_widget_description">See and tick off your tasks from the home screen</string>
     <string name="note_list_widget_label">Notes</string>
     <string name="note_list_widget_description">Browse your notes from the home screen</string>
+    <string name="note_shortcut_widget_label">Note shortcut</string>
+    <string name="note_shortcut_widget_description">Open one note straight from the home screen</string>
 </resources>

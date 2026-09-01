@@ -113,6 +113,15 @@ val androidModule = module {
 
     single { com.ben.ember.presentation.widget.notelist.NoteListWidgetContentReader(noteDao = get()) }
 
+    single { com.ben.ember.presentation.widget.noteshortcut.NoteShortcutWidgetContentReader(noteDao = get()) }
+
+    single {
+        com.ben.ember.presentation.widget.noteshortcut.NoteShortcutWidgetCoordinator(
+            context = androidContext(),
+            noteSource = get()
+        )
+    }
+
     single {
         com.ben.ember.presentation.widget.notelist.NoteListWidgetCoordinator(
             context = androidContext(),
