@@ -29,7 +29,10 @@ import com.ben.ember.presentation.shared.editor.ActiveEditorRegistry
 import com.ben.ember.presentation.widget.note.refreshNoteWidgets
 import com.ben.ember.presentation.widget.notelist.refreshNoteListWidgets
 import com.ben.ember.presentation.widget.noteshortcut.refreshNoteShortcutWidgets
+import com.ben.ember.presentation.widget.todaytasks.refreshTodayTasksWidgets
 import com.ben.ember.presentation.widget.tasks.refreshTaskWidgets
+import com.ben.ember.presentation.widget.widgetDailyDateExtra
+import com.ben.ember.presentation.widget.widgetDailyScreenExtra
 import com.ben.ember.presentation.widget.widgetHomeScreenExtra
 import com.ben.ember.presentation.widget.widgetNewNoteExtra
 import com.ben.ember.presentation.widget.widgetNewTaskExtra
@@ -135,6 +138,7 @@ class MainActivity : ComponentActivity() {
                         refreshTaskWidgets(this@MainActivity)
                         refreshNoteListWidgets(this@MainActivity)
                         refreshNoteShortcutWidgets(this@MainActivity)
+                        refreshTodayTasksWidgets(this@MainActivity)
                     }
                 }
                 else -> {}
@@ -397,6 +401,13 @@ class MainActivity : ComponentActivity() {
                 WidgetComposeRequestBus.request(WidgetComposeRequest.NEW_TASK)
             }
             return Screen.Reminders.route
+        }
+
+        if (intent.getBooleanExtra(widgetDailyScreenExtra, false)) {
+            intent.removeExtra(widgetDailyScreenExtra)
+            val dateString = intent.getStringExtra(widgetDailyDateExtra)
+            intent.removeExtra(widgetDailyDateExtra)
+            return Screen.Daily.createRoute(dateString)
         }
 
         if (intent.getBooleanExtra(widgetHomeScreenExtra, false)) {

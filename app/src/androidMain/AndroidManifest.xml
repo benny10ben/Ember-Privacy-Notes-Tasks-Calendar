@@ -149,6 +149,28 @@
         </activity>
 
         <receiver
+            android:name=".presentation.widget.todaytasks.TodayTasksWidgetReceiver"
+            android:enabled="true"
+            android:exported="true"
+            android:label="@string/today_tasks_widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/today_tasks_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".presentation.widget.todaytasks.TodayTasksWidgetActionReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.ben.ember.widget.todaytasks.TOGGLE_TASK" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
             android:name=".presentation.widget.tasks.TasksWidgetActionReceiver"
             android:enabled="true"
             android:exported="false">

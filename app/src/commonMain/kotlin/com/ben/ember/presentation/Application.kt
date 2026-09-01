@@ -99,7 +99,14 @@ fun EmberApp(
                     openRoutePattern == requestedRoute
                 }
 
-                if (!isAlreadyOpen) {
+                val isDailyRoute = requestedRoute.startsWith(Screen.Daily.createRoute())
+
+                if (isDailyRoute) {
+                    navController.navigate(requestedRoute) {
+                        popUpTo(navController.graph.id) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                } else if (!isAlreadyOpen) {
                     navController.navigate(requestedRoute) {
                         popUpTo(navController.graph.startDestinationId)
                         launchSingleTop = true

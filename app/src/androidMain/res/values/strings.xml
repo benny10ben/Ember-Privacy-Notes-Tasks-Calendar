@@ -8,4 +8,6 @@
     <string name="note_list_widget_description">Browse your notes from the home screen</string>
     <string name="note_shortcut_widget_label">Note shortcut</string>
     <string name="note_shortcut_widget_description">Open one note straight from the home screen</string>
+    <string name="today_tasks_widget_label">Today\'s Tasks</string>
+    <string name="today_tasks_widget_description">See what is planned for today at a glance</string>
 </resources>

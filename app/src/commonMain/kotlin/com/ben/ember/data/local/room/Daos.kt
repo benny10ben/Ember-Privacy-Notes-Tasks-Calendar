@@ -202,6 +202,9 @@ interface CalendarTaskDao {
     @Query("SELECT * FROM calendar_tasks WHERE targetDate = :dateString")
     fun getTasksForDate(dateString: String): Flow<List<CalendarTaskEntity>>
 
+    @Query("SELECT * FROM calendar_tasks WHERE targetDate = :dateString")
+    suspend fun getTasksOnDate(dateString: String): List<CalendarTaskEntity>
+
     @Query("SELECT * FROM calendar_tasks WHERE blockId = :blockId LIMIT 1")
     suspend fun getTaskById(blockId: String): CalendarTaskEntity?
 

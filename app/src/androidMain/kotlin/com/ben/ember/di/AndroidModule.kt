@@ -111,6 +111,19 @@ val androidModule = module {
 
     single { com.ben.ember.presentation.widget.WidgetNoteSource(noteDao = get()) }
 
+    single {
+        com.ben.ember.presentation.widget.todaytasks.TodayTasksWidgetContentReader(
+            calendarTaskDao = get()
+        )
+    }
+
+    single {
+        com.ben.ember.presentation.widget.todaytasks.TodayTasksWidgetCoordinator(
+            context = androidContext(),
+            calendarTaskDao = get()
+        )
+    }
+
     single { com.ben.ember.presentation.widget.notelist.NoteListWidgetContentReader(noteDao = get()) }
 
     single { com.ben.ember.presentation.widget.noteshortcut.NoteShortcutWidgetContentReader(noteDao = get()) }
