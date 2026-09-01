@@ -177,6 +177,9 @@ interface CategoryDao {
     @Query("SELECT * FROM calendar_categories WHERE isDeleted = 0 ORDER BY createdAt ASC")
     fun getAllCategories(): Flow<List<CategoryEntity>>
 
+    @Query("SELECT * FROM calendar_categories WHERE isDeleted = 0")
+    suspend fun getAllCategoriesOnce(): List<CategoryEntity>
+
     @Query("SELECT * FROM calendar_categories WHERE categoryId = :categoryId LIMIT 1")
     suspend fun getCategoryById(categoryId: String): CategoryEntity?
 
@@ -197,6 +200,9 @@ interface CalendarTaskDao {
     // Pass yearMonth as "2026-07" to get everything in July.
     @Query("SELECT * FROM calendar_tasks WHERE targetDate LIKE :yearMonth || '%'")
     fun getTasksForMonth(yearMonth: String): Flow<List<CalendarTaskEntity>>
+
+    @Query("SELECT * FROM calendar_tasks WHERE targetDate LIKE :yearMonth || '%'")
+    suspend fun getTasksInMonth(yearMonth: String): List<CalendarTaskEntity>
 
     // Precise query for the Bottom Sheet when a user clicks a specific day.
     @Query("SELECT * FROM calendar_tasks WHERE targetDate = :dateString")

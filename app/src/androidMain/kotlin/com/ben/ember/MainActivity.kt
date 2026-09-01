@@ -23,14 +23,17 @@ import coil3.request.crossfade
 import com.ben.ember.domain.model.PendingShare
 import com.ben.ember.domain.util.WidgetComposeRequest
 import com.ben.ember.domain.util.WidgetComposeRequestBus
+import com.ben.ember.domain.util.WidgetCalendarDateBus
 import com.ben.ember.domain.util.WidgetNavigationBus
 import com.ben.ember.domain.util.ShareEventBus
 import com.ben.ember.presentation.shared.editor.ActiveEditorRegistry
+import com.ben.ember.presentation.widget.calendar.refreshCalendarWidgets
 import com.ben.ember.presentation.widget.note.refreshNoteWidgets
 import com.ben.ember.presentation.widget.notelist.refreshNoteListWidgets
 import com.ben.ember.presentation.widget.noteshortcut.refreshNoteShortcutWidgets
 import com.ben.ember.presentation.widget.todaytasks.refreshTodayTasksWidgets
 import com.ben.ember.presentation.widget.tasks.refreshTaskWidgets
+import com.ben.ember.presentation.widget.calendarDateUriScheme
 import com.ben.ember.presentation.widget.widgetDailyDateExtra
 import com.ben.ember.presentation.widget.widgetDailyScreenExtra
 import com.ben.ember.presentation.widget.widgetHomeScreenExtra
@@ -139,6 +142,7 @@ class MainActivity : ComponentActivity() {
                         refreshNoteListWidgets(this@MainActivity)
                         refreshNoteShortcutWidgets(this@MainActivity)
                         refreshTodayTasksWidgets(this@MainActivity)
+                        refreshCalendarWidgets(this@MainActivity)
                     }
                 }
                 else -> {}
@@ -401,6 +405,16 @@ class MainActivity : ComponentActivity() {
                 WidgetComposeRequestBus.request(WidgetComposeRequest.NEW_TASK)
             }
             return Screen.Reminders.route
+        }
+
+        val calendarDate = intent.data
+            ?.takeIf { uri -> uri.scheme == calendarDateUriScheme }
+            ?.lastPathSegment
+            ?.takeIf { it.isNotBlank() }
+
+        if (calendarDate != null) {
+            WidgetCalendarDateBus.requestDate(calendarDate)
+            return Screen.Calendar.route
         }
 
         if (intent.getBooleanExtra(widgetDailyScreenExtra, false)) {

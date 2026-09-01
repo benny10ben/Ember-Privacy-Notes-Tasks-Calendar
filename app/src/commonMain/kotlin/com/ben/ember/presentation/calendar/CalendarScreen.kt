@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
+import com.ben.ember.domain.util.WidgetCalendarDateBus
 import com.ben.ember.presentation.shared.stableStatusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -150,6 +151,18 @@ fun CalendarScreen(
     val density = LocalDensity.current
     var topBarHeightPx by remember { mutableFloatStateOf(0f) }
     val topBarHeightDp = with(density) { topBarHeightPx.toDp() }
+
+    LaunchedEffect(Unit) {
+        WidgetCalendarDateBus.requestedDates.collect { requestedDate ->
+            WidgetCalendarDateBus.consumeRequestedDate()
+            try {
+                selectedDate = LocalDate.parse(requestedDate)
+                viewModel.setViewMode(CalendarViewMode.DAY)
+            } catch (cause: IllegalArgumentException) {
+                cause.printStackTrace()
+            }
+        }
+    }
 
     val dayCount = if (viewMode == CalendarViewMode.THREE_DAY) 3 else 7
     val multiDayDates = remember(selectedDate, dayCount) {

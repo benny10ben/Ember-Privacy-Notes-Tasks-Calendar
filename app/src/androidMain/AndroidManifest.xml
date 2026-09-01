@@ -162,6 +162,29 @@
         </receiver>
 
         <receiver
+            android:name=".presentation.widget.calendar.CalendarWidgetReceiver"
+            android:enabled="true"
+            android:exported="true"
+            android:label="@string/calendar_widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/calendar_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".presentation.widget.calendar.CalendarWidgetActionReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.ben.ember.widget.calendar.SHOW_PREVIOUS_MONTH" />
+                <action android:name="com.ben.ember.widget.calendar.SHOW_NEXT_MONTH" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
             android:name=".presentation.widget.todaytasks.TodayTasksWidgetActionReceiver"
             android:enabled="true"
             android:exported="false">
