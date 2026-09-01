@@ -36,6 +36,7 @@ import com.ben.ember.domain.model.DatabaseView
 import com.ben.ember.domain.model.ViewType
 import com.ben.ember.domain.util.isDesktopPlatform
 import com.ben.ember.presentation.shared.components.EmberBottomSheet
+import com.ben.ember.presentation.shared.components.EmberButtonPrimary
 import com.ben.ember.presentation.shared.components.EmberDesktopMenu
 import com.ben.ember.presentation.shared.components.MinimalDatePickerDialog
 import com.ben.ember.presentation.shared.editor.EditorActions
@@ -239,6 +240,15 @@ private fun DesktopOptionMenu(context: DatabaseSheetContext) {
  * Mobile gives every entry in the stack its own [EmberBottomSheet], so opening a sub-sheet slides a
  * fresh surface in on top and a back press pops exactly one level instead of dismissing everything.
  */
+private val SHEET_TYPES_WITH_OWN_DISMISS_BUTTON = setOf(
+    DatabaseSheet.RENAME,
+    DatabaseSheet.FORMULA,
+    DatabaseSheet.RENAME_VIEW,
+    DatabaseSheet.SAVE_AS_TEMPLATE,
+    DatabaseSheet.FILTER,
+    DatabaseSheet.SORT
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MobileSheetStack(context: DatabaseSheetContext) {
@@ -251,6 +261,15 @@ private fun MobileSheetStack(context: DatabaseSheetContext) {
             ) { _ ->
                 Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
                     OptionSheetBody(context, sheetType)
+
+                    if (sheetType !in SHEET_TYPES_WITH_OWN_DISMISS_BUTTON) {
+                        EmberButtonPrimary(
+                            text = "Close",
+                            onClick = { context.state.pop() },
+                            modifier = Modifier.fillMaxWidth()
+                                .padding(vertical = 12.dp, horizontal = 20.dp)
+                        )
+                    }
                 }
             }
         }

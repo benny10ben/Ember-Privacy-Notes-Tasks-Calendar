@@ -448,11 +448,11 @@ fun DesktopMainScreen(
                                     contentDescription = "Calendar",
                                     onClick = { detail = DetailPane.Calendar; isPeeking = false }
                                 ),
-                                TopBarIconButtonItem(
-                                    icon = painterResource(Res.drawable.inbox),
-                                    contentDescription = "Upcoming tasks",
-                                    onClick = { showScheduledTasksSheet = true }
-                                ),
+//                                TopBarIconButtonItem(
+//                                    icon = painterResource(Res.drawable.inbox),
+//                                    contentDescription = "Upcoming tasks",
+//                                    onClick = { showScheduledTasksSheet = true }
+//                                ),
                                 TopBarIconButtonItem(
                                     icon = painterResource(Res.drawable.ellipsis),
                                     contentDescription = "Settings",
@@ -537,10 +537,30 @@ fun DesktopMainScreen(
                     ) {
                         item {
                             Column(modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)) {
-                                OverviewRow(painterResource(Res.drawable.check_square), "Tasks", "$remindersCount left", isSelected = detail == DetailPane.Reminders) { detail = DetailPane.Reminders; isPeeking = false }
-                                OverviewRow(painterResource(Res.drawable.bookmark), "Bookmarks", "$bookmarksCount saved", isSelected = detail == DetailPane.Bookmarks) { detail = DetailPane.Bookmarks; isPeeking = false }
-                                OverviewRow(painterResource(Res.drawable.images), "Images", "$imagesCount saved", isSelected = detail == DetailPane.Images) { detail = DetailPane.Images; isPeeking = false }
-                                OverviewRow(painterResource(Res.drawable.notes2), "Documents", "$documentsCount attached", isSelected = detail == DetailPane.Documents) { detail = DetailPane.Documents; isPeeking = false }
+                                OverviewRow(
+                                    painterResource(Res.drawable.check_square),
+                                    "Tasks",
+                                    "$remindersCount left",
+                                    isSelected = detail == DetailPane.Reminders
+                                ) { detail = DetailPane.Reminders; isPeeking = false }
+                                OverviewRow(
+                                    painterResource(Res.drawable.bookmark),
+                                    "Bookmarks",
+                                    "$bookmarksCount saved",
+                                    isSelected = detail == DetailPane.Bookmarks
+                                ) { detail = DetailPane.Bookmarks; isPeeking = false }
+                                OverviewRow(
+                                    painterResource(Res.drawable.images),
+                                    "Images",
+                                    "$imagesCount saved",
+                                    isSelected = detail == DetailPane.Images
+                                ) { detail = DetailPane.Images; isPeeking = false }
+                                OverviewRow(
+                                    painterResource(Res.drawable.notes2),
+                                    "Documents",
+                                    "$documentsCount attached",
+                                    isSelected = detail == DetailPane.Documents
+                                ) { detail = DetailPane.Documents; isPeeking = false }
                             }
                         }
 
@@ -1117,13 +1137,32 @@ fun DesktopMainScreen(
             if (showScheduledTasksSheet) {
                 val todayTasks = calendarTaskMap[today] ?: emptyList()
                 val tomorrowTasks = calendarTaskMap[today.plus(1, DateTimeUnit.DAY)] ?: emptyList()
-                EmberBottomSheet(expanded = true, onDismiss = { showScheduledTasksSheet = false }, title = "Upcoming Tasks") { _ ->
-                    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+                EmberBottomSheet(
+                    expanded = true,
+                    onDismiss = { showScheduledTasksSheet = false },
+                    title = "Upcoming Tasks"
+                ) { _ ->
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(24.dp)
+                    ) {
                         if (todayTasks.isEmpty() && tomorrowTasks.isEmpty()) {
-                            Text("No tasks scheduled for today or tomorrow.", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                            Text(
+                                "No tasks scheduled for today or tomorrow.",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
                         } else {
-                            if (todayTasks.isNotEmpty()) TaskDaySection("Today", todayTasks, dailyViewModel)
-                            if (tomorrowTasks.isNotEmpty()) TaskDaySection("Tomorrow", tomorrowTasks, dailyViewModel)
+                            if (todayTasks.isNotEmpty()) TaskDaySection(
+                                "Today",
+                                todayTasks,
+                                dailyViewModel
+                            )
+                            if (tomorrowTasks.isNotEmpty()) TaskDaySection(
+                                "Tomorrow",
+                                tomorrowTasks,
+                                dailyViewModel
+                            )
                         }
                     }
                 }
@@ -1138,11 +1177,27 @@ fun DesktopMainScreen(
             }
 
             SnackbarHost(hostState = snackbarHostState, modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 66.dp)) { data ->
-                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface, shadowElevation = 6.dp, modifier = Modifier.padding(horizontal = 24.dp).wrapContentWidth()) {
-                    Row(modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(imageVector = Icons.Default.Sync, contentDescription = "Sync", modifier = Modifier.size(30.dp))
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surface,
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    shadowElevation = 6.dp,
+                    modifier = Modifier.padding(horizontal = 24.dp).wrapContentWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Sync,
+                            contentDescription = "Sync",
+                            modifier = Modifier.size(30.dp)
+                        )
                         Spacer(modifier = Modifier.width(10.dp))
-                        Text(text = data.visuals.message, style = MaterialTheme.typography.labelSmall)
+                        Text(
+                            text = data.visuals.message,
+                            style = MaterialTheme.typography.labelSmall
+                        )
                     }
                 }
             }

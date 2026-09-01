@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import com.ben.ember.data.local.room.NoteMetadataEntity
 import com.ben.ember.domain.model.PendingShare
 import com.ben.ember.presentation.shared.components.EmberBottomSheet
+import com.ben.ember.presentation.shared.components.EmberButtonPrimary
 import com.ben.ember.presentation.shared.components.NotePickerDialog
 import ember.app.generated.resources.Res
 import ember.app.generated.resources.download3
@@ -76,6 +77,13 @@ fun ShareReceiverSheet(
             )
 
             Spacer(Modifier.height(8.dp))
+
+            EmberButtonPrimary(
+                text = "Close",
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth()
+                    .padding(vertical = 12.dp, horizontal = 20.dp)
+            )
         }
     }
 

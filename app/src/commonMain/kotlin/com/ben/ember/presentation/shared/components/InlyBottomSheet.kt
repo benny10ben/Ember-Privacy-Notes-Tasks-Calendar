@@ -266,16 +266,6 @@ private fun EmberModalBottomSheet(
                                 )
                             }
                         }
-                        Box(modifier = Modifier.padding(end = SheetHorizontalPadding)) {
-                            TopBarIconButton(
-                                icon = Icons.Default.Close,
-                                contentDescription = "Close",
-                                bgColor = if (LocalAppIsDark.current) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.background,
-                                tint = MaterialTheme.colorScheme.onSurface,
-                                shadowElevation = SheetIconShadowElevation,
-                                onClick = onDismiss
-                            )
-                        }
                     }
                 }
 

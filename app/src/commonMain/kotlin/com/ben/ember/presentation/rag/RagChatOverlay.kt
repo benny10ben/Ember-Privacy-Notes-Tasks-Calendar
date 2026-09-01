@@ -1107,6 +1107,13 @@ private fun ModelPickerPill(viewModel: RagViewModel) {
                         }
                     }
                 }
+
+                EmberButtonPrimary(
+                    text = "Close",
+                    onClick = { showPicker = false },
+                    modifier = Modifier.fillMaxWidth()
+                        .padding(vertical = 12.dp, horizontal = 20.dp)
+                )
             }
         }
     }
@@ -1185,6 +1192,13 @@ private fun AiSettingsSheet(
                 title = "Fine-tuning",
                 subtitle = knowledgeMode.displayName,
                 onClick = onFineTuningClick
+            )
+
+            EmberButtonPrimary(
+                text = "Close",
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth()
+                    .padding(vertical = 12.dp)
             )
         }
     }
@@ -1312,7 +1326,7 @@ private fun ExternalAiSettingsSheet(
             apiKeyInput = ""
         }
 
-        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 36.dp)) {
+        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
             Text(
                 text = "Provider",
                 style = MaterialTheme.typography.labelSmall,
@@ -1426,6 +1440,13 @@ private fun ExternalAiSettingsSheet(
                     modifier = Modifier.weight(1f)
                 )
             }
+
+            EmberButtonPrimary(
+                text = "Close",
+                onClick = { closeAnd { } },
+                modifier = Modifier.fillMaxWidth()
+                    .padding(vertical = 12.dp)
+            )
 
             if (showDeleteConfirm) {
                 EmberAlertDialog(
@@ -1558,6 +1579,13 @@ private fun FineTuningSheet(
                     onClick = { closeAnd { viewModel.selectMaxOutputTokens(option.tokens) } }
                 )
             }
+
+            EmberButtonPrimary(
+                text = "Close",
+                onClick = { closeAnd { } },
+                modifier = Modifier.fillMaxWidth()
+                    .padding(vertical = 12.dp, horizontal = SheetContentHorizontalPadding)
+            )
         }
     }
 }
@@ -1641,7 +1669,7 @@ private fun ChatHistoryMenuContent(
     var searchQuery by remember { mutableStateOf("") }
     val rowHorizontalPadding = if (isDesktopPlatform) 12.dp else SheetContentHorizontalPadding
 
-    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 26.dp)) {
         Spacer(Modifier.height(10.dp))
         EmberTextField(
             value = searchQuery,
@@ -1740,6 +1768,16 @@ private fun ChatHistoryMenuContent(
                 }
             }
         }
+
+        if (!isDesktopPlatform) {
+            Spacer(Modifier.height(12.dp))
+            EmberButtonPrimary(
+                text = "Close",
+                onClick = { closeAnd { } },
+                modifier = Modifier.fillMaxWidth()
+                    .padding(horizontal = SheetContentHorizontalPadding)
+            )
+        }
     }
 }
 
@@ -1768,6 +1806,13 @@ private fun ChatSessionOptionsBottomSheet(
                 title = "Delete",
                 subtitle = null,
                 onClick = { closeAnd { onDeleteClick() } }
+            )
+
+            EmberButtonPrimary(
+                text = "Close",
+                onClick = { closeAnd { } },
+                modifier = Modifier.fillMaxWidth()
+                    .padding(vertical = 12.dp)
             )
         }
     }

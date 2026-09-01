@@ -9,6 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.ben.ember.data.local.room.DatabaseTemplateEntity
 import com.ben.ember.presentation.shared.components.EmberBottomSheet
+import com.ben.ember.presentation.shared.components.EmberButtonPrimary
 import ember.app.generated.resources.Res
 import ember.app.generated.resources.files
 import ember.app.generated.resources.hash
@@ -45,6 +46,13 @@ fun DatabaseTemplatePickerSheet(
                         }
                     }
                 }
+
+                EmberButtonPrimary(
+                    text = "Close",
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth()
+                        .padding(vertical = 12.dp, horizontal = 20.dp)
+                )
             }
         }
     }

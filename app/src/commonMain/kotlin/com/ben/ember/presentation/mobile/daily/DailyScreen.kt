@@ -63,6 +63,7 @@ import com.ben.ember.presentation.calendar.RecurrenceScopeChooser
 import com.ben.ember.presentation.shared.UserSettings
 import com.ben.ember.presentation.shared.components.EmberBlur
 import com.ben.ember.presentation.shared.components.EmberBottomSheet
+import com.ben.ember.presentation.shared.components.EmberButtonPrimary
 import com.ben.ember.presentation.shared.components.TopBarIconButton
 import com.ben.ember.presentation.shared.components.TopBarIconButtonGroup
 import com.ben.ember.presentation.shared.components.TopBarIconButtonItem
@@ -753,11 +754,11 @@ private fun DailyTopBar(
                                 contentDescription = "Open Calendar",
                                 onClick = onOpenCalendarScreenClick
                             ),
-                            TopBarIconButtonItem(
-                                icon = painterResource(Res.drawable.inbox),
-                                contentDescription = "Notifications",
-                                onClick = onNotificationsClick
-                            ),
+//                            TopBarIconButtonItem(
+//                                icon = painterResource(Res.drawable.inbox),
+//                                contentDescription = "Notifications",
+//                                onClick = onNotificationsClick
+//                            ),
                             TopBarIconButtonItem(
                                 icon = painterResource(Res.drawable.ellipsis),
                                 contentDescription = "Settings",
@@ -798,7 +799,7 @@ private fun UpcomingTasksSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(24.dp)
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             if (todayTasks.isEmpty() && tomorrowTasks.isEmpty()) {
                 Text(
@@ -815,6 +816,13 @@ private fun UpcomingTasksSheet(
                     TaskDaySection("Tomorrow", tomorrowTasks, viewModel, onTaskNoteLinkClick)
                 }
             }
+
+            EmberButtonPrimary(
+                text = "Close",
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth()
+                    .padding(vertical = 12.dp)
+            )
         }
     }
 }
@@ -846,6 +854,13 @@ private fun DailyCalendarSheet(
                 onGoToToday()
                 closeAnd { onDismiss() }
             }
+        )
+
+        EmberButtonPrimary(
+            text = "Close",
+            onClick = onDismiss,
+            modifier = Modifier.fillMaxWidth()
+                .padding(vertical = 12.dp, horizontal = 20.dp)
         )
     }
 }

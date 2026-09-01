@@ -486,6 +486,12 @@ fun SettingsScreen(
                         },
                         modifier = Modifier.fillMaxWidth()
                     )
+
+                    EmberButtonPrimary(
+                        text = "Close",
+                        onClick = { closeAnd { showImportExportSheet = false } },
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             }
         }
@@ -616,6 +622,13 @@ fun SettingsScreen(
                         )
                     }
                 }
+
+                EmberButtonPrimary(
+                    text = "Close",
+                    onClick = { showFontStyleSheet = false },
+                    modifier = Modifier.fillMaxWidth()
+                        .padding(top = 12.dp, start = 20.dp, end = 20.dp)
+                )
             }
         }
     }
@@ -668,6 +681,13 @@ fun SettingsScreen(
                         )
                     }
                 }
+
+                EmberButtonPrimary(
+                    text = "Close",
+                    onClick = { showSubNoteOpenModeSheet = false },
+                    modifier = Modifier.fillMaxWidth()
+                        .padding(top = 12.dp, start = 20.dp, end = 20.dp)
+                )
             }
         }
     }

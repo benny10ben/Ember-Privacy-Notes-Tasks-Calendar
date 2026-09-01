@@ -90,6 +90,7 @@ import com.ben.ember.domain.util.isDesktopPlatform
 import com.ben.ember.presentation.customEmberShadow
 import com.ben.ember.presentation.shared.components.EmberBlur
 import com.ben.ember.presentation.shared.components.EmberBottomSheet
+import com.ben.ember.presentation.shared.components.EmberButtonPrimary
 import com.ben.ember.presentation.shared.components.EmberDesktopMenu
 import com.ben.ember.presentation.shared.components.SelectedOptionBackground
 import com.ben.ember.presentation.shared.components.TopBarIconButton
@@ -409,13 +410,20 @@ fun CalendarScreen(
         LocalIndication provides NoRippleIndicationNodeFactory,
         LocalRippleConfiguration provides null
       ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 26.dp)) {
             ViewModeSection(
                 viewMode = viewMode,
                 onViewModeChange = { mode ->
                     viewModel.setViewMode(mode)
                     showViewsSheet = false
                 }
+            )
+
+            EmberButtonPrimary(
+                text = "Close",
+                onClick = { showViewsSheet = false },
+                modifier = Modifier.fillMaxWidth()
+                    .padding(top = 12.dp, start = 20.dp, end = 20.dp)
             )
         }
       }
@@ -436,6 +444,13 @@ fun CalendarScreen(
                 onAddCategory = viewModel::addCategory,
                 onUpdateCategory = viewModel::updateCategory,
                 onDeleteCategory = viewModel::deleteCategory
+            )
+
+            EmberButtonPrimary(
+                text = "Close",
+                onClick = { showCategoriesSheet = false },
+                modifier = Modifier.fillMaxWidth()
+                    .padding(vertical = 12.dp)
             )
         }
       }

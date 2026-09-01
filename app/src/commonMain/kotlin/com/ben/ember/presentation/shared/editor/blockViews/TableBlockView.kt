@@ -88,6 +88,7 @@ import com.ben.ember.domain.model.TableCellStyle
 import com.ben.ember.domain.model.TextAlignment
 import com.ben.ember.domain.util.isDesktopPlatform
 import com.ben.ember.presentation.shared.components.EmberBottomSheet
+import com.ben.ember.presentation.shared.components.EmberButtonPrimary
 import com.ben.ember.presentation.shared.components.EmberDesktopMenu
 import com.ben.ember.presentation.shared.components.rememberKeyboardHandoff
 import com.ben.ember.presentation.shared.editor.blockViews.databaseBlockView.SheetMenuRow
@@ -598,6 +599,12 @@ fun TableBlockView(
         ) { _ ->
             Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
                 cellActionsBody()
+                EmberButtonPrimary(
+                    text = "Close",
+                    onClick = { closeMenu() },
+                    modifier = Modifier.fillMaxWidth()
+                        .padding(vertical = 12.dp, horizontal = 20.dp)
+                )
             }
         }
         EmberBottomSheet(
@@ -607,6 +614,12 @@ fun TableBlockView(
         ) { _ ->
             Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
                 styleSheetBody()
+                EmberButtonPrimary(
+                    text = "Close",
+                    onClick = { closeMenu() },
+                    modifier = Modifier.fillMaxWidth()
+                        .padding(vertical = 12.dp, horizontal = 20.dp)
+                )
             }
         }
     }

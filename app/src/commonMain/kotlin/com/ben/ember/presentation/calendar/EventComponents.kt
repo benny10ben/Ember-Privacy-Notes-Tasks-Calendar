@@ -292,6 +292,7 @@ private fun EventEditorFields(
             categories = categories,
             onEditClick = onEditClick,
             onDelete = onDelete,
+            onClose = onCancel,
         )
         return
     }
@@ -492,6 +493,7 @@ private fun EventViewFields(
     categories: List<CalendarCategory>,
     onEditClick: () -> Unit,
     onDelete: (() -> Unit)?,
+    onClose: () -> Unit,
 ) {
     val category = categories.firstOrNull { it.id == state.categoryId }
     val accentColor = category?.colorHex?.toCategoryColor() ?: MaterialTheme.colorScheme.primary
@@ -502,7 +504,7 @@ private fun EventViewFields(
             .fillMaxWidth()
             .padding(
                 top = if (isDesktopPlatform) 16.dp else 24.dp,
-                bottom = if (isDesktopPlatform) 0.dp else 32.dp
+                bottom = if (isDesktopPlatform) 0.dp else 24.dp
             ),
         verticalArrangement = Arrangement.spacedBy(SectionSpacing)
     ) {
@@ -562,7 +564,6 @@ private fun EventViewFields(
             }
         }
 
-        // Plain icon + label rows - no Surface/box background, matching the reference layout.
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             state.recurrenceRule?.let { rule ->
                 InfoRow(icon = painterResource(Res.drawable.clock_circle), label = "Repeats ${formatRecurrenceSummary(rule).replaceFirstChar(Char::lowercase)}")
@@ -582,6 +583,14 @@ private fun EventViewFields(
             if (state.description.isNotBlank()) {
                 InfoRow(icon = painterResource(Res.drawable.doc_text), label = state.description)
             }
+        }
+
+        if (!isDesktopPlatform) {
+            EmberButtonPrimary(
+                text = "Close",
+                onClick = onClose,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }
@@ -724,7 +733,7 @@ fun RepeatOptionsDialog(
             LocalIndication provides NoRippleIndicationNodeFactory,
             LocalRippleConfiguration provides null
         ) {
-            Column(modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp)) {
+            Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
                 SheetOptionRow("Never") { closeAnd { onConfirm(null) } }
                 SheetOptionRow("Daily") { closeAnd { onConfirm(RecurrenceRule(frequency = RecurrenceFrequency.DAILY)) } }
                 SheetOptionRow("Weekly") {
@@ -733,6 +742,13 @@ fun RepeatOptionsDialog(
                 SheetOptionRow("Monthly") { closeAnd { onConfirm(RecurrenceRule(frequency = RecurrenceFrequency.MONTHLY)) } }
                 SheetOptionRow("Yearly") { closeAnd { onConfirm(RecurrenceRule(frequency = RecurrenceFrequency.YEARLY)) } }
                 SheetOptionRow("Custom…") { showCustom = true }
+
+                EmberButtonPrimary(
+                    text = "Close",
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth()
+                        .padding(vertical = 12.dp)
+                )
             }
         }
     }
@@ -1050,6 +1066,13 @@ fun RecurrenceScopeChooser(
                 SheetOptionRow("All future events") { closeAnd { onScopeSelected(RecurrenceEditScope.ALL_FUTURE_EVENTS) } }
                 SheetOptionRow("All past events") { closeAnd { onScopeSelected(RecurrenceEditScope.ALL_PAST_EVENTS) } }
                 SheetOptionRow("All events") { closeAnd { onScopeSelected(RecurrenceEditScope.ALL_EVENTS) } }
+
+                EmberButtonPrimary(
+                    text = "Close",
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth()
+                        .padding(vertical = 12.dp, horizontal = 20.dp)
+                )
             }
         }
     }

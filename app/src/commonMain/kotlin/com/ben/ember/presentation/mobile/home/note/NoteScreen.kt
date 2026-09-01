@@ -803,17 +803,26 @@ fun NoteScreen(
                         LocalIndication provides NoRippleIndicationNodeFactory,
                         LocalRippleConfiguration provides null
                       ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(450.dp)
-                        ) {
-                            CategorizedEmojiPicker(
-                                onEmojiSelected = { emoji ->
-                                    viewModel.updateIcon(emoji)
-                                    showIconPicker = false
-                                },
-                                modifier = Modifier.fillMaxSize()
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(450.dp)
+                            ) {
+                                CategorizedEmojiPicker(
+                                    onEmojiSelected = { emoji ->
+                                        viewModel.updateIcon(emoji)
+                                        showIconPicker = false
+                                    },
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+
+                            EmberButtonPrimary(
+                                text = "Close",
+                                onClick = { showIconPicker = false },
+                                modifier = Modifier.fillMaxWidth()
+                                    .padding(vertical = 12.dp, horizontal = 20.dp)
                             )
                         }
                       }
@@ -1672,6 +1681,13 @@ fun NoteOptionsBottomSheet(
             BottomSheetOptionItem(painterResource(Res.drawable.file_pdf), "Download PDF") {
                 closeAnd { onDownloadPdf(); onDismiss() }
             }
+
+            EmberButtonPrimary(
+                text = "Close",
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth()
+                    .padding(vertical = 12.dp, horizontal = 20.dp)
+            )
         }
       }
     }
@@ -1699,6 +1715,13 @@ fun NoteOptionsBottomSheet(
                     isDestructive = true
                 ) { closeAnd { onRemoveIcon(); onDismiss() } }
             }
+
+            EmberButtonPrimary(
+                text = "Close",
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth()
+                    .padding(vertical = 12.dp, horizontal = 20.dp)
+            )
         }
       }
     }
@@ -1726,6 +1749,13 @@ fun NoteOptionsBottomSheet(
                     isDestructive = true
                 ) { closeAnd { onRemoveCover(); onDismiss() } }
             }
+
+            EmberButtonPrimary(
+                text = "Close",
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth()
+                    .padding(vertical = 12.dp, horizontal = 20.dp)
+            )
         }
       }
     }

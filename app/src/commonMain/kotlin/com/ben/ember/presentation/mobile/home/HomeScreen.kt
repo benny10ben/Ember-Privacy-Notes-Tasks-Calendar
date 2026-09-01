@@ -857,7 +857,7 @@ fun HomeScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(24.dp)
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         if (todayTasks.isEmpty() && tomorrowTasks.isEmpty()) {
                             Text(
@@ -889,6 +889,13 @@ fun HomeScreen(
                                 )
                             }
                         }
+
+                        EmberButtonPrimary(
+                            text = "Close",
+                            onClick = { showScheduledTasksSheet = false },
+                            modifier = Modifier.fillMaxWidth()
+                                .padding(vertical = 12.dp)
+                        )
                     }
                 }
             }
@@ -965,11 +972,11 @@ private fun HomeTopBar(
                             contentDescription = "Open Calendar",
                             onClick = onNavigateToCalendar
                         ),
-                        TopBarIconButtonItem(
-                            icon = painterResource(Res.drawable.inbox),
-                            contentDescription = "Notifications",
-                            onClick = onOpenScheduledTasks
-                        ),
+//                        TopBarIconButtonItem(
+//                            icon = painterResource(Res.drawable.inbox),
+//                            contentDescription = "Notifications",
+//                            onClick = onOpenScheduledTasks
+//                        ),
                         TopBarIconButtonItem(
                             icon = painterResource(Res.drawable.ellipsis),
                             contentDescription = "Settings",
@@ -1490,6 +1497,13 @@ fun TemplatesBottomSheet(
                 onDeleteTemplate = onDeleteTemplate,
                 onCreateNewTemplate = { closeAnd(onCreateNewTemplate) }
             )
+
+            EmberButtonPrimary(
+                text = "Close",
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth()
+                    .padding(vertical = 12.dp)
+            )
         }
     }
 }
@@ -1566,7 +1580,13 @@ fun SortBottomSheet(expanded: Boolean, currentSortType: SortType, currentSortOrd
                 "Descending",
                 currentSortOrder == SortOrder.DESCENDING
             ) { closeAnd { onSortChanged(currentSortType, SortOrder.DESCENDING) } }
-            Spacer(Modifier.height(16.dp))
+
+            EmberButtonPrimary(
+                text = "Close",
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth()
+                    .padding(vertical = 12.dp, horizontal = 20.dp)
+            )
         }
     }
 }

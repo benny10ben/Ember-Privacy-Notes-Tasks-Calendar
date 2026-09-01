@@ -82,7 +82,7 @@ internal fun LocalAiSettingsSheet(
         title = "Local AI",
         subtitle = "Manage the on-device models.",
     ) { _ ->
-        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 36.dp)) {
+        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
             val currentDownloadProgress = downloadProgress
             val isDownloading = currentDownloadProgress is ModelDownloadProgress.Downloading
 
@@ -227,6 +227,13 @@ internal fun LocalAiSettingsSheet(
                     Spacer(Modifier.height(6.dp))
                 }
             }
+
+            EmberButtonPrimary(
+                text = "Close",
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth()
+                    .padding(vertical = 12.dp)
+            )
         }
     }
 

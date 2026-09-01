@@ -187,6 +187,12 @@ fun NotePickerDialog(
                     listContent(closeAnd)
                 }
             }
+            EmberButtonPrimary(
+                text = "Close",
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth()
+                    .padding(vertical = 12.dp, horizontal = 20.dp)
+            )
         }
     }
 }

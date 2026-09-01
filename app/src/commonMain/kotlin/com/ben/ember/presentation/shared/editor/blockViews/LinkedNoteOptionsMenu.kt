@@ -15,6 +15,7 @@ import androidx.compose.ui.window.PopupProperties
 import com.ben.ember.domain.model.LinkedNoteBlock
 import com.ben.ember.domain.util.isDesktopPlatform
 import com.ben.ember.presentation.shared.components.EmberBottomSheet
+import com.ben.ember.presentation.shared.components.EmberButtonPrimary
 import com.ben.ember.presentation.shared.components.EmberDesktopMenu
 @Composable
 fun LinkedNoteOptionsMenu(
@@ -72,6 +73,12 @@ fun LinkedNoteOptionsMenu(
         ) { _ ->
             Column(modifier = Modifier.fillMaxWidth().padding(bottom = 26.dp)) {
                 content()
+                EmberButtonPrimary(
+                    text = "Close",
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth()
+                        .padding(vertical = 12.dp, horizontal = 20.dp)
+                )
             }}
     }
 }
