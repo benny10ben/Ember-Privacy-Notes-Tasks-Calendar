@@ -14,12 +14,15 @@ import org.koin.android.ext.android.getKoin
 import org.koin.android.ext.koin.androidContext
 import org.koin.androidx.workmanager.koin.workManagerFactory
 import org.koin.core.context.startKoin
+import java.util.concurrent.atomic.AtomicBoolean
 
 class EmberApplication : Application() {
     companion object {
         @Volatile
         var isReady = false
     }
+
+    private val hasStartedAiWarmUp = AtomicBoolean(false)
 
     override fun onCreate() {
         super.onCreate()
@@ -36,6 +39,11 @@ class EmberApplication : Application() {
             getKoin().get<SharedPreferences>()
             isReady = true
         }
+
+    }
+
+    fun warmUpAiEngineOnce() {
+        if (!hasStartedAiWarmUp.compareAndSet(false, true)) return
 
         CoroutineScope(Dispatchers.Default).launch {
             try {

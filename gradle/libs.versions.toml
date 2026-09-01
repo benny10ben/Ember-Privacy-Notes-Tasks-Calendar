@@ -8,6 +8,7 @@ ksp = "2.1.21-2.0.2"
 # Image & UI Effects
 coil3 = "3.3.0"
 haze = "1.7.2"
+glance = "1.2.0"
 
 # Android Platform Core
 coreKtx = "1.18.0"
@@ -60,6 +61,7 @@ navigation-compose-kmp = { module = "org.jetbrains.androidx.navigation:navigatio
 
 # Advanced UI Components
 haze = { group = "dev.chrisbanes.haze", name = "haze", version.ref = "haze" }
+androidx-glance-appwidget = { group = "androidx.glance", name = "glance-appwidget", version.ref = "glance" }
 coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil3" }
 
 # Dependency Injection Architecture

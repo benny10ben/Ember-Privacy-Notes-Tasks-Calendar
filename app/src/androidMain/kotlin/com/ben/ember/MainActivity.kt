@@ -98,6 +98,8 @@ class MainActivity : ComponentActivity() {
             overridePendingTransition(0, 0)
         }
         enableEdgeToEdge()
+        (application as? EmberApplication)?.warmUpAiEngineOnce()
+
         handleIntent(intent)
         backupScheduler.toString()
 

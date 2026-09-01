@@ -100,6 +100,9 @@ val androidModule = module {
     single<FolderDao> { get<AppDatabase>().folderDao() }
     single<TagDao> { get<AppDatabase>().tagDao() }
     single<BlockDao> { get<AppDatabase>().blockDao() }
+
+    single { com.ben.ember.presentation.widget.WidgetNoteSource(noteDao = get()) }
+
     single<CalendarTaskDao> { get<AppDatabase>().calendarTaskDao() }
     single<com.ben.ember.data.local.room.CalendarEventExceptionDao> { get<AppDatabase>().calendarEventExceptionDao() }
     single<ImageBlockDao> { get<AppDatabase>().imageBlockDao() }

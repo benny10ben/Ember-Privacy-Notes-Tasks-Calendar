@@ -79,6 +79,7 @@ kotlin {
                 implementation(libs.sqlcipher)
                 implementation(libs.androidx.sqlite.ktx)
                 implementation(libs.androidx.security.crypto)
+                implementation(libs.androidx.glance.appwidget)
                 implementation("io.coil-kt.coil3:coil-compose:3.3.0")
                 implementation("com.composables:icons-lucide:1.1.0")
                 implementation("io.coil-kt.coil3:coil-network-ktor3:3.3.0")

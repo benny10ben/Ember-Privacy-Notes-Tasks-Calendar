@@ -68,7 +68,8 @@ fun EmberApp(
     onExportBackup: (jsonContent: String) -> Unit = {},
     onImportBackupClick: () -> Unit = {},
     onRequestBackupFolder: () -> Unit,
-    onExportPdf: (fileName: String, title: String, blocks: List<NoteBlock>) -> Unit = { _, _, _ -> }
+    onExportPdf: (fileName: String, title: String, blocks: List<NoteBlock>) -> Unit = { _, _, _ -> },
+    onExitApp: () -> Unit = {}
 ) {
 
     LaunchedEffect(Unit) {
@@ -83,6 +84,33 @@ fun EmberApp(
     }
 
     val navController = rememberNavController()
+
+    LaunchedEffect(Unit) {
+        com.ben.ember.domain.util.WidgetNavigationBus.requestedRoutes.collect { requestedRoute ->
+            com.ben.ember.domain.util.WidgetNavigationBus.consumeRequestedRoute()
+            try {
+                val openEntry = navController.currentBackStackEntry
+                val openRoutePattern = openEntry?.destination?.route
+                val isAlreadyOpen = if (openRoutePattern == Screen.Note.route) {
+                    requestedRoute == Screen.Note.createRoute(
+                        openEntry.savedStateHandle.get<String>("noteId").orEmpty()
+                    )
+                } else {
+                    openRoutePattern == requestedRoute
+                }
+
+                if (!isAlreadyOpen) {
+                    navController.navigate(requestedRoute) {
+                        popUpTo(navController.graph.startDestinationId)
+                        launchSingleTop = true
+                    }
+                }
+            } catch (cause: Exception) {
+                cause.printStackTrace()
+            }
+        }
+    }
+
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
