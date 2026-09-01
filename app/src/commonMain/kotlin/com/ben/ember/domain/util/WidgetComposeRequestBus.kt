@@ -2,7 +2,7 @@ package com.ben.ember.domain.util
 
 import kotlinx.coroutines.flow.MutableStateFlow
 
-enum class WidgetComposeRequest { NEW_TASK, NEW_NOTE }
+enum class WidgetComposeRequest { NEW_TASK, NEW_NOTE, NEW_EVENT }
 
 object WidgetComposeRequestBus {
     private val pendingRequest = MutableStateFlow<WidgetComposeRequest?>(null)

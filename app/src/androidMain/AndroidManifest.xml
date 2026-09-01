@@ -185,6 +185,19 @@
         </receiver>
 
         <receiver
+            android:name=".presentation.widget.upcomingevents.UpcomingEventsWidgetReceiver"
+            android:enabled="true"
+            android:exported="true"
+            android:label="@string/upcoming_events_widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/upcoming_events_widget_info" />
+        </receiver>
+
+        <receiver
             android:name=".presentation.widget.calendar.CalendarWidgetReceiver"
             android:enabled="true"
             android:exported="true"

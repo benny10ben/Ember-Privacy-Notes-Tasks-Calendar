@@ -6,6 +6,8 @@ const val widgetTasksScreenExtra = "widget_tasks_screen"
 const val widgetHomeScreenExtra = "widget_home_screen"
 const val widgetDailyScreenExtra = "widget_daily_screen"
 const val widgetDailyDateExtra = "widget_daily_date"
+const val widgetCalendarScreenExtra = "widget_calendar_screen"
+const val widgetNewEventExtra = "widget_new_event"
 
 const val calendarDateUriScheme = "ember-calendar-day"
 const val calendarEventUriScheme = "ember-calendar-event"

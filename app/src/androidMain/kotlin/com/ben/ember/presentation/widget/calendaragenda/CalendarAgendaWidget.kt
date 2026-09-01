@@ -126,7 +126,7 @@ internal fun CalendarAgendaWidgetBody(
 
         Column(modifier = GlanceModifier.defaultWeight().fillMaxHeight()) {
             Row(
-                modifier = GlanceModifier.fillMaxWidth().height(headerHeight),
+                modifier = GlanceModifier.fillMaxWidth(),
                 verticalAlignment = Alignment.Vertical.CenterVertically
             ) {
                 Text(
@@ -134,7 +134,7 @@ internal fun CalendarAgendaWidgetBody(
                     maxLines = 1,
                     style = TextStyle(
                         color = primaryTextColor,
-                        fontSize = 16.sp,
+                        fontSize = 20.sp,
                         fontWeight = FontWeight.Bold
                     ),
                     modifier = GlanceModifier.defaultWeight()
@@ -257,7 +257,7 @@ private fun EventList(context: Context, content: CalendarAgendaWidgetContent?) {
             Text(
                 text = if (content == null) "Open Ember to load events" else "No events this month",
                 maxLines = 2,
-                style = TextStyle(color = secondaryTextColor, fontSize = 12.sp)
+                style = TextStyle(color = secondaryTextColor, fontSize = 15.sp)
             )
         }
         return
@@ -294,7 +294,7 @@ private fun EventRow(context: Context, event: AgendaEvent) {
                 maxLines = 1,
                 style = TextStyle(
                     color = if (event.isDone) secondaryTextColor else primaryTextColor,
-                    fontSize = 13.sp,
+                    fontSize = 16.sp,
                     fontWeight = FontWeight.Medium,
                     textDecoration = if (event.isDone) TextDecoration.LineThrough else TextDecoration.None
                 )
@@ -303,7 +303,7 @@ private fun EventRow(context: Context, event: AgendaEvent) {
             Text(
                 text = event.whenLabel,
                 maxLines = 1,
-                style = TextStyle(color = secondaryTextColor, fontSize = 11.sp)
+                style = TextStyle(color = secondaryTextColor, fontSize = 13.sp)
             )
         }
     }

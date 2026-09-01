@@ -226,6 +226,9 @@ interface CalendarTaskDao {
     @Query("DELETE FROM calendar_tasks WHERE blockId = :blockId")
     suspend fun deleteTaskById(blockId: String)
 
+    @Query("SELECT * FROM calendar_tasks WHERE targetDate >= :fromDate AND isChecked = 0 ORDER BY targetDate ASC")
+    suspend fun getUpcomingTasks(fromDate: String): List<CalendarTaskEntity>
+
     @Query("SELECT * FROM calendar_tasks")
     fun getAllTasksFlow(): Flow<List<CalendarTaskEntity>>
 

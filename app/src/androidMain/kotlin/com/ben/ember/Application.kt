@@ -45,6 +45,7 @@ class EmberApplication : Application() {
             getKoin().get<com.ben.ember.presentation.widget.todaytasks.TodayTasksWidgetCoordinator>().start()
             getKoin().get<com.ben.ember.presentation.widget.calendar.CalendarWidgetCoordinator>().start()
             getKoin().get<com.ben.ember.presentation.widget.calendaragenda.CalendarAgendaWidgetCoordinator>().start()
+            getKoin().get<com.ben.ember.presentation.widget.upcomingevents.UpcomingEventsWidgetCoordinator>().start()
         }
 
     }

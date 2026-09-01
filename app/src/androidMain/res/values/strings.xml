@@ -14,4 +14,6 @@
     <string name="calendar_widget_description">A month at a glance, with a dot for every task</string>
     <string name="calendar_agenda_widget_label">Calendar and events</string>
     <string name="calendar_agenda_widget_description">A month beside the events planned in it</string>
+    <string name="upcoming_events_widget_label">Upcoming Events</string>
+    <string name="upcoming_events_widget_description">Scroll through everything coming up on your calendar</string>
 </resources>

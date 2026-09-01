@@ -39,6 +39,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import com.ben.ember.domain.util.WidgetCalendarDateBus
 import com.ben.ember.domain.util.WidgetCalendarEventBus
+import com.ben.ember.domain.util.WidgetComposeRequest
+import com.ben.ember.domain.util.WidgetComposeRequestBus
 import com.ben.ember.presentation.shared.stableStatusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -162,6 +164,22 @@ fun CalendarScreen(
                 selectedDate = LocalDate.parse(event.dateString)
                 eventEditorState = event.toEditorState()
             }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (WidgetComposeRequestBus.consume(WidgetComposeRequest.NEW_EVENT)) {
+            val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
+            selectedDate = now.date
+            eventEditorState = EventEditorState(
+                original = null,
+                name = "",
+                date = now.date,
+                hour = now.hour,
+                minute = 0,
+                categoryId = null,
+                durationMinutes = 30
+            )
         }
     }
 
@@ -509,15 +527,17 @@ private fun CalendarTopBar(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        TopBarIconButton(
-            icon = painterResource(Res.drawable.chevron_left),
-            contentDescription = "Back",
-            bgColor = Color.Transparent,
-            tint = MaterialTheme.colorScheme.primary,
-            hazeState = hazeState,
-            hazeStyle = EmberBlur.Regular,
-            onClick = onBackClick
-        )
+        Box(modifier = Modifier.align(Alignment.Top)) {
+            TopBarIconButton(
+                icon = painterResource(Res.drawable.chevron_left),
+                contentDescription = "Back",
+                bgColor = Color.Transparent,
+                tint = MaterialTheme.colorScheme.primary,
+                hazeState = hazeState,
+                hazeStyle = EmberBlur.Regular,
+                onClick = onBackClick
+            )
+        }
 
         AnimatedContent(
             targetState = selectedDate,
@@ -535,19 +555,19 @@ private fun CalendarTopBar(
                 if (viewMode == CalendarViewMode.MONTH) {
                     Text(
                         text = formatMonthYear(date),
-                        style = MaterialTheme.typography.titleLarge,
+                        style = MaterialTheme.typography.bodyLarge,
                         color = defaultContentColor,
                         textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(top = 18.dp)
+                        modifier = Modifier.padding(top = 8.dp)
                     )
                 } else {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(top = 18.dp)
+                        modifier = Modifier.padding(top = 8.dp)
                     ) {
                         Text(
                             text = formatSelectedDateTitle(date),
-                            style = MaterialTheme.typography.titleLarge,
+                            style = MaterialTheme.typography.bodyLarge,
                             color = defaultContentColor,
                             textAlign = TextAlign.Center
                         )
@@ -564,7 +584,7 @@ private fun CalendarTopBar(
 
         if (isDesktopPlatform) {
             var showOptionsMenu by remember { mutableStateOf(false) }
-            Box {
+            Box(modifier = Modifier.align(Alignment.Top)) {
                 TopBarIconButton(
                     icon = Icons.Default.MoreVert,
                     contentDescription = "Options",

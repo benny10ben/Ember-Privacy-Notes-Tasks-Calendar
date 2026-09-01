@@ -39,7 +39,9 @@ import com.ben.ember.presentation.widget.calendarDateUriScheme
 import com.ben.ember.presentation.widget.calendarEventUriScheme
 import com.ben.ember.presentation.widget.widgetDailyDateExtra
 import com.ben.ember.presentation.widget.widgetDailyScreenExtra
+import com.ben.ember.presentation.widget.widgetCalendarScreenExtra
 import com.ben.ember.presentation.widget.widgetHomeScreenExtra
+import com.ben.ember.presentation.widget.widgetNewEventExtra
 import com.ben.ember.presentation.widget.widgetNewNoteExtra
 import com.ben.ember.presentation.widget.widgetNewTaskExtra
 import com.ben.ember.presentation.widget.widgetNoteIdExtra
@@ -428,6 +430,15 @@ class MainActivity : ComponentActivity() {
 
         if (calendarDate != null) {
             WidgetCalendarDateBus.requestDate(calendarDate)
+            return Screen.Calendar.route
+        }
+
+        if (intent.getBooleanExtra(widgetCalendarScreenExtra, false)) {
+            intent.removeExtra(widgetCalendarScreenExtra)
+            if (intent.getBooleanExtra(widgetNewEventExtra, false)) {
+                intent.removeExtra(widgetNewEventExtra)
+                WidgetComposeRequestBus.request(WidgetComposeRequest.NEW_EVENT)
+            }
             return Screen.Calendar.route
         }
 
