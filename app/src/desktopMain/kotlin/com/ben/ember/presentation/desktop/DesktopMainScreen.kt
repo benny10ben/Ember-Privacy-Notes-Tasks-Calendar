@@ -32,8 +32,16 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.ben.ember.data.local.prefs.SettingsManager
+import com.ben.ember.domain.model.CellData
+import com.ben.ember.domain.model.ColumnType
+import com.ben.ember.domain.model.FilterConfig
+import com.ben.ember.domain.model.GalleryCardSize
 import com.ben.ember.domain.model.NoteBlock
 import com.ben.ember.domain.model.NoteContent
+import com.ben.ember.domain.model.Stroke
+import com.ben.ember.domain.model.TextAlignment
+import com.ben.ember.domain.model.ViewType
+import com.ben.ember.presentation.shared.editor.EditorActions
 import com.ben.ember.presentation.settings.SettingsScreen
 import com.ben.ember.presentation.settings.selfhost.SelfHostSetupScreen
 import com.ben.ember.presentation.shared.UserSettings
@@ -1116,11 +1124,133 @@ fun DesktopMainScreen(
 
             // Sheets
             if (showTimelineDialog) {
+                val timelineGlobalTags by dailyViewModel.globalTags.collectAsState()
+                val timelineAllLinkableNotes by dailyViewModel.allLinkableNotes.collectAsState()
+
+                // Mirrors DailyEditorPane's own EditorActions (same viewModel, same picker
+                // callbacks) so the timeline dialog's real block views - table/database edits,
+                // audio playback, file opening, linked-note lookups - work against the same
+                // daily editor state. Note-link navigation closes the dialog first since it's
+                // opening a different note, not just jumping within this same day's timeline.
+                val timelineEditorActions = remember(dailyViewModel, onOpenFile) {
+                    object : EditorActions {
+                        override fun onClearSlashQuery() = dailyViewModel.clearActiveSlashQuery()
+                        override fun onClearFocusRequest() = dailyViewModel.clearFocusRequest()
+                        override fun onUpdateText(id: String, text: String) = dailyViewModel.updateBlockText(id, text)
+                        override fun onToggleCheckbox(id: String, checked: Boolean) = dailyViewModel.toggleCheckbox(id, checked)
+                        override fun onToggleExpand(id: String) = dailyViewModel.toggleToggleBlock(id)
+                        override fun onFocusBlock(id: String) = dailyViewModel.setFocusedBlock(id)
+                        override fun onRequestCursorPosition(id: String, offset: Int) = dailyViewModel.requestCursorPosition(id, offset)
+                        override fun onChangeBlockType(type: String) = dailyViewModel.changeFocusedBlockType(type)
+                        override fun onToggleFormat(format: String) = dailyViewModel.toggleFormat(format)
+                        override fun onAdjustIndentation(increase: Boolean) = dailyViewModel.adjustIndentation(increase)
+                        override fun onSetBlockAlignment(alignment: TextAlignment) = dailyViewModel.setFocusedBlockAlignment(alignment)
+                        override fun onEnterPressed(id: String, before: String, after: String) = dailyViewModel.handleEnter(id, before, after)
+                        override fun onBackspaceOnEmpty(id: String) = dailyViewModel.handleBackspaceOnEmpty(id)
+                        override fun onToggleSelection(id: String) = dailyViewModel.toggleSelection(id)
+                        override fun onUpdateReminder(id: String, timestamp: Long?) = dailyViewModel.updateReminder(id, timestamp)
+                        override fun onUrlSubmit(id: String, url: String) = dailyViewModel.handleUrlSubmit(id, url)
+                        override fun onImagePicked(id: String, uri: String) = dailyViewModel.handleImagePicked(id, uri)
+                        override fun onDocumentPicked(id: String, uri: String) = dailyViewModel.handleDocumentPicked(id, uri)
+                        override fun onAddBlankBlock() = dailyViewModel.addBlankBlockBelowFocused()
+                        override fun onInsertMediaBlock(type: String) = dailyViewModel.insertNewMediaBlock(type)
+                        override fun onSaveDatabaseAsTemplate(blockId: String, templateName: String) =
+                            dailyViewModel.saveDatabaseAsTemplate(blockId, templateName)
+                        override fun onOutsideTap() {}
+                        override fun onUpdateDbTitle(id: String, title: String) = dailyViewModel.updateDbTitle(id, title)
+                        override fun onAddDbRow(id: String) = dailyViewModel.addDbRow(id)
+                        override fun onAddDbColumn(id: String) = dailyViewModel.addDbColumn(id)
+                        override fun onUpdateDbCell(blockId: String, rowId: String, colId: String, value: CellData) = dailyViewModel.updateDbCell(blockId, rowId, colId, value)
+                        override fun onUpdateDbColumn(blockId: String, colId: String, name: String, type: ColumnType, isManualNameChange: Boolean) = dailyViewModel.updateDbColumn(blockId, colId, name, type, isManualNameChange)
+                        override fun onUpdateDbSort(blockId: String, colId: String, isAscending: Boolean?) = dailyViewModel.updateDbSort(blockId, colId, isAscending)
+                        override fun onUpdateDbGroupBy(blockId: String, colId: String?) = dailyViewModel.updateDbGroupBy(blockId, colId)
+                        override fun onUpdateDbGalleryCardSize(blockId: String, size: GalleryCardSize) = dailyViewModel.updateDbGalleryCardSize(blockId, size)
+                        override fun onToggleKanbanGroupVisibility(blockId: String, viewId: String, groupName: String, isHidden: Boolean) = dailyViewModel.toggleKanbanGroupVisibility(blockId, viewId, groupName, isHidden)
+                        override fun onReorderKanbanGroups(blockId: String, viewId: String, orderedGroupKeys: List<String>) = dailyViewModel.reorderKanbanGroups(blockId, viewId, orderedGroupKeys)
+                        override fun onAddDbFilter(blockId: String, colId: String, operator: String, value: String) = dailyViewModel.addDbFilter(blockId, colId, operator, value)
+                        override fun onRemoveDbFilter(blockId: String, config: FilterConfig) = dailyViewModel.removeDbFilter(blockId, config)
+                        override fun onReorderDbColumns(blockId: String, from: Int, to: Int) = dailyViewModel.reorderDbColumns(blockId, from, to)
+                        override fun onReorderDbRows(blockId: String, from: Int, to: Int) = dailyViewModel.reorderDbRows(blockId, from, to)
+                        override fun onReorderDatabaseViews(blockId: String, from: Int, to: Int) = dailyViewModel.reorderDatabaseViews(blockId, from, to)
+                        override fun onUpdateDbFormula(blockId: String, colId: String, expression: String) = dailyViewModel.updateDbFormula(blockId, colId, expression)
+                        override fun onDeleteDbColumn(blockId: String, colId: String) = dailyViewModel.deleteDbColumn(blockId, colId)
+                        override fun onDeleteDbRow(blockId: String, rowId: String) = dailyViewModel.deleteDbRow(blockId, rowId)
+                        override fun onAddDbRowAt(blockId: String, index: Int) = dailyViewModel.addDbRowAt(blockId, index)
+                        override fun onAddDbColumnAt(blockId: String, index: Int) = dailyViewModel.addDbColumnAt(blockId, index)
+                        override fun onUpdateDbColumnWidth(blockId: String, colId: String, width: Int) = dailyViewModel.updateDbColumnWidth(blockId, colId, width)
+                        override fun onVoiceRecorded(id: String, filePath: String, duration: Int) = dailyViewModel.handleVoiceRecorded(id, filePath, duration)
+                        override fun onRemoveVoice(id: String) = dailyViewModel.handleRemoveVoice(id)
+                        override fun onDeleteImageBlock(id: String) = dailyViewModel.deleteImageBlock(id)
+                        override fun onCreateGlobalTag(name: String, colorHex: String): String = dailyViewModel.createGlobalTag(name, colorHex)
+                        override fun onRequestImagePicker(blockId: String) {
+                            onPickImage { path -> dailyViewModel.handleImagePicked(blockId, path) }
+                        }
+                        override fun onRequestCamera(blockId: String) {
+                            onTakePhoto { path -> dailyViewModel.handleImagePicked(blockId, path) }
+                        }
+                        override fun onRequestDocumentPicker(blockId: String) {
+                            onPickDocument { path -> dailyViewModel.handleDocumentPicked(blockId, path) }
+                        }
+                        override fun onRequestDbFilePicker(blockId: String, rowId: String, colId: String, isAudio: Boolean) {
+                            onPickDocument { path -> dailyViewModel.handleDbFilePicked(blockId, rowId, colId, path) }
+                        }
+                        override fun onStopDbAudioRecording(blockId: String, rowId: String, colId: String, cancel: Boolean) {
+                            dailyViewModel.stopDbHardwareRecording(blockId, rowId, colId, cancel)
+                        }
+                        override fun onOpenFile(filePath: String, mimeType: String) {
+                            onOpenFile(filePath, mimeType)
+                        }
+                        override fun onStartRecording() = dailyViewModel.startHardwareRecording()
+                        override fun onStopRecording(blockId: String, cancel: Boolean) = dailyViewModel.stopHardwareRecording(blockId, cancel)
+                        override fun onPlayAudio(filePath: String, onComplete: () -> Unit) = dailyViewModel.playAudio(filePath, onComplete)
+                        override fun onStopAudio() = dailyViewModel.stopAudio()
+                        override fun onTogglePin() = dailyViewModel.togglePinSelectedBlocks()
+                        override fun onUpdateSketch(id: String, strokes: List<Stroke>) = dailyViewModel.updateSketchStrokes(id, strokes)
+                        override fun onUpdateTable(id: String, rows: List<List<String>>) = dailyViewModel.updateTable(id, rows)
+                        override fun onUpdateTableColumnWidth(id: String, columnIndex: Int, width: Int) = dailyViewModel.updateTableColumnWidth(id, columnIndex, width)
+                        override fun onUpdateTableStyle(
+                            id: String,
+                            cellStyles: Map<String, com.ben.ember.domain.model.TableCellStyle>,
+                            rowStyles: Map<String, com.ben.ember.domain.model.TableCellStyle>,
+                            columnStyles: Map<String, com.ben.ember.domain.model.TableCellStyle>
+                        ) = dailyViewModel.updateTableStyle(id, cellStyles, rowStyles, columnStyles)
+                        override fun onAddBlockAbove(id: String) = dailyViewModel.addBlockAbove(id)
+                        override fun onAddBlockBelow(id: String) = dailyViewModel.addBlockBelow(id)
+                        override fun onUpdateDbAggregation(blockId: String, colId: String, aggregationType: String?) = dailyViewModel.updateDbAggregation(blockId, colId, aggregationType)
+                        override fun onUpdateDbCurrency(blockId: String, colId: String, symbol: String) = dailyViewModel.updateDbCurrency(blockId, colId, symbol)
+                        override fun onUpdateDbFormulaCurrency(blockId: String, colId: String, enabled: Boolean) = dailyViewModel.updateDbFormulaCurrency(blockId, colId, enabled)
+                        override fun onAddDatabaseView(blockId: String, type: ViewType) = dailyViewModel.addDatabaseView(blockId, type)
+                        override fun onDeleteDatabaseView(blockId: String, viewId: String) = dailyViewModel.deleteDatabaseView(blockId, viewId)
+                        override fun onSetActiveDatabaseView(blockId: String, viewId: String) = dailyViewModel.setActiveDatabaseView(blockId, viewId)
+                        override fun onRenameDatabaseView(blockId: String, viewId: String, newName: String) = dailyViewModel.renameDatabaseView(blockId, viewId, newName)
+                        override fun onNoteLinkClick(noteId: String) {
+                            showTimelineDialog = false
+                            dailyViewModel.clearTimeline()
+                            openNote(noteId)
+                        }
+                        override fun onCreateLinkedNote(title: String): String = dailyViewModel.createLinkedNote(title)
+                        override fun onOpenDatabaseNote(blockId: String, rowId: String, colId: String, existingNoteId: String?) {
+                            dailyViewModel.openDatabaseNote(blockId, rowId, colId, existingNoteId) { resolvedNoteId ->
+                                showTimelineDialog = false
+                                dailyViewModel.clearTimeline()
+                                openNote(resolvedNoteId)
+                            }
+                        }
+                        override suspend fun getNoteTitle(noteId: String): String = dailyViewModel.getNoteTitle(noteId)
+                        override suspend fun getNoteMetadata(noteId: String) = dailyViewModel.getNoteMetadata(noteId)
+                        override fun onUpdateLinkedNoteOptions(id: String, showIcon: Boolean, showCoverImage: Boolean) =
+                            dailyViewModel.updateLinkedNoteOptions(id, showIcon, showCoverImage)
+                    }
+                }
+
                 DailyTimelineDialog(
                     days = timelineDays,
                     isLoading = isTimelineLoading,
                     anchorDate = selectedDate,
                     today = today,
+                    editorActions = timelineEditorActions,
+                    globalTags = timelineGlobalTags,
+                    allLinkableNotes = timelineAllLinkableNotes,
                     onDismiss = {
                         showTimelineDialog = false
                         dailyViewModel.clearTimeline()
