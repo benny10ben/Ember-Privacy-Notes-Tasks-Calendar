@@ -42,9 +42,14 @@ import com.ben.ember.presentation.shared.components.EmberBlur
 import com.ben.ember.presentation.shared.components.NoRippleIndicationNodeFactory
 import com.ben.ember.presentation.shared.components.emberBlur
 import dev.chrisbanes.haze.HazeState
+import ember.app.generated.resources.Res
+import ember.app.generated.resources.chevron_left
+import ember.app.generated.resources.chevron_right
+import ember.app.generated.resources.history2
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.datetime.*
+import org.jetbrains.compose.resources.painterResource
 import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.roundToInt
@@ -328,7 +333,7 @@ fun BottomSheetMonthCalendar(
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = { currentMonth = currentMonth.minus(1, DateTimeUnit.MONTH) }) {
-                Icon(Icons.Default.KeyboardArrowLeft, contentDescription = "Previous", tint = MaterialTheme.colorScheme.onSurface)
+                Icon(painterResource(Res.drawable.chevron_left), contentDescription = "Previous", tint = MaterialTheme.colorScheme.onSurface)
             }
 
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -344,11 +349,11 @@ fun BottomSheetMonthCalendar(
             }
 
             IconButton(onClick = { currentMonth = currentMonth.plus(1, DateTimeUnit.MONTH) }) {
-                Icon(Icons.Default.KeyboardArrowRight, contentDescription = "Next", tint = MaterialTheme.colorScheme.onSurface)
+                Icon(painterResource(Res.drawable.chevron_right), contentDescription = "Next", tint = MaterialTheme.colorScheme.onSurface)
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(22.dp))
 
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             listOf("M", "T", "W", "T", "F", "S", "S").forEach { day ->
@@ -360,7 +365,7 @@ fun BottomSheetMonthCalendar(
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         val daysInMonth = remember(currentMonth) { currentMonth.plus(1, DateTimeUnit.MONTH).minus(1, DateTimeUnit.DAY).dayOfMonth }
         val startOffset = currentMonth.dayOfWeek.ordinal
@@ -388,7 +393,6 @@ fun BottomSheetMonthCalendar(
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(6.dp))
             }
         }
     }
@@ -410,7 +414,7 @@ private fun BottomSheetDateCell(
         contentAlignment = Alignment.Center
     ) {
         Text(
-            text = date.dayOfMonth.toString(), style = MaterialTheme.typography.bodyLarge,
+            text = date.dayOfMonth.toString(), style = MaterialTheme.typography.labelSmall,
             fontWeight = if (isSelected || isToday) FontWeight.Medium else FontWeight.Normal,
             color = textColor, modifier = Modifier.offset(y = if (hasTasks) (-3).dp else 0.dp)
         )

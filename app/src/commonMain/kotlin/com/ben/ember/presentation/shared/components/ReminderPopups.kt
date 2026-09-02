@@ -38,6 +38,8 @@ import ember.app.generated.resources.Res
 import ember.app.generated.resources.bell_off2
 import ember.app.generated.resources.calendar_add3
 import ember.app.generated.resources.calendar_day
+import ember.app.generated.resources.chevron_left
+import ember.app.generated.resources.chevron_right
 import ember.app.generated.resources.clock_circle
 import ember.app.generated.resources.history2
 import ember.app.generated.resources.history3
@@ -366,7 +368,7 @@ private fun CustomCalendarHeader(
     onNextMonth: () -> Unit
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Row(
@@ -392,10 +394,10 @@ private fun CustomCalendarHeader(
         }
         Spacer(modifier = Modifier.weight(1f).padding(end = 2.dp))
         IconButton(onClick = onPreviousMonth, modifier = Modifier.size(32.dp)) {
-            Icon(Icons.Default.ChevronLeft, contentDescription = "Previous month")
+            Icon(painterResource(Res.drawable.chevron_left), contentDescription = "Previous month")
         }
         IconButton(onClick = onNextMonth, modifier = Modifier.size(32.dp).padding(end = 2.dp)) {
-            Icon(Icons.Default.ChevronRight, contentDescription = "Next month")
+            Icon(painterResource(Res.drawable.chevron_right), contentDescription = "Next month")
         }
     }
 }
@@ -403,7 +405,7 @@ private fun CustomCalendarHeader(
 @Composable
 private fun CalendarWeekdayRow() {
     val weekdays = listOf("S", "M", "T", "W", "T", "F", "S")
-    Row(modifier = Modifier.fillMaxWidth()) {
+    Row(modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp)) {
         weekdays.forEach { label ->
             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                 Text(
@@ -467,7 +469,7 @@ private fun CustomCalendarGrid(
                             ) {
                                 Text(
                                     text = day.toString(),
-                                    style = MaterialTheme.typography.bodyLarge,
+                                    style = MaterialTheme.typography.labelSmall,
                                     color = when {
                                         isSelected -> MaterialTheme.colorScheme.onPrimary
                                         isToday -> MaterialTheme.colorScheme.primary
