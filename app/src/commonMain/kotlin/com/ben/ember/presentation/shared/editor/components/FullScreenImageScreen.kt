@@ -30,6 +30,7 @@ import dev.chrisbanes.haze.haze
 import org.jetbrains.compose.resources.painterResource
 import ember.app.generated.resources.Res
 import ember.app.generated.resources.chevron_left
+import ember.app.generated.resources.copy
 import ember.app.generated.resources.download
 import ember.app.generated.resources.trash
 
@@ -39,6 +40,7 @@ fun FullScreenImageScreen(
     hasLocalFile: Boolean,
     onBack: () -> Unit,
     onDownload: () -> Unit,
+    onCopy: () -> Unit,
     onDelete: () -> Unit
 ) {
     KmpBackHandler(enabled = true) { onBack() }
@@ -140,6 +142,17 @@ fun FullScreenImageScreen(
                     contentDescription = "Download",
                     modifier = Modifier.size(iconSize).clickable {
                         if (hasLocalFile) onDownload()
+                    },
+                    tint = tint
+                )
+
+                Box(Modifier.width(1.dp).height(18.dp).background(tint.copy(alpha = 0.2f)))
+
+                Icon(
+                    painter = painterResource(Res.drawable.copy),
+                    contentDescription = "Copy Image",
+                    modifier = Modifier.size(iconSize).clickable {
+                        if (hasLocalFile) onCopy()
                     },
                     tint = tint
                 )

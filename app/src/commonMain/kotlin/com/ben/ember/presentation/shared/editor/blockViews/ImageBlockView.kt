@@ -26,9 +26,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Icon
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
@@ -36,15 +39,21 @@ import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
 import com.ben.ember.domain.model.ImageBlock
 import com.ben.ember.domain.sync.MediaRetryCoordinator
+import com.ben.ember.domain.util.ImageClipboard
 import com.ben.ember.domain.util.ImageDownloader
 import com.ben.ember.domain.util.MediaStorageHelper
 import com.ben.ember.domain.util.isDesktopPlatform
 import com.ben.ember.domain.util.showFeedback
 import com.ben.ember.presentation.LocalImageOverlay
+import com.ben.ember.presentation.shared.components.EmberBlur
+import com.ben.ember.presentation.shared.components.emberBlur
 import com.ben.ember.presentation.shared.editor.DefaultBlockShape
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 import ember.app.generated.resources.Res
 import ember.app.generated.resources.camera
 import ember.app.generated.resources.circle_x
+import ember.app.generated.resources.copy
 import ember.app.generated.resources.image
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
@@ -196,6 +205,8 @@ fun ImageBlockView(
                     .build()
             }
 
+            val imageHazeState = remember { HazeState() }
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -216,8 +227,27 @@ fun ImageBlockView(
                 AsyncImage(
                     model = request,
                     contentDescription = "Note Image",
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize().hazeSource(state = imageHazeState),
                     contentScale = ContentScale.Crop
+                )
+
+                Icon(
+                    painterResource(Res.drawable.copy),
+                    contentDescription = "Copy Image",
+                    tint = Color.White,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                        .clip(CircleShape)
+                        .emberBlur(imageHazeState, EmberBlur.OnImage)
+                        .padding(8.dp)
+                        .size(16.dp)
+                        .clickable {
+                            coroutineScope.launch {
+                                val success = ImageClipboard.copyImageToClipboard(absolutePath)
+                                showFeedback(if (success) "Image copied to clipboard" else "Failed to copy image")
+                            }
+                        }
                 )
             }
 
@@ -238,6 +268,12 @@ fun ImageBlockView(
                                             "Failed to save image"
                                         }
                                     )
+                                }
+                            },
+                            onCopy = {
+                                coroutineScope.launch {
+                                    val success = ImageClipboard.copyImageToClipboard(absolutePath)
+                                    showFeedback(if (success) "Image copied to clipboard" else "Failed to copy image")
                                 }
                             },
                             onDelete = {
