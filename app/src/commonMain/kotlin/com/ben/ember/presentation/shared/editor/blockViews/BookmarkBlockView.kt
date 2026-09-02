@@ -4,6 +4,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,6 +13,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -32,9 +35,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -44,8 +50,14 @@ import coil3.network.httpHeaders
 import coil3.request.crossfade
 import com.ben.ember.domain.model.BookmarkBlock
 import com.ben.ember.domain.util.isDesktopPlatform
+import com.ben.ember.domain.util.showNativeToast
+import com.ben.ember.presentation.shared.components.EmberBlur
+import com.ben.ember.presentation.shared.components.emberBlur
 import com.ben.ember.presentation.shared.editor.DefaultBlockShape
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 import ember.app.generated.resources.Res
+import ember.app.generated.resources.copy
 import ember.app.generated.resources.link
 import org.jetbrains.compose.resources.painterResource
 
@@ -60,6 +72,7 @@ fun BookmarkBlockView(
     var isEditing by remember { mutableStateOf(block.url.isEmpty()) }
     var inputUrl by remember { mutableStateOf(block.url) }
     val uriHandler = LocalUriHandler.current
+    val clipboardManager = LocalClipboardManager.current
 
     Box(
         modifier = Modifier
@@ -138,14 +151,32 @@ fun BookmarkBlockView(
                     modifier = modifier.padding(14.dp),
                     verticalArrangement = Arrangement.Center
                 ) {
-                    Text(
-                        text = block.title ?: block.url,
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = block.title ?: block.url,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        if (block.url.isNotEmpty() && block.previewImageUrl == null) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Icon(
+                                painterResource(Res.drawable.copy),
+                                contentDescription = "Copy URL",
+                                tint = MaterialTheme.colorScheme.outline,
+                                modifier = Modifier
+                                    .size(18.dp)
+                                    .clickable {
+                                        clipboardManager.setText(AnnotatedString(block.url))
+                                        showNativeToast("copied url")
+                                    }
+                            )
+                        }
+                    }
 
                     Spacer(modifier = Modifier.height(4.dp))
 
@@ -185,26 +216,51 @@ fun BookmarkBlockView(
 
             val imageContent = @Composable { modifier: Modifier ->
                 if (block.previewImageUrl != null) {
-                    coil3.compose.AsyncImage(
-                        model = coil3.request.ImageRequest.Builder(coil3.compose.LocalPlatformContext.current)
-                            .data(block.previewImageUrl)
-                            .crossfade(true)
-                            .httpHeaders(
-                                coil3.network.NetworkHeaders.Builder()
-                                    .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
-                                    .set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
-                                    .build()
-                            )
-                            .build(),
-                        contentDescription = "Preview",
-                        contentScale = ContentScale.Crop,
-                        modifier = modifier.background(MaterialTheme.colorScheme.surface.copy(alpha = 0.3f)),
-                        onState = { state ->
-                            if (state is coil3.compose.AsyncImagePainter.State.Error) {
-                                println("Coil failed to load bookmark image: ${state.result.throwable.message}")
+                    val imageHazeState = remember { HazeState() }
+                    Box(modifier = modifier) {
+                        coil3.compose.AsyncImage(
+                            model = coil3.request.ImageRequest.Builder(coil3.compose.LocalPlatformContext.current)
+                                .data(block.previewImageUrl)
+                                .crossfade(true)
+                                .httpHeaders(
+                                    coil3.network.NetworkHeaders.Builder()
+                                        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+                                        .set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+                                        .build()
+                                )
+                                .build(),
+                            contentDescription = "Preview",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.3f))
+                                .hazeSource(state = imageHazeState),
+                            onState = { state ->
+                                if (state is coil3.compose.AsyncImagePainter.State.Error) {
+                                    println("Coil failed to load bookmark image: ${state.result.throwable.message}")
+                                }
                             }
+                        )
+
+                        if (block.url.isNotEmpty()) {
+                            Icon(
+                                painterResource(Res.drawable.copy),
+                                contentDescription = "Copy URL",
+                                tint = Color.White,
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(8.dp)
+                                    .clip(CircleShape)
+                                    .emberBlur(imageHazeState, EmberBlur.OnImage)
+                                    .padding(8.dp)
+                                    .size(16.dp)
+                                    .clickable {
+                                        clipboardManager.setText(AnnotatedString(block.url))
+                                        showNativeToast("copied url")
+                                    }
+                            )
                         }
-                    )
+                    }
                 }
             }
 

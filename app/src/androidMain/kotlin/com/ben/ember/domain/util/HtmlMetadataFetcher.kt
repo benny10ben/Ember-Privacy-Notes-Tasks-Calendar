@@ -3,7 +3,6 @@ package com.ben.ember.domain.util
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.jsoup.Jsoup
-import java.net.URI
 
 actual object HtmlMetadataFetcher {
     actual suspend fun fetchMetadata(url: String): UrlMetadata = withContext(Dispatchers.IO) {
@@ -42,27 +41,18 @@ actual object HtmlMetadataFetcher {
                 ?: document.select("meta[name=twitter:image], meta[name=twitter:image:src]").attr("abs:content").takeIf { it.isNotBlank() }
                 ?: document.select("meta[itemprop=image]").attr("abs:content").takeIf { it.isNotBlank() }
                 ?: document.select("link[rel=image_src]").attr("abs:href").takeIf { it.isNotBlank() }
-                ?: document.select("link[rel=apple-touch-icon]").attr("abs:href").takeIf { it.isNotBlank() }
-                ?: document.select("link[rel=\"shortcut icon\"]").attr("abs:href").takeIf { it.isNotBlank() }
-                ?: document.select("link[rel=icon]").attr("abs:href").takeIf { it.isNotBlank() }
 
             if (imageUrl?.startsWith("http://") == true) {
                 imageUrl = imageUrl.replace("http://", "https://")
             }
 
-            if (imageUrl == null) {
-                val finalHost = try { URI(document.location()).host } catch (_: Exception) { null }
-                if (finalHost != null) imageUrl = "https://www.google.com/s2/favicons?domain=$finalHost&sz=128"
-            }
-
             UrlMetadata(title = title, description = description, imageUrl = imageUrl)
 
         } catch (e: Exception) {
-            val host = try { URI(validUrl).host } catch (_: Exception) { null }
             UrlMetadata(
                 title = url,
                 description = "Could not load preview",
-                imageUrl = if (host != null) "https://www.google.com/s2/favicons?domain=$host&sz=128" else null
+                imageUrl = null
             )
         }
     }
