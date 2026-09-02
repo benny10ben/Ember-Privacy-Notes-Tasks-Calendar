@@ -23,6 +23,7 @@ data class MediaInfo(
 
 interface MediaStorageHelper {
     suspend fun copyUriToInternalStorage(uriString: String): MediaInfo?
+    suspend fun saveBytesToInternalStorage(bytes: ByteArray, extension: String, mimeType: String): MediaInfo?
     fun getAbsoluteMediaPath(fileName: String): String
     fun listAllMediaFileNames(): List<String>
 }

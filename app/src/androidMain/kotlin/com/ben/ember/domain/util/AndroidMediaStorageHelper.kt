@@ -109,6 +109,25 @@ class AndroidMediaStorageHelper(private val context: Context) : MediaStorageHelp
         }
     }
 
+    override suspend fun saveBytesToInternalStorage(bytes: ByteArray, extension: String, mimeType: String): MediaInfo? =
+        withContext(Dispatchers.IO) {
+            try {
+                val localFileName = "media_${UUID.randomUUID()}${if (extension.isNotEmpty()) ".$extension" else ""}"
+                val file = File(mediaDir, localFileName)
+                FileOutputStream(file).use { it.write(bytes) }
+
+                MediaInfo(
+                    localFileName = localFileName,
+                    originalName = localFileName,
+                    mimeType = mimeType,
+                    sizeBytes = file.length()
+                )
+            } catch (e: Exception) {
+                e.printStackTrace()
+                null
+            }
+        }
+
     override fun getAbsoluteMediaPath(fileName: String): String {
         val cleanName = fileName.substringAfterLast("/")
         val newFile = File(mediaDir, cleanName)

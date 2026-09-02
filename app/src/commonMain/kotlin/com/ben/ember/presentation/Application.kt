@@ -32,6 +32,7 @@ import com.ben.ember.domain.util.AiEventBus
 import com.ben.ember.domain.util.isDesktopPlatform
 import com.ben.ember.presentation.mobile.daily.DailyScreen
 import com.ben.ember.presentation.navigation.Screen
+import com.ben.ember.presentation.onboarding.OnboardingScreen
 import com.ben.ember.presentation.trash.TrashScreen
 import dev.chrisbanes.haze.HazeState
 import com.ben.ember.presentation.splash.LoadingScreen
@@ -262,27 +263,33 @@ fun EmberApp(
         LocalImageOverlay provides { content -> fullScreenContent = content }
     ) {
         if (isDesktopPlatform) {
+            var isOnboardingCompleted by remember { mutableStateOf(settingsManager.isOnboardingCompleted()) }
+
             Box(
                 modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
             ) {
-                DesktopMainScreenWrapper(
-                    isSidebarVisible = isSidebarVisible,
-                    sidebarWidth = DESKTOP_SIDEBAR_WIDTH,
-                    onToggleSidebar = { isSidebarVisible = !isSidebarVisible },
-                    onSelectionModeChange = { isActive -> isSelectionActive = isActive },
-                    onPickImage = onPickImage,
-                    onTakePhoto = onTakePhoto,
-                    onPickDocument = onPickDocument,
-                    onOpenFile = onOpenFile,
-                    onExportMarkdown = onExportMarkdown,
-                    onExportPdf = onExportPdf,
-                    onExportBackup = onExportBackup,
-                    onImportBackupClick = onImportBackupClick,
-                    onAiIconTap = openAiChat,
-                    isRagChatVisible = showRagChatOverlay,
-                    ragViewModel = ragViewModel,
-                    onDismissRagChat = dismissRagChat
-                )
+                if (isOnboardingCompleted) {
+                    DesktopMainScreenWrapper(
+                        isSidebarVisible = isSidebarVisible,
+                        sidebarWidth = DESKTOP_SIDEBAR_WIDTH,
+                        onToggleSidebar = { isSidebarVisible = !isSidebarVisible },
+                        onSelectionModeChange = { isActive -> isSelectionActive = isActive },
+                        onPickImage = onPickImage,
+                        onTakePhoto = onTakePhoto,
+                        onPickDocument = onPickDocument,
+                        onOpenFile = onOpenFile,
+                        onExportMarkdown = onExportMarkdown,
+                        onExportPdf = onExportPdf,
+                        onExportBackup = onExportBackup,
+                        onImportBackupClick = onImportBackupClick,
+                        onAiIconTap = openAiChat,
+                        isRagChatVisible = showRagChatOverlay,
+                        ragViewModel = ragViewModel,
+                        onDismissRagChat = dismissRagChat
+                    )
+                } else {
+                    OnboardingScreen(onFinished = { isOnboardingCompleted = true })
+                }
 
                 fullScreenContent?.invoke()
             }
@@ -338,8 +345,23 @@ fun EmberApp(
                         composable(Screen.Splash.route) {
                             LoadingScreen(
                                 onLoadingComplete = {
-                                    navController.navigate(Screen.Daily.createRoute()) {
+                                    val destinationRoute = if (settingsManager.isOnboardingCompleted()) {
+                                        Screen.Daily.createRoute()
+                                    } else {
+                                        Screen.Onboarding.route
+                                    }
+                                    navController.navigate(destinationRoute) {
                                         popUpTo(Screen.Splash.route) { inclusive = true }
+                                    }
+                                }
+                            )
+                        }
+
+                        composable(Screen.Onboarding.route) {
+                            OnboardingScreen(
+                                onFinished = {
+                                    navController.navigate(Screen.Daily.createRoute()) {
+                                        popUpTo(Screen.Onboarding.route) { inclusive = true }
                                     }
                                 }
                             )

@@ -36,6 +36,8 @@ sealed class Screen(val route: String, val title: String? = null, val icon: Imag
 
     object Splash : Screen("splash_screen")
 
+    object Onboarding : Screen("onboarding")
+
     /**
      * Route for opening a specific note.
      */

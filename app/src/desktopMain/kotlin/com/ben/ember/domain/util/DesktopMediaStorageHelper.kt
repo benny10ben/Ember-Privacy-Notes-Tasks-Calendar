@@ -40,6 +40,25 @@ class DesktopMediaStorageHelper : MediaStorageHelper {
         }
     }
 
+    override suspend fun saveBytesToInternalStorage(bytes: ByteArray, extension: String, mimeType: String): MediaInfo? =
+        withContext(Dispatchers.IO) {
+            try {
+                val localFileName = "media_${UUID.randomUUID()}${if (extension.isNotEmpty()) ".$extension" else ""}"
+                val destFile = File(mediaStorageDir, localFileName)
+                destFile.writeBytes(bytes)
+
+                MediaInfo(
+                    localFileName = localFileName,
+                    originalName = localFileName,
+                    mimeType = mimeType,
+                    sizeBytes = destFile.length()
+                )
+            } catch (e: Exception) {
+                e.printStackTrace()
+                null
+            }
+        }
+
     override fun getAbsoluteMediaPath(fileName: String): String {
         // Clean any accidental slashes from the DB string to prevent duplicate "media/" paths
         val cleanName = fileName.substringAfterLast("/")

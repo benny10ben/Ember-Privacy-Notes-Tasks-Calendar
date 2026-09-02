@@ -103,4 +103,8 @@ interface SettingsManager {
     val aiFeaturesDisabledFlow: Flow<Boolean>
     fun isAiFeaturesDisabled(): Boolean
     fun saveAiFeaturesDisabled(disabled: Boolean)
+
+    val hasCompletedOnboardingFlow: Flow<Boolean>
+    fun isOnboardingCompleted(): Boolean
+    fun saveOnboardingCompleted(completed: Boolean)
 }

@@ -39,6 +39,8 @@ object SyncConstants {
     const val DEFAULT_AI_FEATURES_DISABLED = false
     const val KEY_SHOW_SCROLLBAR = "show_scrollbar"
     const val DEFAULT_SHOW_SCROLLBAR = false
+    const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
+    const val DEFAULT_ONBOARDING_COMPLETED = false
     // Sync Keys
     const val KEY_SYNC_TIMESTAMP = "last_sync_timestamp"
     const val KEY_SELF_HOST_SYNC_TIMESTAMP = "self_host_last_sync_timestamp"

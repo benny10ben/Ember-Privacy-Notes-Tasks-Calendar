@@ -320,4 +320,16 @@ class DesktopSettingsManager : SettingsManager {
         prefs.putBoolean(SyncConstants.KEY_AI_FEATURES_DISABLED, disabled)
         _aiFeaturesDisabled.value = disabled
     }
+
+    private val _hasCompletedOnboarding = MutableStateFlow(
+        prefs.getBoolean(SyncConstants.KEY_ONBOARDING_COMPLETED, SyncConstants.DEFAULT_ONBOARDING_COMPLETED)
+    )
+    override val hasCompletedOnboardingFlow: Flow<Boolean> = _hasCompletedOnboarding
+
+    override fun isOnboardingCompleted(): Boolean = _hasCompletedOnboarding.value
+
+    override fun saveOnboardingCompleted(completed: Boolean) {
+        prefs.putBoolean(SyncConstants.KEY_ONBOARDING_COMPLETED, completed)
+        _hasCompletedOnboarding.value = completed
+    }
 }

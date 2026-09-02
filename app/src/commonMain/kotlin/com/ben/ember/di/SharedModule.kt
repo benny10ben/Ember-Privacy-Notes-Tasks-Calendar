@@ -124,6 +124,14 @@ val sharedModule = module {
     }
 
     viewModel {
+        com.ben.ember.presentation.onboarding.OnboardingViewModel(
+            settingsManager = get(),
+            noteRepository = get(),
+            mediaStorageHelper = get()
+        )
+    }
+
+    viewModel {
         _root_ide_package_.com.ben.ember.presentation.mobile.home.HomeViewModel(
             repository = get(),
             settingsManager = get(),

@@ -76,6 +76,7 @@ import com.ben.ember.ui.theme.FontStylePreference
 import androidx.compose.ui.platform.LocalContext
 import com.ben.ember.data.worker.BackupScheduler
 import com.ben.ember.domain.model.NoteBlock
+import com.ben.ember.data.local.prefs.SettingsManager
 import com.ben.ember.domain.util.generateAndSaveAndroidPdf
 import com.ben.ember.presentation.navigation.Screen
 import kotlin.time.Duration.Companion.milliseconds
@@ -109,6 +110,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private val settingsViewModel: com.ben.ember.presentation.settings.SettingsViewModel by inject()
+    private val settingsManager: SettingsManager by inject()
     private val backupScheduler: BackupScheduler by inject()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -124,7 +126,11 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         (application as? EmberApplication)?.warmUpAiEngineOnce()
 
-        val routeForThisLaunch = consumeWidgetRoute(intent) ?: Screen.Daily.route
+        val routeForThisLaunch = consumeWidgetRoute(intent) ?: if (settingsManager.isOnboardingCompleted()) {
+            Screen.Daily.route
+        } else {
+            Screen.Onboarding.route
+        }
 
         handleIntent(intent)
         backupScheduler.toString()
