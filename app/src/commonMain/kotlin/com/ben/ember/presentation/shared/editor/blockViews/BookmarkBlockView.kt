@@ -251,6 +251,11 @@ fun BookmarkBlockView(
                                     .align(Alignment.TopEnd)
                                     .padding(8.dp)
                                     .clip(CircleShape)
+                                    .border(
+                                        width = 0.5.dp,
+                                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                                        shape = CircleShape
+                                    )
                                     .emberBlur(imageHazeState, EmberBlur.OnImage)
                                     .padding(8.dp)
                                     .size(16.dp)

@@ -2,6 +2,7 @@ package com.ben.ember.presentation.shared.editor.blockViews
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -239,6 +240,11 @@ fun ImageBlockView(
                         .align(Alignment.TopEnd)
                         .padding(8.dp)
                         .clip(CircleShape)
+                        .border(
+                            width = 0.5.dp,
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                            shape = CircleShape
+                        )
                         .emberBlur(imageHazeState, EmberBlur.OnImage)
                         .padding(8.dp)
                         .size(16.dp)
