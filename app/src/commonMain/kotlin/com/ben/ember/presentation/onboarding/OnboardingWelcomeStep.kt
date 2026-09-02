@@ -1,15 +1,13 @@
 package com.ben.ember.presentation.onboarding
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -20,27 +18,41 @@ import com.ben.ember.ui.theme.fontFamilyFor
 
 @Composable
 fun OnboardingWelcomeStep() {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 28.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
+    OnboardingStepPage {
         Text(
             text = "Ember",
             fontFamily = fontFamilyFor(LocalEmberFontStyle.current),
             fontWeight = FontWeight.Bold,
             fontSize = 52.sp,
+            lineHeight = 58.sp,
             color = MaterialTheme.colorScheme.onBackground
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Box(
+            modifier = Modifier
+                .width(40.dp)
+                .height(2.dp)
+                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f))
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         Text(
             text = "A quiet, offline-first home for your notes and reminders.",
             style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+            color = onboardingSubtitleColor(),
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(28.dp))
+
+        Text(
+            text = "No accounts · Works offline · Encrypted on device",
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Normal,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.42f),
             textAlign = TextAlign.Center
         )
     }

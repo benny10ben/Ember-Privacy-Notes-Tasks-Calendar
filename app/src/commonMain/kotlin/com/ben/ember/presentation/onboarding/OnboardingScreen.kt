@@ -10,6 +10,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -18,6 +19,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProgressIndicatorDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -29,22 +32,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.ben.ember.domain.util.isDesktopPlatform
 import com.ben.ember.presentation.shared.components.EmberButtonPrimary
-import com.ben.ember.presentation.shared.components.EmberBlur
-import com.ben.ember.presentation.shared.components.emberBlur
 import com.ben.ember.presentation.shared.stableStatusBarsPadding
 import com.ben.ember.ui.theme.LocalAppIsDark
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeSource
 import ember.app.generated.resources.Res
 import ember.app.generated.resources.chevron_left
-import ember.app.generated.resources.chevron_right
 import org.jetbrains.compose.resources.painterResource
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -68,7 +67,6 @@ fun OnboardingScreen(
     var currentStepIndex by rememberSaveable { mutableIntStateOf(0) }
     val isLastStep = currentStepIndex == steps.lastIndex
 
-    val hazeState = remember { HazeState() }
     val density = LocalDensity.current
     var topBarHeightPx by remember { mutableFloatStateOf(0f) }
     var bottomBarHeightPx by remember { mutableFloatStateOf(0f) }
@@ -81,9 +79,6 @@ fun OnboardingScreen(
             viewModel.completeOnboarding()
             onFinished()
         } else {
-            if (currentStepIndex == 0) {
-                viewModel.ensurePreviewNoteCreated()
-            }
             currentStepIndex++
         }
     }
@@ -98,6 +93,10 @@ fun OnboardingScreen(
         onFinished()
     }
 
+    LaunchedEffect(Unit) {
+        if (isDesktopPlatform) viewModel.ensurePreviewNoteCreated()
+    }
+
     if (isDesktopPlatform) {
         val wizardPaneWeight by animateFloatAsState(
             targetValue = if (currentStepIndex == 0) 1f else 0.5f,
@@ -110,34 +109,36 @@ fun OnboardingScreen(
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
         ) {
+            val settledPaneWidth = maxWidth / 2
             val wizardWidth = maxWidth * wizardPaneWeight
-            val editorWidth = maxWidth - wizardWidth
             val editorAlpha = ((1f - wizardPaneWeight) / 0.5f).coerceIn(0f, 1f)
 
-            Row(modifier = Modifier.fillMaxSize()) {
-                OnboardingWizardPane(
-                    modifier = Modifier.fillMaxHeight().width(wizardWidth),
-                    steps = steps,
-                    currentStepIndex = currentStepIndex,
-                    isLastStep = isLastStep,
-                    hazeState = hazeState,
-                    topBarHeightDp = topBarHeightDp,
-                    bottomBarHeightDp = bottomBarHeightDp,
-                    onTopBarHeightChanged = { topBarHeightPx = it },
-                    onBottomBarHeightChanged = { bottomBarHeightPx = it },
-                    onBack = ::goToPreviousStep,
-                    onNext = ::goToNextStep,
-                    onSkip = ::skipOnboarding
-                )
+            OnboardingEditorPreview(
+                viewModel = viewModel,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .fillMaxHeight()
+                    .width(settledPaneWidth)
+                    .graphicsLayer(alpha = editorAlpha)
+            )
 
-                OnboardingEditorPreview(
-                    viewModel = viewModel,
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .width(editorWidth)
-                        .graphicsLayer(alpha = editorAlpha)
-                )
-            }
+            OnboardingWizardPane(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .fillMaxHeight()
+                    .width(wizardWidth)
+                    .background(MaterialTheme.colorScheme.background),
+                steps = steps,
+                currentStepIndex = currentStepIndex,
+                isLastStep = isLastStep,
+                topBarHeightDp = topBarHeightDp,
+                bottomBarHeightDp = bottomBarHeightDp,
+                onTopBarHeightChanged = { topBarHeightPx = it },
+                onBottomBarHeightChanged = { bottomBarHeightPx = it },
+                onBack = ::goToPreviousStep,
+                onNext = ::goToNextStep,
+                onSkip = ::skipOnboarding
+            )
         }
     } else {
         OnboardingWizardPane(
@@ -147,7 +148,6 @@ fun OnboardingScreen(
             steps = steps,
             currentStepIndex = currentStepIndex,
             isLastStep = isLastStep,
-            hazeState = hazeState,
             topBarHeightDp = topBarHeightDp,
             bottomBarHeightDp = bottomBarHeightDp,
             onTopBarHeightChanged = { topBarHeightPx = it },
@@ -165,9 +165,8 @@ private fun OnboardingWizardPane(
     steps: List<@Composable () -> Unit>,
     currentStepIndex: Int,
     isLastStep: Boolean,
-    hazeState: HazeState,
-    topBarHeightDp: androidx.compose.ui.unit.Dp,
-    bottomBarHeightDp: androidx.compose.ui.unit.Dp,
+    topBarHeightDp: Dp,
+    bottomBarHeightDp: Dp,
     onTopBarHeightChanged: (Float) -> Unit,
     onBottomBarHeightChanged: (Float) -> Unit,
     onBack: () -> Unit,
@@ -178,24 +177,39 @@ private fun OnboardingWizardPane(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .hazeSource(state = hazeState)
-                .padding(top = topBarHeightDp, bottom = bottomBarHeightDp)
+                .then(
+                    if (isDesktopPlatform) {
+                        Modifier
+                    } else {
+                        Modifier.onboardingSwipeNavigation(
+                            stepKey = currentStepIndex,
+                            onSwipeForward = onNext,
+                            onSwipeBackward = onBack
+                        )
+                    }
+                )
         ) {
-            AnimatedContent(
-                targetState = currentStepIndex,
-                transitionSpec = {
-                    val movingForward = targetState >= initialState
-                    val enter = fadeIn(tween(500)) + slideInHorizontally(tween(500)) { width ->
-                        if (movingForward) width / 5 else -width / 5
-                    }
-                    val exit = fadeOut(tween(400)) + slideOutHorizontally(tween(400)) { width ->
-                        if (movingForward) -width / 5 else width / 5
-                    }
-                    enter togetherWith exit
-                },
-                label = "onboarding-step"
-            ) { stepIndex ->
-                steps[stepIndex]()
+            CompositionLocalProvider(
+                LocalOnboardingBarInsets provides OnboardingBarInsets(
+                    top = topBarHeightDp,
+                    bottom = bottomBarHeightDp
+                )
+            ) {
+                AnimatedContent(
+                    targetState = currentStepIndex,
+                    transitionSpec = {
+                        val movingForward = targetState >= initialState
+                        val enter = fadeIn(tween(400, delayMillis = 50)) +
+                                slideInHorizontally(tween(400)) { width ->
+                                    if (movingForward) width / 8 else -width / 8
+                                }
+                        val exit = fadeOut(tween(200))
+                        enter togetherWith exit
+                    },
+                    label = "onboarding-step"
+                ) { stepIndex ->
+                    steps[stepIndex]()
+                }
             }
         }
 
@@ -209,8 +223,7 @@ private fun OnboardingWizardPane(
             OnboardingProgressBar(
                 progress = (currentStepIndex + 1) / steps.size.toFloat(),
                 showSkip = !isLastStep,
-                onSkip = onSkip,
-                hazeState = hazeState
+                onSkip = onSkip
             )
         }
 
@@ -225,52 +238,79 @@ private fun OnboardingWizardPane(
                 showBack = currentStepIndex > 0,
                 isLastStep = isLastStep,
                 onBack = onBack,
-                onNext = onNext,
-                hazeState = hazeState
+                onNext = onNext
             )
         }
     }
+}
+
+private fun Modifier.onboardingSwipeNavigation(
+    stepKey: Int,
+    onSwipeForward: () -> Unit,
+    onSwipeBackward: () -> Unit
+): Modifier = pointerInput(stepKey) {
+    val swipeThreshold = 72.dp.toPx()
+    var horizontalDragTotal = 0f
+
+    detectHorizontalDragGestures(
+        onDragStart = { horizontalDragTotal = 0f },
+        onDragCancel = { horizontalDragTotal = 0f },
+        onDragEnd = {
+            if (horizontalDragTotal <= -swipeThreshold) onSwipeForward()
+            if (horizontalDragTotal >= swipeThreshold) onSwipeBackward()
+            horizontalDragTotal = 0f
+        },
+        onHorizontalDrag = { _, dragAmount -> horizontalDragTotal += dragAmount }
+    )
 }
 
 @Composable
 private fun OnboardingProgressBar(
     progress: Float,
     showSkip: Boolean,
-    onSkip: () -> Unit,
-    hazeState: HazeState
+    onSkip: () -> Unit
 ) {
+    val animatedProgress by animateFloatAsState(
+        targetValue = progress,
+        animationSpec = tween(400),
+        label = "onboarding-progress"
+    )
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .emberBlur(hazeState, EmberBlur.Regular)
             .then(if (isDesktopPlatform) Modifier else Modifier.stableStatusBarsPadding())
             .padding(top = 16.dp, bottom = 12.dp),
         contentAlignment = Alignment.Center
     ) {
         Row(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 28.dp),
+                .padding(horizontal = 20.dp)
+                .widthIn(max = OnboardingContentMaxWidth)
+                .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             LinearProgressIndicator(
-                progress = { progress },
+                progress = { animatedProgress },
                 modifier = Modifier
                     .weight(1f)
                     .height(4.dp)
                     .clip(RoundedCornerShape(100)),
                 color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f),
                 strokeCap = ProgressIndicatorDefaults.LinearStrokeCap
             )
 
             if (showSkip) {
-                Spacer(modifier = Modifier.width(16.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = "Skip",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                    modifier = Modifier.clickable { onSkip() }
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { onSkip() }
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
                 )
             }
         }
@@ -282,13 +322,11 @@ private fun OnboardingNavigationBar(
     showBack: Boolean,
     isLastStep: Boolean,
     onBack: () -> Unit,
-    onNext: () -> Unit,
-    hazeState: HazeState
+    onNext: () -> Unit
 ) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .emberBlur(hazeState, EmberBlur.Regular)
             .padding(top = 16.dp, bottom = if (isDesktopPlatform) 36.dp else 28.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -296,66 +334,43 @@ private fun OnboardingNavigationBar(
             modifier = if (isDesktopPlatform) {
                 Modifier.padding(horizontal = 20.dp)
             } else {
-                Modifier.fillMaxWidth().padding(horizontal = 20.dp)
+                Modifier
+                    .padding(horizontal = 20.dp)
+                    .widthIn(max = OnboardingContentMaxWidth)
+                    .fillMaxWidth()
             },
-            horizontalArrangement = if (isDesktopPlatform) Arrangement.spacedBy(16.dp) else Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            val navButtonModifier = if (isDesktopPlatform) Modifier.size(52.dp) else Modifier.weight(1f).height(46.dp)
-
             if (showBack) {
-                OnboardingIconNavButton(
-                    icon = painterResource(Res.drawable.chevron_left),
-                    onClick = onBack,
-                    isPrimary = false,
-                    modifier = navButtonModifier
-                )
+                OnboardingBackButton(onClick = onBack)
             }
 
-            if (isLastStep) {
-                EmberButtonPrimary(
-                    text = "Start Using Ember",
-                    onClick = onNext,
-                    modifier = if (isDesktopPlatform) Modifier else Modifier.weight(1f)
-                )
-            } else {
-                OnboardingIconNavButton(
-                    icon = painterResource(Res.drawable.chevron_right),
-                    onClick = onNext,
-                    isPrimary = true,
-                    modifier = navButtonModifier
-                )
-            }
+            EmberButtonPrimary(
+                text = if (isLastStep) "Start Using Ember" else "Continue",
+                onClick = onNext,
+                modifier = if (isDesktopPlatform) Modifier else Modifier.weight(1f)
+            )
         }
     }
 }
 
 @Composable
-private fun OnboardingIconNavButton(
-    icon: Painter,
-    onClick: () -> Unit,
-    isPrimary: Boolean,
-    modifier: Modifier = Modifier
-) {
+private fun OnboardingBackButton(onClick: () -> Unit) {
     Box(
-        modifier = modifier
+        modifier = Modifier
+            .size(width = 52.dp, height = 46.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(
-                if (isPrimary) {
-                    MaterialTheme.colorScheme.primary
-                } else if (LocalAppIsDark.current) {
-                    Color(0xFF363636)
-                } else {
-                    MaterialTheme.colorScheme.surface
-                }
+                if (LocalAppIsDark.current) Color(0xFF363636) else MaterialTheme.colorScheme.surface
             )
             .clickable { onClick() },
         contentAlignment = Alignment.Center
     ) {
         Icon(
-            painter = icon,
-            contentDescription = null,
-            tint = if (isPrimary) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+            painter = painterResource(Res.drawable.chevron_left),
+            contentDescription = "Go back",
+            tint = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.size(20.dp)
         )
     }
