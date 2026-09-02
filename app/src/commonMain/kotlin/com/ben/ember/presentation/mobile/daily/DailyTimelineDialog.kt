@@ -31,6 +31,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -46,6 +47,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -54,7 +56,9 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.offset
 import androidx.compose.ui.window.Dialog
 import com.ben.ember.domain.model.BookmarkBlock
 import com.ben.ember.domain.model.BulletedListBlock
@@ -74,12 +78,23 @@ import com.ben.ember.domain.model.TableBlock
 import com.ben.ember.domain.model.TextBlock
 import com.ben.ember.domain.model.ToggleBlock
 import com.ben.ember.domain.model.VoiceBlock
+import com.ben.ember.data.local.room.NoteMetadataEntity
+import com.ben.ember.data.local.room.TagEntity
 import com.ben.ember.domain.model.inlineSpansOrEmpty
 import com.ben.ember.domain.util.isDesktopPlatform
+import com.ben.ember.presentation.LocalImageOverlay
 import com.ben.ember.presentation.shared.components.EmberBlur
 import com.ben.ember.presentation.shared.components.TopBarIconButton
 import com.ben.ember.presentation.shared.components.emberBlur
 import com.ben.ember.presentation.shared.components.fullScreenDialogProperties
+import com.ben.ember.presentation.shared.editor.EditorActions
+import com.ben.ember.presentation.shared.editor.blockViews.AudioBlockView
+import com.ben.ember.presentation.shared.editor.blockViews.BookmarkBlockView
+import com.ben.ember.presentation.shared.editor.blockViews.DocumentBlockView
+import com.ben.ember.presentation.shared.editor.blockViews.ImageBlockView
+import com.ben.ember.presentation.shared.editor.blockViews.LinkedNoteBlockView
+import com.ben.ember.presentation.shared.editor.blockViews.TableBlockView
+import com.ben.ember.presentation.shared.editor.blockViews.databaseBlockView.DatabaseBlockView
 import com.ben.ember.presentation.shared.editor.blockViews.databaseBlockView.buildNoteLinkAnnotatedString
 import com.ben.ember.ui.theme.LocalAppIsDark
 import dev.chrisbanes.haze.HazeState
@@ -87,18 +102,11 @@ import dev.chrisbanes.haze.hazeSource
 import ember.app.generated.resources.Res
 import ember.app.generated.resources.arrow_down
 import ember.app.generated.resources.arrow_up
-import ember.app.generated.resources.bookmark
 import ember.app.generated.resources.code
-import ember.app.generated.resources.doc_text
-import ember.app.generated.resources.image
-import ember.app.generated.resources.link
-import ember.app.generated.resources.microphone
 import ember.app.generated.resources.pen
 import ember.app.generated.resources.search
 import ember.app.generated.resources.square
 import ember.app.generated.resources.square_check
-import ember.app.generated.resources.table
-import ember.app.generated.resources.widget
 import ember.app.generated.resources.x
 import kotlinx.coroutines.flow.first
 import kotlinx.datetime.DateTimeUnit
@@ -112,6 +120,16 @@ private const val NoteLinkPrefix = "](ember://note/"
 private val DialogShape = RoundedCornerShape(24.dp)
 private val BubbleShape = RoundedCornerShape(topStart = 6.dp, topEnd = 18.dp, bottomEnd = 18.dp, bottomStart = 18.dp)
 private val IndentationStep = 14.dp
+private val TableBlockSideInsetCancellation = 16.dp
+private val DatabaseBlockSideInsetCancellation = 18.dp
+
+private fun Modifier.reduceSideInset(amount: Dp): Modifier = this.layout { measurable, constraints ->
+    val amountPx = amount.roundToPx()
+    val placeable = measurable.measure(constraints.offset(horizontal = amountPx * 2))
+    layout(placeable.width - amountPx * 2, placeable.height) {
+        placeable.placeRelative(-amountPx, 0)
+    }
+}
 
 // One scrollable row of the timeline.
 private sealed interface TimelineRow {
@@ -137,6 +155,9 @@ fun DailyTimelineDialog(
     isLoading: Boolean,
     anchorDate: LocalDate,
     today: LocalDate,
+    editorActions: EditorActions,
+    globalTags: List<TagEntity>,
+    allLinkableNotes: List<NoteMetadataEntity>,
     onDismiss: () -> Unit,
     onBlockClick: (LocalDate, String) -> Unit
 ) {
@@ -144,71 +165,81 @@ fun DailyTimelineDialog(
         onDismissRequest = onDismiss,
         properties = fullScreenDialogProperties()
     ) {
-        val hazeState = remember { HazeState() }
-        var searchQuery by remember { mutableStateOf("") }
+        var fullScreenOverlayContent by remember { mutableStateOf<(@Composable () -> Unit)?>(null) }
 
-        val rows = remember(days) { buildTimelineRows(days) }
-        val trimmedQuery = searchQuery.trim()
-        val matchRowIndices = remember(rows, trimmedQuery, today) {
-            findMatchingRowIndices(rows, trimmedQuery, today)
-        }
-
-        // Matches are ranked from the day the dialog opened on, not from wherever the last match
-        // scrolled us to, so refining a query can't drift the timeline further and further away.
-        // The arrows only nudge an offset, and that offset resets the instant the match set changes -
-        // synchronously, so a new query can never scroll to the previous query's match first.
-        val nearestMatchPosition = remember(rows, matchRowIndices, anchorDate) {
-            matchRowIndices
-                .indices
-                .minByOrNull { abs(anchorDate.daysUntil(rows[matchRowIndices[it]].date)) }
-                ?: 0
-        }
-        var matchStepOffset by remember(matchRowIndices) { mutableIntStateOf(0) }
-        val currentMatchPosition =
-            stepMatchPosition(nearestMatchPosition, matchRowIndices.size, matchStepOffset)
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(if (isDesktopPlatform) 0.55f else 0.94f)
-                .widthIn(max = 720.dp)
-                .fillMaxHeight(0.92f)
-                .safeDrawingPadding()
-                .clip(DialogShape)
+        CompositionLocalProvider(
+            LocalImageOverlay provides { content -> fullScreenOverlayContent = content }
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .hazeSource(hazeState)
-                    .background(
-                        if (LocalAppIsDark.current) MaterialTheme.colorScheme.surface
-                        else MaterialTheme.colorScheme.background
-                    )
-            ) {
-                TimelineList(
-                    rows = rows,
-                    isLoading = isLoading,
-                    anchorDate = anchorDate,
-                    today = today,
-                    matchRowIndices = matchRowIndices,
-                    targetRowIndex = matchRowIndices.getOrNull(currentMatchPosition),
-                    onBlockClick = onBlockClick
-                )
+            val hazeState = remember { HazeState() }
+            var searchQuery by remember { mutableStateOf("") }
+
+            val rows = remember(days) { buildTimelineRows(days) }
+            val trimmedQuery = searchQuery.trim()
+            val matchRowIndices = remember(rows, trimmedQuery, today) {
+                findMatchingRowIndices(rows, trimmedQuery, today)
             }
-            TimelineHeader(
-                hazeState = hazeState,
-                onDismiss = onDismiss,
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
-            TimelineSearchBar(
-                query = searchQuery,
-                onQueryChange = { searchQuery = it },
-                matchCount = matchRowIndices.size,
-                currentMatchPosition = currentMatchPosition,
-                onPreviousMatch = { matchStepOffset -= 1 },
-                onNextMatch = { matchStepOffset += 1 },
-                hazeState = hazeState,
-                modifier = Modifier.align(Alignment.BottomCenter)
-            )
+
+            val nearestMatchPosition = remember(rows, matchRowIndices, anchorDate) {
+                matchRowIndices
+                    .indices
+                    .minByOrNull { abs(anchorDate.daysUntil(rows[matchRowIndices[it]].date)) }
+                    ?: 0
+            }
+            var matchStepOffset by remember(matchRowIndices) { mutableIntStateOf(0) }
+            val currentMatchPosition =
+                stepMatchPosition(nearestMatchPosition, matchRowIndices.size, matchStepOffset)
+
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(if (isDesktopPlatform) 0.55f else 0.94f)
+                        .widthIn(max = 720.dp)
+                        .fillMaxHeight(0.92f)
+                        .safeDrawingPadding()
+                        .clip(DialogShape)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .hazeSource(hazeState)
+                            .background(
+                                if (LocalAppIsDark.current) MaterialTheme.colorScheme.surface
+                                else MaterialTheme.colorScheme.background
+                            )
+                    ) {
+                        TimelineList(
+                            rows = rows,
+                            isLoading = isLoading,
+                            anchorDate = anchorDate,
+                            today = today,
+                            matchRowIndices = matchRowIndices,
+                            targetRowIndex = matchRowIndices.getOrNull(currentMatchPosition),
+                            editorActions = editorActions,
+                            globalTags = globalTags,
+                            allLinkableNotes = allLinkableNotes,
+                            onBlockClick = onBlockClick
+                        )
+                    }
+
+                    TimelineHeader(
+                        hazeState = hazeState,
+                        onDismiss = onDismiss,
+                        modifier = Modifier.align(Alignment.TopCenter)
+                    )
+                    TimelineSearchBar(
+                        query = searchQuery,
+                        onQueryChange = { searchQuery = it },
+                        matchCount = matchRowIndices.size,
+                        currentMatchPosition = currentMatchPosition,
+                        onPreviousMatch = { matchStepOffset -= 1 },
+                        onNextMatch = { matchStepOffset += 1 },
+                        hazeState = hazeState,
+                        modifier = Modifier.align(Alignment.BottomCenter)
+                    )
+                }
+
+                fullScreenOverlayContent?.invoke()
+            }
         }
     }
 }
@@ -369,22 +400,19 @@ private fun TimelineList(
     today: LocalDate,
     matchRowIndices: List<Int>,
     targetRowIndex: Int?,
+    editorActions: EditorActions,
+    globalTags: List<TagEntity>,
+    allLinkableNotes: List<NoteMetadataEntity>,
     onBlockClick: (LocalDate, String) -> Unit
 ) {
     val listState = rememberLazyListState()
     var isAnchorCentered by remember { mutableStateOf(false) }
     val matchRowIndexSet = remember(matchRowIndices) { matchRowIndices.toSet() }
 
-    // Read as state so the match scroll re-runs when the viewport changes height - which is exactly
-    // what happens the moment the keyboard opens. Without it, a row centred against the tall
-    // pre-keyboard viewport is left stranded near the top once the list shrinks.
     val viewportHeight by remember {
         derivedStateOf { listState.layoutInfo.viewportSize.height }
     }
 
-    // The anchor day can only be centred once the list has been measured, so this waits for a real
-    // viewport height and then offsets the scroll by half of it. The list stays hidden until that
-    // lands, otherwise the first frame visibly flashes at the top of the timeline before jumping.
     LaunchedEffect(rows, anchorDate) {
         isAnchorCentered = false
         if (rows.isEmpty()) return@LaunchedEffect
@@ -398,8 +426,6 @@ private fun TimelineList(
         isAnchorCentered = true
     }
 
-    // Runs on every keystroke: a new query cancels this coroutine mid-animation and restarts, so the
-    // list follows the typing instead of queueing up one scroll per character.
     LaunchedEffect(targetRowIndex, viewportHeight, isAnchorCentered) {
         if (!isAnchorCentered || targetRowIndex == null || viewportHeight <= 0) return@LaunchedEffect
         listState.animateScrollToItem(targetRowIndex, -(viewportHeight / 2))
@@ -436,19 +462,33 @@ private fun TimelineList(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
                 )
 
-                is TimelineRow.BlockRow -> Box(
-                    modifier = Modifier
+                is TimelineRow.BlockRow -> {
+                    val indentModifier = Modifier
                         .padding(start = IndentationStep * row.block.indentationLevel)
                         .fillMaxWidth()
-                        .clip(BubbleShape)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = { onBlockClick(row.date, row.block.id) }
+                    val clickModifier = Modifier.clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = { onBlockClick(row.date, row.block.id) }
+                    )
+                    val rowModifier = if (row.block is TableBlock || row.block is DatabaseBlock) {
+                        indentModifier.then(clickModifier)
+                    } else {
+                        indentModifier
+                            .clip(BubbleShape)
+                            .then(clickModifier)
+                            .padding(horizontal = 4.dp, vertical = 6.dp)
+                    }
+                    Box(modifier = rowModifier) {
+                        TimelineBlockContent(
+                            block = row.block,
+                            isSearchMatch = isSearchMatch,
+                            editorActions = editorActions,
+                            globalTags = globalTags,
+                            allLinkableNotes = allLinkableNotes,
+                            onNavigate = { onBlockClick(row.date, row.block.id) }
                         )
-                        .padding(horizontal = 4.dp, vertical = 6.dp)
-                ) {
-                    TimelineBlockContent(block = row.block, isSearchMatch = isSearchMatch)
+                    }
                 }
             }
         }
@@ -474,7 +514,14 @@ private fun TimelineList(
 }
 
 @Composable
-private fun TimelineBlockContent(block: NoteBlock, isSearchMatch: Boolean) {
+private fun TimelineBlockContent(
+    block: NoteBlock,
+    isSearchMatch: Boolean,
+    editorActions: EditorActions,
+    globalTags: List<TagEntity>,
+    allLinkableNotes: List<NoteMetadataEntity>,
+    onNavigate: () -> Unit
+) {
     when (block) {
         is HeadingBlock -> TimelineText(
             block = block,
@@ -561,34 +608,49 @@ private fun TimelineBlockContent(block: NoteBlock, isSearchMatch: Boolean) {
             )
         }
 
-        is BookmarkBlock -> TimelineMediaLabel(
-            icon = painterResource(Res.drawable.bookmark),
-            label = block.title?.takeIf { it.isNotBlank() } ?: block.url,
-            isSearchMatch = isSearchMatch
+        is BookmarkBlock -> BookmarkBlockView(
+            block = block,
+            inSelectionMode = false,
+            onToggleSelection = {},
+            onUrlSubmit = {}
         )
 
-        is LinkedNoteBlock -> TimelineMediaLabel(
-            icon = painterResource(Res.drawable.link),
-            label = "Linked note",
-            isSearchMatch = isSearchMatch
+        is LinkedNoteBlock -> LinkedNoteBlockView(
+            block = block,
+            inSelectionMode = false,
+            onToggleSelection = {},
+            // Tapping this card normally opens the linked note itself, but here it should behave
+            // like every other block in the timeline and just jump to this block's own day.
+            onOpenNote = onNavigate,
+            getNoteMetadata = { editorActions.getNoteMetadata(it) }
         )
 
-        is ImageBlock -> TimelineMediaLabel(
-            icon = painterResource(Res.drawable.image),
-            label = "Image",
-            isSearchMatch = isSearchMatch
+        is ImageBlock -> ImageBlockView(
+            block = block,
+            inSelectionMode = false,
+            onToggleSelection = {},
+            onRequestPicker = {},
+            onRequestCamera = {},
+            onDelete = {}
         )
 
-        is DocumentBlock -> TimelineMediaLabel(
-            icon = painterResource(Res.drawable.doc_text),
-            label = block.fileName,
-            isSearchMatch = isSearchMatch
+        is DocumentBlock -> DocumentBlockView(
+            block = block,
+            inSelectionMode = false,
+            onToggleSelection = {},
+            onRequestPicker = {},
+            onOpenFile = { filePath, mimeType -> editorActions.onOpenFile(filePath, mimeType) }
         )
 
-        is VoiceBlock -> TimelineMediaLabel(
-            icon = painterResource(Res.drawable.microphone),
-            label = "Voice note · ${formatVoiceDuration(block.durationSeconds)}",
-            isSearchMatch = isSearchMatch
+        is VoiceBlock -> AudioBlockView(
+            block = block,
+            inSelectionMode = false,
+            onToggleSelection = {},
+            onRemoveVoice = {},
+            onStartRecording = {},
+            onStopRecording = {},
+            onPlayAudio = { filePath, onComplete -> editorActions.onPlayAudio(filePath, onComplete) },
+            onStopAudio = { editorActions.onStopAudio() }
         )
 
         is SketchBlock -> TimelineMediaLabel(
@@ -597,17 +659,31 @@ private fun TimelineBlockContent(block: NoteBlock, isSearchMatch: Boolean) {
             isSearchMatch = isSearchMatch
         )
 
-        is TableBlock -> TimelineMediaLabel(
-            icon = painterResource(Res.drawable.table),
-            label = "Table · ${block.rows.size} rows",
-            isSearchMatch = isSearchMatch
-        )
+        is TableBlock -> Box(modifier = Modifier.reduceSideInset(TableBlockSideInsetCancellation)) {
+            TableBlockView(
+                block = block,
+                inSelectionMode = true,
+                onUpdateTable = { editorActions.onUpdateTable(block.id, it) },
+                onUpdateTableStyle = { cellStyles, rowStyles, columnStyles ->
+                    editorActions.onUpdateTableStyle(block.id, cellStyles, rowStyles, columnStyles)
+                },
+                onUpdateColumnWidth = { columnIndex, width ->
+                    editorActions.onUpdateTableColumnWidth(block.id, columnIndex, width)
+                }
+            )
+        }
 
-        is DatabaseBlock -> TimelineMediaLabel(
-            icon = painterResource(Res.drawable.widget),
-            label = block.title.ifBlank { "Database" },
-            isSearchMatch = isSearchMatch
-        )
+        is DatabaseBlock -> Box(modifier = Modifier.reduceSideInset(DatabaseBlockSideInsetCancellation)) {
+            DatabaseBlockView(
+                block = block,
+                inSelectionMode = true,
+                globalTags = globalTags,
+                allLinkableNotes = allLinkableNotes,
+                actions = object : EditorActions by editorActions {
+                    override fun onToggleSelection(id: String) = onNavigate()
+                }
+            )
+        }
 
         else -> Unit
     }
@@ -677,9 +753,6 @@ private fun TimelineText(
     )
 }
 
-// A note link is stored as markdown pointing at ember://note/<id>, and rewriting it into a readable
-// "@Title" shifts every character offset after it - so inline spans are only safe to apply when the
-// text has no links in it. Links win because an unreadable ember:// url is worse than a lost bold.
 private fun buildTimelineAnnotatedString(
     text: String,
     inlineSpans: List<InlineSpan>,
@@ -731,8 +804,6 @@ private fun buildTimelineRows(days: List<DailyTimelineDay>): List<TimelineRow> =
         }
     }
 
-// A day whose label matches but whose blocks don't still counts as one match, so searching "Mar" or
-// "Yesterday" lands on that day instead of reporting nothing.
 private fun findMatchingRowIndices(
     rows: List<TimelineRow>,
     query: String,
@@ -769,13 +840,6 @@ private fun timelineBlockSearchText(block: NoteBlock): String = when (block) {
     is DatabaseBlock -> block.title
     is TableBlock -> block.rows.joinToString(" ") { row -> row.joinToString(" ") }
     else -> ""
-}
-
-private fun formatVoiceDuration(totalSeconds: Int): String {
-    val safeSeconds = totalSeconds.coerceAtLeast(0)
-    val minutes = safeSeconds / 60
-    val seconds = safeSeconds % 60
-    return "$minutes:${seconds.toString().padStart(2, '0')}"
 }
 
 private fun timelineDayLabel(date: LocalDate, today: LocalDate): String = when (date) {
