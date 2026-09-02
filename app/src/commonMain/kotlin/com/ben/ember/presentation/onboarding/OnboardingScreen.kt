@@ -12,6 +12,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProgressIndicatorDefaults
@@ -26,19 +27,25 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.ben.ember.domain.util.isDesktopPlatform
 import com.ben.ember.presentation.shared.components.EmberButtonPrimary
-import com.ben.ember.presentation.shared.components.EmberButtonSecondary
 import com.ben.ember.presentation.shared.components.EmberBlur
 import com.ben.ember.presentation.shared.components.emberBlur
 import com.ben.ember.presentation.shared.stableStatusBarsPadding
+import com.ben.ember.ui.theme.LocalAppIsDark
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
+import ember.app.generated.resources.Res
+import ember.app.generated.resources.chevron_left
+import ember.app.generated.resources.chevron_right
+import org.jetbrains.compose.resources.painterResource
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
@@ -282,28 +289,74 @@ private fun OnboardingNavigationBar(
         modifier = Modifier
             .fillMaxWidth()
             .emberBlur(hazeState, EmberBlur.Regular)
-            .padding(vertical = 16.dp),
+            .padding(top = 16.dp, bottom = if (isDesktopPlatform) 36.dp else 28.dp),
         contentAlignment = Alignment.Center
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = if (isDesktopPlatform) {
+                Modifier.padding(horizontal = 20.dp)
+            } else {
+                Modifier.fillMaxWidth().padding(horizontal = 20.dp)
+            },
+            horizontalArrangement = if (isDesktopPlatform) Arrangement.spacedBy(16.dp) else Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            val navButtonModifier = if (isDesktopPlatform) Modifier.size(52.dp) else Modifier.weight(1f).height(46.dp)
+
             if (showBack) {
-                EmberButtonSecondary(
-                    text = "Back",
+                OnboardingIconNavButton(
+                    icon = painterResource(Res.drawable.chevron_left),
                     onClick = onBack,
-                    modifier = Modifier.weight(1f)
+                    isPrimary = false,
+                    modifier = navButtonModifier
                 )
             }
 
-            EmberButtonPrimary(
-                text = if (isLastStep) "Start Using Ember" else "Next",
-                onClick = onNext,
-                modifier = Modifier.weight(1f)
-            )
+            if (isLastStep) {
+                EmberButtonPrimary(
+                    text = "Start Using Ember",
+                    onClick = onNext,
+                    modifier = if (isDesktopPlatform) Modifier else Modifier.weight(1f)
+                )
+            } else {
+                OnboardingIconNavButton(
+                    icon = painterResource(Res.drawable.chevron_right),
+                    onClick = onNext,
+                    isPrimary = true,
+                    modifier = navButtonModifier
+                )
+            }
         }
+    }
+}
+
+@Composable
+private fun OnboardingIconNavButton(
+    icon: Painter,
+    onClick: () -> Unit,
+    isPrimary: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(
+                if (isPrimary) {
+                    MaterialTheme.colorScheme.primary
+                } else if (LocalAppIsDark.current) {
+                    Color(0xFF363636)
+                } else {
+                    MaterialTheme.colorScheme.surface
+                }
+            )
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            painter = icon,
+            contentDescription = null,
+            tint = if (isPrimary) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.size(20.dp)
+        )
     }
 }

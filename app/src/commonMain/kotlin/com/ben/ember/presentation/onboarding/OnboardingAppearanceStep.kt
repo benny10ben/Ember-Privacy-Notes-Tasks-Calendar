@@ -2,6 +2,7 @@ package com.ben.ember.presentation.onboarding
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,6 +16,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -92,7 +94,10 @@ private fun OnboardingFontStyleOption(
                 .height(108.dp)
                 .clip(RoundedCornerShape(18.dp))
                 .background(if (isSelected) SelectedOptionBackground else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
-                .clickable { onClick() },
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) { onClick() },
             contentAlignment = Alignment.Center
         ) {
             Text(
