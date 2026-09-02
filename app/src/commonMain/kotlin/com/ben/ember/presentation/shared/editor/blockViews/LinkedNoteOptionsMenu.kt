@@ -26,7 +26,7 @@ fun LinkedNoteOptionsMenu(
 ) {
     val content: @Composable () -> Unit = {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 0.dp).padding(top = 8.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
@@ -41,7 +41,7 @@ fun LinkedNoteOptionsMenu(
             )
         }
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 0.dp),
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
@@ -71,14 +71,14 @@ fun LinkedNoteOptionsMenu(
             onDismiss = onDismiss,
             title = "Preview Options"
         ) { _ ->
-            Column(modifier = Modifier.fillMaxWidth().padding(bottom = 26.dp)) {
+            Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
                 content()
                 EmberButtonPrimary(
                     text = "Close",
                     onClick = onDismiss,
                     modifier = Modifier.fillMaxWidth()
-                        .padding(vertical = 12.dp, horizontal = 20.dp)
-                )
-            }}
+                        .padding(vertical = 12.dp))
+            }
+        }
     }
 }

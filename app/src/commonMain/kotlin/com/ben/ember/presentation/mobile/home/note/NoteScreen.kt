@@ -1684,7 +1684,7 @@ fun NoteOptionsBottomSheet(
 
             EmberButtonPrimary(
                 text = "Close",
-                onClick = onDismiss,
+                onClick = { currentMenu = MenuLevel.MAIN },
                 modifier = Modifier.fillMaxWidth()
                     .padding(vertical = 12.dp, horizontal = 20.dp)
             )
@@ -1718,9 +1718,9 @@ fun NoteOptionsBottomSheet(
 
             EmberButtonPrimary(
                 text = "Close",
-                onClick = onDismiss,
+                onClick = { currentMenu = MenuLevel.MAIN },
                 modifier = Modifier.fillMaxWidth()
-                    .padding(vertical = 12.dp, horizontal = 20.dp)
+                    .padding(vertical = 12.dp)
             )
         }
       }
@@ -1752,9 +1752,9 @@ fun NoteOptionsBottomSheet(
 
             EmberButtonPrimary(
                 text = "Close",
-                onClick = onDismiss,
+                onClick = { currentMenu = MenuLevel.MAIN },
                 modifier = Modifier.fillMaxWidth()
-                    .padding(vertical = 12.dp, horizontal = 20.dp)
+                    .padding(vertical = 12.dp)
             )
         }
       }
