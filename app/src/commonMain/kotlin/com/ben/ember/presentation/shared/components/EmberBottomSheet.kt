@@ -5,8 +5,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -125,7 +123,7 @@ private fun EmberFloatingDialog(
                                 .padding(horizontal = SheetHorizontalPadding, vertical = 8.dp)
                         )
                         if (headerAction != null) {
-                            Box(modifier = Modifier.padding(end = SheetIconSpacing)) {
+                            Box(modifier = Modifier.padding(end = SheetHorizontalPadding)) {
                                 TopBarIconButton(
                                     icon = headerAction.icon,
                                     contentDescription = headerAction.contentDescription,
@@ -136,16 +134,16 @@ private fun EmberFloatingDialog(
                                 )
                             }
                         }
-                        Box(modifier = Modifier.padding(end = SheetHorizontalPadding)) {
-                            TopBarIconButton(
-                                icon = Icons.Default.Close,
-                                contentDescription = "Close",
-                                bgColor = if (LocalAppIsDark.current) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.background,
-                                tint = MaterialTheme.colorScheme.onSurface,
-                                shadowElevation = SheetIconShadowElevation,
-                                onClick = onDismiss
-                            )
-                        }
+//                        Box(modifier = Modifier.padding(end = SheetHorizontalPadding)) {
+//                            TopBarIconButton(
+//                                icon = Icons.Default.Close,
+//                                contentDescription = "Close",
+//                                bgColor = if (LocalAppIsDark.current) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.background,
+//                                tint = MaterialTheme.colorScheme.onSurface,
+//                                shadowElevation = SheetIconShadowElevation,
+//                                onClick = onDismiss
+//                            )
+//                        }
                     }
                 }
 
@@ -164,7 +162,6 @@ private fun EmberFloatingDialog(
                         .heightIn(max = 560.dp)
                         .verticalScroll(rememberScrollState())
                         .padding(horizontal = contentHorizontalPadding)
-                        .padding(bottom = 20.dp)
                 ) {
                     content { action -> closeAnd(action) }
                 }
@@ -255,7 +252,7 @@ private fun EmberModalBottomSheet(
                                 .padding(horizontal = SheetHorizontalPadding, vertical = 8.dp)
                         )
                         if (headerAction != null) {
-                            Box(modifier = Modifier.padding(end = SheetIconSpacing)) {
+                            Box(modifier = Modifier.padding(end = SheetHorizontalPadding)) {
                                 TopBarIconButton(
                                     icon = headerAction.icon,
                                     contentDescription = headerAction.contentDescription,
