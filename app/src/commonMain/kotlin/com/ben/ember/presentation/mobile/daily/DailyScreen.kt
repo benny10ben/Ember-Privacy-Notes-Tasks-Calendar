@@ -650,6 +650,9 @@ fun DailyScreen(
                     isLoading = isTimelineLoading,
                     anchorDate = selectedDate,
                     today = initialDate,
+                    editorActions = sharedEditorActions,
+                    globalTags = globalTags,
+                    allLinkableNotes = allLinkableNotes,
                     onDismiss = {
                         showTimelineDialog = false
                         viewModel.clearTimeline()
@@ -842,26 +845,28 @@ private fun DailyCalendarSheet(
         title = null,
         subtitle = null
     ) { closeAnd ->
-        BottomSheetMonthCalendar(
-            selectedDate = selectedDate,
-            today = initialDate,
-            taskMap = calendarTaskMap,
-            onDateSelected = {
-                onDateSelected(it)
-                closeAnd { onDismiss() }
-            },
-            onGoToToday = {
-                onGoToToday()
-                closeAnd { onDismiss() }
-            }
-        )
+        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+            BottomSheetMonthCalendar(
+                selectedDate = selectedDate,
+                today = initialDate,
+                taskMap = calendarTaskMap,
+                onDateSelected = {
+                    onDateSelected(it)
+                    closeAnd { onDismiss() }
+                },
+                onGoToToday = {
+                    onGoToToday()
+                    closeAnd { onDismiss() }
+                }
+            )
 
-        EmberButtonPrimary(
-            text = "Close",
-            onClick = onDismiss,
-            modifier = Modifier.fillMaxWidth()
-                .padding(vertical = 12.dp, horizontal = 20.dp)
-        )
+            EmberButtonPrimary(
+                text = "Close",
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth()
+                    .padding(vertical = 12.dp, horizontal = 20.dp)
+            )
+        }
     }
 }
 
