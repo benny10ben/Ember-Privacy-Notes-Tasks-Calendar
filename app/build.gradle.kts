@@ -24,7 +24,7 @@ kotlin {
 
     jvm("desktop") {
         mainRun {
-            mainClass.set("com.ben.ember.DesktopMainKt")
+            mainClass.set("com.ben.emberr.DesktopMainKt")
         }
     }
 
@@ -134,14 +134,14 @@ kotlin {
 
 compose.desktop {
     application {
-        mainClass = "com.ben.ember.DesktopMainKt"
+        mainClass = "com.ben.emberr.DesktopMainKt"
 
         nativeDistributions {
             targetFormats(
                 org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb,
                 org.jetbrains.compose.desktop.application.dsl.TargetFormat.Rpm
             )
-            packageName = "Ember"
+            packageName = "Emberr"
             packageVersion = "1.0.0"
         }
     }
@@ -149,18 +149,18 @@ compose.desktop {
 
 sqldelight {
     databases {
-        create("EmberDatabase") {
-            packageName.set("com.ember.database")
+        create("EmberrDatabase") {
+            packageName.set("com.emberr.database")
         }
     }
 }
 
 android {
-    namespace = "com.ben.ember"
+    namespace = "com.ben.emberr"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.ben.ember"
+        applicationId = "com.ben.emberr"
         minSdk = 31
         targetSdk = 36
         versionCode = 1

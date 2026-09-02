@@ -23,8 +23,8 @@
     </queries>
 
     <application
-        android:name=".EmberApplication"
-        android:theme="@style/Theme.Ember.Splash"
+        android:name=".EmberrApplication"
+        android:theme="@style/Theme.Emberr.Splash"
         android:windowSoftInputMode="adjustResize"
         android:enableOnBackInvokedCallback="true"
         android:allowBackup="true"
@@ -42,7 +42,7 @@
             android:exported="true"
             android:launchMode="singleTask"
             android:label="@string/app_name"
-            android:theme="@style/Theme.Ember.Splash"
+            android:theme="@style/Theme.Emberr.Splash"
             >
 
             <intent-filter>
@@ -142,7 +142,7 @@
             android:name=".presentation.widget.noteshortcut.NoteShortcutWidgetPickerActivity"
             android:exported="true"
             android:label="@string/note_shortcut_widget_label"
-            android:theme="@style/Theme.Ember">
+            android:theme="@style/Theme.Emberr">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
             </intent-filter>
@@ -179,8 +179,8 @@
             android:enabled="true"
             android:exported="false">
             <intent-filter>
-                <action android:name="com.ben.ember.widget.calendaragenda.SHOW_PREVIOUS_MONTH" />
-                <action android:name="com.ben.ember.widget.calendaragenda.SHOW_NEXT_MONTH" />
+                <action android:name="com.ben.emberr.widget.calendaragenda.SHOW_PREVIOUS_MONTH" />
+                <action android:name="com.ben.emberr.widget.calendaragenda.SHOW_NEXT_MONTH" />
             </intent-filter>
         </receiver>
 
@@ -215,8 +215,8 @@
             android:enabled="true"
             android:exported="false">
             <intent-filter>
-                <action android:name="com.ben.ember.widget.calendar.SHOW_PREVIOUS_MONTH" />
-                <action android:name="com.ben.ember.widget.calendar.SHOW_NEXT_MONTH" />
+                <action android:name="com.ben.emberr.widget.calendar.SHOW_PREVIOUS_MONTH" />
+                <action android:name="com.ben.emberr.widget.calendar.SHOW_NEXT_MONTH" />
             </intent-filter>
         </receiver>
 
@@ -225,7 +225,7 @@
             android:enabled="true"
             android:exported="false">
             <intent-filter>
-                <action android:name="com.ben.ember.widget.todaytasks.TOGGLE_TASK" />
+                <action android:name="com.ben.emberr.widget.todaytasks.TOGGLE_TASK" />
             </intent-filter>
         </receiver>
 
@@ -234,8 +234,8 @@
             android:enabled="true"
             android:exported="false">
             <intent-filter>
-                <action android:name="com.ben.ember.widget.tasks.TOGGLE_COMPLETED_VIEW" />
-                <action android:name="com.ben.ember.widget.tasks.TOGGLE_TASK" />
+                <action android:name="com.ben.emberr.widget.tasks.TOGGLE_COMPLETED_VIEW" />
+                <action android:name="com.ben.emberr.widget.tasks.TOGGLE_TASK" />
             </intent-filter>
         </receiver>
 
@@ -243,7 +243,7 @@
             android:name=".presentation.widget.note.NoteWidgetPickerActivity"
             android:exported="true"
             android:label="@string/note_widget_label"
-            android:theme="@style/Theme.Ember">
+            android:theme="@style/Theme.Emberr">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
             </intent-filter>

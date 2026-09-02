@@ -1,4 +1,4 @@
-# Ember — Architecture & Developer Documentation
+# Emberr — Architecture & Developer Documentation
 
 > **Version:** 1.0 · **Stack:** Kotlin, Jetpack Compose, Room + SQLCipher, Hilt, kotlinx.serialization
 
@@ -21,7 +21,7 @@
 
 ## 1. Project Overview
 
-Ember is a **privacy-first, encrypted, block-based note-taking app** for Android. All user data is encrypted at rest using a layered security model: the Room metadata database is encrypted via **SQLCipher**, and note content payloads are stored as individual **AES-256-GCM encrypted JSON files** on internal storage.
+Emberr is a **privacy-first, encrypted, block-based note-taking app** for Android. All user data is encrypted at rest using a layered security model: the Room metadata database is encrypted via **SQLCipher**, and note content payloads are stored as individual **AES-256-GCM encrypted JSON files** on internal storage.
 
 The editor follows a **block-based content model** inspired by Notion — a note is a flat, ordered list of typed blocks (paragraphs, headings, checkboxes, code blocks, etc.) that can be formatted, indented, reordered, and toggled. The architecture follows **Clean Architecture** with a domain layer, a data layer, and a presentation layer wired together via **Hilt**.
 
@@ -30,7 +30,7 @@ The editor follows a **block-based content model** inspired by Notion — a note
 ## 2. Package Structure
 
 ```
-com.ben.ember
+com.ben.emberr
 ├── core.security
 │   └── EncryptionManager
 ├── data.local
@@ -61,12 +61,12 @@ com.ben.ember
 │   │   └── Screen
 │   ├── notes
 │   │   └── HomeScreen.kt
-│   └── EmberApp.kt
+│   └── EmberrApp.kt
 ├── ui.theme
 │   ├── SystemBars.kt
 │   ├── Theme.kt
 │   └── Type.kt
-├── EmberApplication
+├── EmberrApplication
 └── MainActivity
 ```
 
@@ -74,7 +74,7 @@ com.ben.ember
 
 ## 3. Security Implementation
 
-Ember uses a **three-layer security stack** to ensure no user data is ever stored in cleartext on disk.
+Emberr uses a **three-layer security stack** to ensure no user data is ever stored in cleartext on disk.
 
 ### 3.1 Android Keystore + MasterKey
 
@@ -90,12 +90,12 @@ The hardware-backed keystore means the AES key material never leaves the secure 
 
 ### 3.2 SQLCipher — Room Database Encryption
 
-The Room metadata database (`ember_metadata.db`) is encrypted at the page level using **SQLCipher**. A 256-bit random passphrase is generated on first launch, encoded as Base64, stored in `EncryptedSharedPreferences`, and then passed into Room via SQLCipher's `SupportFactory`:
+The Room metadata database (`emberr_metadata.db`) is encrypted at the page level using **SQLCipher**. A 256-bit random passphrase is generated on first launch, encoded as Base64, stored in `EncryptedSharedPreferences`, and then passed into Room via SQLCipher's `SupportFactory`:
 
 ```kotlin
 // AppModule.kt
 val supportFactory = SupportFactory(passphrase)
-Room.databaseBuilder(context, AppDatabase::class.java, "ember_metadata.db")
+Room.databaseBuilder(context, AppDatabase::class.java, "emberr_metadata.db")
     .openHelperFactory(supportFactory)
     .build()
 ```
@@ -143,7 +143,7 @@ Room indexes **metadata** (title, folder, timestamps, file path). Heavy content 
 
 ## 4. Domain Models
 
-All models live in `com.ben.ember.domain.model` and are annotated with `@Serializable` for kotlinx.serialization.
+All models live in `com.ben.emberr.domain.model` and are annotated with `@Serializable` for kotlinx.serialization.
 
 ### 4.1 NoteContent
 
@@ -386,11 +386,11 @@ A horizontally scrollable `Row` of `IconButton`s divided into logical groups by 
 
 Navigation uses Jetpack Navigation Compose with two top-level destinations defined as `sealed class Screen` objects.
 
-The root `Scaffold` in `EmberApp` sets `contentWindowInsets = WindowInsets(0)` to prevent the Scaffold from consuming IME insets itself. This allows `EditorScreen` to own `imePadding()` exclusively, avoiding double-application of keyboard insets.
+The root `Scaffold` in `EmberrApp` sets `contentWindowInsets = WindowInsets(0)` to prevent the Scaffold from consuming IME insets itself. This allows `EditorScreen` to own `imePadding()` exclusively, avoiding double-application of keyboard insets.
 
 Transitions are disabled (`EnterTransition.None`, `ExitTransition.None`) for instant tab switching — appropriate given the minimal two-tab structure.
 
-**EmberBottomBar** is a floating, pill-shaped `Surface` using `MaterialTheme.colorScheme.onSurface` as its background. Selected items are shown as a `surface`-colored circular cutout within the pill, achieving a natural inversion for both light and dark themes without theme-conditional color logic.
+**EmberrBottomBar** is a floating, pill-shaped `Surface` using `MaterialTheme.colorScheme.onSurface` as its background. Selected items are shown as a `surface`-colored circular cutout within the pill, achieving a natural inversion for both light and dark themes without theme-conditional color logic.
 
 ---
 
@@ -471,4 +471,4 @@ Maintain a bounded `ArrayDeque<List<NoteBlock>>` history stack in the ViewModel.
 
 ---
 
-*Generated from source review of Ember v1.0 codebase — May 2026.*
+*Generated from source review of Emberr v1.0 codebase — May 2026.*
