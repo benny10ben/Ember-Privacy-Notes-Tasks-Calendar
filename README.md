@@ -39,6 +39,12 @@ Emberr is just getting started. Here is the vision for the future:
 * **Encrypted Cloud Backup:** A privacy-respecting, end-to-end encrypted backup and sync solution for those who want their data available across devices without sacrificing security.
 * **Cross-Platform Expansion:** Bringing Emberr to the Desktop (Linux, macOS, Windows) and beyond to create a seamless, unified workspace.
 
+## System Requirements
+
+**Android:** Android 12 (API 31) or newer. On-device AI runs on all common processors (arm64-v8a, armeabi-v7a, x86_64, x86).
+
+**Desktop:** Linux on a 64-bit Intel or AMD processor. Everything in Emberr works on other platforms, with one exception: the bundled on-device AI engine is a native library that currently ships only as a Linux x86-64 build. On ARM Linux (a Raspberry Pi, an Ampere or Snapdragon laptop, an aarch64 VM) the local AI options are hidden and Emberr tells you why — notes, reminders, sync and cloud AI providers are unaffected. Bring your own API key for OpenAI, Claude or Gemini to keep AI features on those machines.
+
 ## Looking for Contributors
 
 Emberr is currently an Android-only, local-only application. To make this the ultimate productivity ecosystem, I am looking for open-source contributors to help expand the vision:
