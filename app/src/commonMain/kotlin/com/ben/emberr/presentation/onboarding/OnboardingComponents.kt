@@ -1,12 +1,15 @@
 package com.ben.emberr.presentation.onboarding
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -37,12 +40,19 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -52,8 +62,26 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ben.emberr.presentation.shared.components.SelectedOptionBackground
 import com.ben.emberr.ui.theme.LocalAppIsDark
+import emberr.app.generated.resources.Res
+import emberr.app.generated.resources.arrow_up
+import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.painterResource
+import kotlin.math.abs
 
 val OnboardingContentMaxWidth = 470.dp
+
+private const val OnboardingVisibleCardCount = 3
+private const val OnboardingMaxCardRotationDegrees = 10f
+private const val OnboardingCardFanDegrees = 1.5f
+private val OnboardingDeckHeight = 252.dp
+private val OnboardingCardSidePeek = 12.dp
+private val OnboardingDeckSideInset = 20.dp
+
+private fun peekDirectionForDepth(depth: Int): Float = when (depth) {
+    0 -> 0f
+    1 -> 1f
+    else -> -1f
+}
 
 data class OnboardingBarInsets(val top: Dp, val bottom: Dp)
 
@@ -64,6 +92,8 @@ object OnboardingPastelColors {
     val Green = Color(0xFF4FAE7B)
     val Amber = Color(0xFFE0902E)
     val Purple = Color(0xFFA97BD1)
+    val Rose = Color(0xFFDE7A88)
+    val Teal = Color(0xFF3FA3A3)
 }
 
 data class OnboardingHighlight(
@@ -267,6 +297,189 @@ private fun OnboardingHighlightCard(
 }
 
 @Composable
+fun OnboardingHighlightSwipeDeck(
+    highlights: List<OnboardingHighlight>,
+    modifier: Modifier = Modifier
+) {
+    var topCardIndex by remember(highlights.size) { mutableIntStateOf(0) }
+    val swipeOffsetX = remember { Animatable(0f) }
+    val coroutineScope = rememberCoroutineScope()
+    val density = LocalDensity.current
+
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(OnboardingDeckHeight)
+        ) {
+            val deckWidthPx = with(density) { maxWidth.toPx() }
+            val dismissThreshold = deckWidthPx * 0.26f
+
+            for (depth in (OnboardingVisibleCardCount - 1) downTo 0) {
+                val highlight = highlights[(topCardIndex + depth) % highlights.size]
+                val isTopCard = depth == 0
+
+                val depthModifier = if (isTopCard) {
+                    Modifier
+                        .graphicsLayer {
+                            translationX = swipeOffsetX.value
+                            rotationZ = if (size.width <= 0f) {
+                                0f
+                            } else {
+                                (swipeOffsetX.value / size.width) * OnboardingMaxCardRotationDegrees
+                            }
+                        }
+                        .pointerInput(topCardIndex, deckWidthPx) {
+                            detectHorizontalDragGestures(
+                                onDragEnd = {
+                                    coroutineScope.launch {
+                                        if (abs(swipeOffsetX.value) >= dismissThreshold) {
+                                            val flyOutTarget = if (swipeOffsetX.value > 0f) {
+                                                deckWidthPx * 1.5f
+                                            } else {
+                                                -deckWidthPx * 1.5f
+                                            }
+                                            swipeOffsetX.animateTo(flyOutTarget, tween(200))
+                                            topCardIndex = (topCardIndex + 1) % highlights.size
+                                            swipeOffsetX.snapTo(0f)
+                                        } else {
+                                            swipeOffsetX.animateTo(
+                                                targetValue = 0f,
+                                                animationSpec = spring(
+                                                    dampingRatio = 0.55f,
+                                                    stiffness = Spring.StiffnessMedium
+                                                )
+                                            )
+                                        }
+                                    }
+                                },
+                                onDragCancel = {
+                                    coroutineScope.launch { swipeOffsetX.animateTo(0f, tween(180)) }
+                                },
+                                onHorizontalDrag = { _, dragAmount ->
+                                    coroutineScope.launch {
+                                        swipeOffsetX.snapTo(swipeOffsetX.value + dragAmount)
+                                    }
+                                }
+                            )
+                        }
+                } else {
+                    Modifier.graphicsLayer {
+                        val swipeProgress = if (dismissThreshold <= 0f) {
+                            0f
+                        } else {
+                            (abs(swipeOffsetX.value) / dismissThreshold).coerceIn(0f, 1f)
+                        }
+                        val peekPx = OnboardingCardSidePeek.toPx()
+                        val restingPeek = peekPx * peekDirectionForDepth(depth)
+                        val promotedPeek = peekPx * peekDirectionForDepth(depth - 1)
+                        val restingFan = OnboardingCardFanDegrees * peekDirectionForDepth(depth)
+                        val promotedFan = OnboardingCardFanDegrees * peekDirectionForDepth(depth - 1)
+                        val restingScale = 1f - 0.03f * depth
+                        val promotedScale = 1f - 0.03f * (depth - 1)
+
+                        translationX = restingPeek + (promotedPeek - restingPeek) * swipeProgress
+                        rotationZ = restingFan + (promotedFan - restingFan) * swipeProgress
+                        scaleX = restingScale + (promotedScale - restingScale) * swipeProgress
+                        scaleY = scaleX
+                    }
+                }
+
+                OnboardingDeckCard(
+                    highlight = highlight,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = OnboardingDeckSideInset)
+                        .then(depthModifier)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            highlights.forEachIndexed { index, highlight ->
+                val isActive = index == topCardIndex
+                Box(
+                    modifier = Modifier
+                        .size(if (isActive) 8.dp else 6.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (isActive) {
+                                highlight.color
+                            } else {
+                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f)
+                            }
+                        )
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        Text(
+            text = "Swipe the card to see more",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.42f)
+        )
+    }
+}
+
+@Composable
+private fun OnboardingDeckCard(
+    highlight: OnboardingHighlight,
+    modifier: Modifier = Modifier
+) {
+    val isDark = LocalAppIsDark.current
+    val solidCardColor = highlight.color
+        .copy(alpha = if (isDark) 0.18f else 0.22f)
+        .compositeOver(MaterialTheme.colorScheme.background)
+
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(24.dp))
+            .background(solidCardColor)
+            .padding(horizontal = 22.dp, vertical = 26.dp),
+        verticalArrangement = Arrangement.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(54.dp)
+                .clip(CircleShape)
+                .background(highlight.color.copy(alpha = if (isDark) 0.32f else 0.28f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                painter = highlight.icon,
+                contentDescription = null,
+                tint = highlight.color,
+                modifier = Modifier.size(26.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Text(
+            text = highlight.title,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = highlight.description,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+        )
+    }
+}
+
+@Composable
 fun OnboardingSegmentedControl(
     options: List<Pair<String, String>>,
     selectedKey: String,
@@ -347,7 +560,7 @@ fun OnboardingToggleCard(
 ) {
     val cardShape = RoundedCornerShape(16.dp)
     val backgroundColor by animateColorAsState(
-        targetValue = if (checked) SelectedOptionBackground else onboardingSurfaceColor(),
+        targetValue = onboardingSurfaceColor(),
         animationSpec = tween(200),
         label = "onboarding-toggle-background"
     )
@@ -388,6 +601,82 @@ fun OnboardingToggleCard(
                 uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
             )
         )
+    }
+}
+
+@Composable
+fun OnboardingChatMock(
+    question: String,
+    answer: String,
+    placeholder: String,
+    modifier: Modifier = Modifier
+) {
+    val cardShape = RoundedCornerShape(16.dp)
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(cardShape)
+            .background(MaterialTheme.colorScheme.background)
+            .border(1.dp, onboardingHairlineColor(), cardShape)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End
+        ) {
+            Text(
+                text = question,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Normal,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier
+                    .widthIn(max = 230.dp)
+                    .clip(RoundedCornerShape(16.dp, 16.dp, 4.dp, 16.dp))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(horizontal = 14.dp, vertical = 10.dp)
+            )
+        }
+
+        Text(
+            text = answer,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Normal,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+        )
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(24.dp))
+                .background(onboardingSurfaceColor())
+                .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = placeholder,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Normal,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                modifier = Modifier.weight(1f)
+            )
+
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    painter = painterResource(Res.drawable.arrow_up),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(15.dp)
+                )
+            }
+        }
     }
 }
 

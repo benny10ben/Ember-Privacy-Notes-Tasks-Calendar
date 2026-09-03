@@ -40,7 +40,7 @@ fun OnboardingWelcomeStep() {
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = "A quiet, offline-first home for your notes and reminders.",
+            text = "A quiet, offline-first home for your notes, tasks and calendars.",
             style = MaterialTheme.typography.bodyLarge,
             color = onboardingSubtitleColor(),
             textAlign = TextAlign.Center

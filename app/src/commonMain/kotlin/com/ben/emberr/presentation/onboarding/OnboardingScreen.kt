@@ -23,7 +23,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -32,6 +34,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
@@ -43,6 +46,7 @@ import com.ben.emberr.presentation.shared.stableStatusBarsPadding
 import com.ben.emberr.ui.theme.LocalAppIsDark
 import emberr.app.generated.resources.Res
 import emberr.app.generated.resources.chevron_left
+import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -72,11 +76,23 @@ fun OnboardingScreen(
     val topBarHeightDp = with(density) { topBarHeightPx.toDp() }
     val bottomBarHeightDp = with(density) { bottomBarHeightPx.toDp() }
 
-    fun goToNextStep() {
-        if (isLastStep) {
+    val finishScope = rememberCoroutineScope()
+    var isFinishing by remember { mutableStateOf(false) }
+
+    fun finishOnboarding() {
+        if (isFinishing) return
+        isFinishing = true
+
+        finishScope.launch {
             viewModel.deletePreviewNoteIfExists()
             viewModel.completeOnboarding()
             onFinished()
+        }
+    }
+
+    fun goToNextStep() {
+        if (isLastStep) {
+            finishOnboarding()
         } else {
             currentStepIndex++
         }
@@ -84,12 +100,6 @@ fun OnboardingScreen(
 
     fun goToPreviousStep() {
         if (currentStepIndex > 0) currentStepIndex--
-    }
-
-    fun skipOnboarding() {
-        viewModel.deletePreviewNoteIfExists()
-        viewModel.completeOnboarding()
-        onFinished()
     }
 
     LaunchedEffect(Unit) {
@@ -136,7 +146,7 @@ fun OnboardingScreen(
                 onBottomBarHeightChanged = { bottomBarHeightPx = it },
                 onBack = ::goToPreviousStep,
                 onNext = ::goToNextStep,
-                onSkip = ::skipOnboarding
+                onSkip = ::finishOnboarding
             )
         }
     } else {
@@ -153,7 +163,7 @@ fun OnboardingScreen(
             onBottomBarHeightChanged = { bottomBarHeightPx = it },
             onBack = ::goToPreviousStep,
             onNext = ::goToNextStep,
-            onSkip = ::skipOnboarding
+            onSkip = ::finishOnboarding
         )
     }
 }
@@ -243,6 +253,15 @@ private fun OnboardingWizardPane(
     }
 }
 
+private fun Modifier.reserveHeightOnlyWhen(isCollapsed: Boolean): Modifier =
+    layout { measurable, constraints ->
+        val placeable = measurable.measure(constraints)
+        val usedWidth = if (isCollapsed) 0 else placeable.width
+        layout(usedWidth, placeable.height) {
+            if (!isCollapsed) placeable.place(0, 0)
+        }
+    }
+
 private fun Modifier.onboardingSwipeNavigation(
     stepKey: Int,
     onSwipeForward: () -> Unit,
@@ -302,16 +321,18 @@ private fun OnboardingProgressBar(
 
             if (showSkip) {
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Skip",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { onSkip() }
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                )
             }
+
+            Text(
+                text = "Skip",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                modifier = Modifier
+                    .reserveHeightOnlyWhen(isCollapsed = !showSkip)
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable(enabled = showSkip) { onSkip() }
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+            )
         }
     }
 }
@@ -355,7 +376,7 @@ private fun OnboardingNavigationBar(
 }
 
 @Composable
-private fun OnboardingBackButton(onClick: () -> Unit) {
+internal fun OnboardingBackButton(onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .size(width = 52.dp, height = 46.dp)

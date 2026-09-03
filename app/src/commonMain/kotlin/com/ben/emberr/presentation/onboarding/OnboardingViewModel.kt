@@ -8,7 +8,9 @@ import com.ben.emberr.data.local.room.NoteMetadataEntity
 import com.ben.emberr.domain.model.NoteContent
 import com.ben.emberr.domain.repository.NoteRepository
 import com.ben.emberr.domain.util.MediaStorageHelper
+import com.ben.emberr.presentation.shared.editor.ActiveEditorRegistry
 import emberr.app.generated.resources.Res
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -26,7 +28,9 @@ class OnboardingViewModel(
     private val _previewNoteId = MutableStateFlow<String?>(null)
     val previewNoteId: StateFlow<String?> = _previewNoteId.asStateFlow()
 
-    private var previewNoteFilePath: String? = null
+    private var createdNoteId: String? = null
+    private var createdNoteFilePath: String? = null
+    private var previewNoteCreationJob: Job? = null
 
     val fontStylePreference: StateFlow<String> = settingsManager.fontStylePreferenceFlow.stateIn(
         scope = viewModelScope,
@@ -83,12 +87,14 @@ class OnboardingViewModel(
     }
 
     fun ensurePreviewNoteCreated() {
-        if (_previewNoteId.value != null) return
+        if (previewNoteCreationJob != null) return
 
         val newNoteId = UUID.randomUUID().toString()
         val fileName = "note_$newNoteId.json"
+        createdNoteId = newNoteId
+        createdNoteFilePath = fileName
 
-        viewModelScope.launch {
+        previewNoteCreationJob = viewModelScope.launch {
             val coverImagePath = runCatching {
                 val bytes = Res.readBytes("files/onboarding_cover_img.jpg")
                 mediaStorageHelper.saveBytesToInternalStorage(bytes, "jpg", "image/jpeg")?.localFileName
@@ -108,19 +114,23 @@ class OnboardingViewModel(
                 coverImagePath = coverImagePath
             )
             noteRepository.saveNote(metadata, NoteContent(blocks = emptyList()))
-            previewNoteFilePath = fileName
             _previewNoteId.value = newNoteId
         }
     }
 
-    fun deletePreviewNoteIfExists() {
-        val noteId = _previewNoteId.value ?: return
-        val filePath = previewNoteFilePath ?: return
-        _previewNoteId.value = null
-        previewNoteFilePath = null
+    suspend fun deletePreviewNoteIfExists() {
+        val noteId = createdNoteId ?: return
+        val filePath = createdNoteFilePath ?: return
 
-        viewModelScope.launch {
-            noteRepository.deleteNote(noteId, filePath)
-        }
+        runCatching { previewNoteCreationJob?.join() }
+
+        ActiveEditorRegistry.discardAllPendingWrites()
+
+        previewNoteCreationJob = null
+        createdNoteId = null
+        createdNoteFilePath = null
+        _previewNoteId.value = null
+
+        runCatching { noteRepository.deleteNote(noteId, filePath) }
     }
 }
