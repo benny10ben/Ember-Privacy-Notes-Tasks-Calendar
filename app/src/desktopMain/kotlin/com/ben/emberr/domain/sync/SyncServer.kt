@@ -61,11 +61,12 @@ fun startSyncServer(
     syncRepository: SyncRepository,
     hmacSigner: SyncHmacSigner,
     syncEncryptionManager: SyncEncryptionManager,
-    pairingState: SyncPairingState
-) {
+    pairingState: SyncPairingState,
+    serverAvailability: SyncServerAvailability
+): Boolean {
     val port = settingsManager.getSyncPort().let { if (it <= 0) SyncConstants.DEFAULT_PORT else it }
 
-    embeddedServer(Netty, host = "0.0.0.0", port = port) {
+    val server = embeddedServer(Netty, host = "0.0.0.0", port = port) {
         install(ContentNegotiation) {
             json(Json { ignoreUnknownKeys = true; coerceInputValues = true })
         }
@@ -284,5 +285,17 @@ fun startSyncServer(
                 call.respond(io.ktor.http.HttpStatusCode.OK)
             }
         }
-    }.start(wait = false)
+    }
+
+    return runCatching { server.start(wait = false) }.fold(
+        onSuccess = {
+            serverAvailability.markRunning(port)
+            true
+        },
+        onFailure = { startFailure ->
+            runCatching { server.stop(gracePeriodMillis = 0, timeoutMillis = 0) }
+            serverAvailability.markUnavailable(port, startFailure)
+            false
+        }
+    )
 }

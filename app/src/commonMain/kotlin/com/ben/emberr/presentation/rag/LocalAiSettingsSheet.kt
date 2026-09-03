@@ -82,6 +82,19 @@ internal fun LocalAiSettingsSheet(
         title = "Local AI",
         subtitle = "Manage the on-device models.",
     ) { _ ->
+        val unsupportedHardwareReason = viewModel.localAiUnsupportedReason
+        if (unsupportedHardwareReason != null) {
+            Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+                UnsupportedHardwareNotice(reason = unsupportedHardwareReason)
+                EmberrButtonPrimary(
+                    text = "Close",
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)
+                )
+            }
+            return@EmberrBottomSheet
+        }
+
         Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
             val currentDownloadProgress = downloadProgress
             val isDownloading = currentDownloadProgress is ModelDownloadProgress.Downloading

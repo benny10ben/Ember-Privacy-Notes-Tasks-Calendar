@@ -24,6 +24,9 @@ class LocalAiEngine(
 
     private val embedderFileName = ModelFileNames.EMBEDDER
 
+    val unsupportedHardwareReason: String? =
+        (detectLocalAiSupport() as? LocalAiSupport.Unsupported)?.reason
+
     private val nativeMutex = Mutex()
     private var loadedModel: LoadedModel = LoadedModel.NONE
     private var loadedGeneratorFileName: String? = null
@@ -51,6 +54,8 @@ class LocalAiEngine(
         contextBlock: String,
         conversationHistory: List<ChatTurn>
     ): Flow<String> = callbackFlow {
+        failWhenHardwareCannotRunLocalAi()
+
         launch(Dispatchers.IO) {
             nativeMutex.withLock {
                 ensureGeneratorLoaded()
@@ -87,7 +92,13 @@ class LocalAiEngine(
     }
 
     // Private helpers
+    private fun failWhenHardwareCannotRunLocalAi() {
+        val reason = unsupportedHardwareReason ?: return
+        throw LocalAiUnsupportedException(reason)
+    }
+
     private fun ensureEmbedderLoaded() {
+        failWhenHardwareCannotRunLocalAi()
         if (loadedModel == LoadedModel.EMBEDDER) return
 
         val embedderPath = resolveModelPath(embedderFileName)
@@ -109,6 +120,7 @@ class LocalAiEngine(
     }
 
     private suspend fun ensureGeneratorLoaded() {
+        failWhenHardwareCannotRunLocalAi()
         val generatorFileName = aiSettingsRepository.getSelectedLocalModelFileName()
         if (generatorFileName.isBlank()) {
             throw IllegalStateException("No local model is installed or selected.")
@@ -174,6 +186,7 @@ class LocalAiEngine(
         isEmbeddingModelAvailable() && isGeneratorModelAvailable()
 
     fun isEmbeddingModelAvailable(): Boolean {
+        if (unsupportedHardwareReason != null) return false
         return try {
             modelFileExists(resolveModelPath(embedderFileName))
         } catch (e: Exception) {
@@ -182,6 +195,7 @@ class LocalAiEngine(
     }
 
     fun isGeneratorModelAvailable(): Boolean {
+        if (unsupportedHardwareReason != null) return false
         return try {
             val fileName = aiSettingsRepository.getSelectedLocalModelFileName()
             fileName.isNotBlank() && modelFileExists(resolveModelPath(fileName))

@@ -96,6 +96,7 @@ val desktopModule = module {
     single<SyncEncryptionManager> { AesGcmEncryptionManager() }
     single<com.ben.emberr.core.security.SyncHmacSigner> { com.ben.emberr.core.security.HmacSha256Signer() }
     single<SyncDiscoveryManager> { DesktopDiscoveryManager() }
+    single { com.ben.emberr.domain.sync.SyncServerAvailability() }
     single<com.ben.emberr.domain.sync.SyncClient> { com.ben.emberr.domain.sync.SyncClient(get(), get(), get()) }
     single<SyncRepository> { SyncRepositoryImpl(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     factory { SyncViewModel(get(), get(), get(), get(), get()) }

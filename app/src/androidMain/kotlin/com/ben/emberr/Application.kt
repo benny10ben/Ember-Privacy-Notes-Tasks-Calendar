@@ -7,6 +7,7 @@ import com.ben.emberr.di.androidModule
 import com.ben.emberr.di.sharedModule
 import com.ben.emberr.domain.ai.LocalAiEngine
 import com.ben.emberr.domain.selfhost.sync.SelfHostSyncScheduler
+import com.ben.emberr.presentation.reminders.ReminderRescheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -46,6 +47,7 @@ class EmberrApplication : Application() {
             getKoin().get<com.ben.emberr.presentation.widget.calendar.CalendarWidgetCoordinator>().start()
             getKoin().get<com.ben.emberr.presentation.widget.calendaragenda.CalendarAgendaWidgetCoordinator>().start()
             getKoin().get<com.ben.emberr.presentation.widget.upcomingevents.UpcomingEventsWidgetCoordinator>().start()
+            getKoin().get<ReminderRescheduler>().rescheduleUpcomingReminders()
         }
 
     }

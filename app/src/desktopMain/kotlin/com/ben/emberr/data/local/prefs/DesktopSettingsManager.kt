@@ -2,13 +2,17 @@ package com.ben.emberr.data.local.prefs
 
 import com.github.javakeyring.Keyring
 import com.github.javakeyring.PasswordAccessException
-import java.util.prefs.Preferences
+import java.io.File
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 
 class DesktopSettingsManager : SettingsManager {
-    // Standard unencrypted preferences for basic app state
-    private val prefs = Preferences.userRoot().node("com.ben.emberr.settings")
+    // Standard unencrypted preferences for basic app state, stored alongside the
+    // database and media so that removing the app folder resets the app completely.
+    private val prefs = DesktopPreferenceStore(
+        storageDirectory = File(System.getProperty("user.home"), ".emberr"),
+        legacyNodeName = "com.ben.emberr.settings"
+    )
 
     // The identifier that will show up in the OS Keychain/Credential Manager
     private val serviceName = "EmberrAppVault"
@@ -83,7 +87,7 @@ class DesktopSettingsManager : SettingsManager {
     }
 
     override fun getSelfHostSupportsETags(): Boolean? {
-        return when (prefs.get(SyncConstants.KEY_SELF_HOST_SUPPORTS_ETAGS, null)) {
+        return when (prefs.getOrNull(SyncConstants.KEY_SELF_HOST_SUPPORTS_ETAGS)) {
             "true" -> true
             "false" -> false
             else -> null
@@ -95,7 +99,7 @@ class DesktopSettingsManager : SettingsManager {
     }
 
     override fun getSelfHostManifestEtag(): String? {
-        return prefs.get(SyncConstants.KEY_SELF_HOST_MANIFEST_ETAG, null)
+        return prefs.getOrNull(SyncConstants.KEY_SELF_HOST_MANIFEST_ETAG)
     }
 
     override fun saveSelfHostManifestEtag(etag: String?) {

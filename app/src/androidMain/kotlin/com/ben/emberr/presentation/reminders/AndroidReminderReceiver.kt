@@ -7,12 +7,20 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
 
 /**
  * Listens for alarms triggered by the system and pushes the actual notification to the user.
  * Runs independently in the background, even if the app is completely closed.
  */
-class AndroidReminderReceiver : BroadcastReceiver() {
+class AndroidReminderReceiver : BroadcastReceiver(), KoinComponent {
+
+    private val reminderRescheduler: ReminderRescheduler by inject()
+
     override fun onReceive(context: Context, intent: Intent) {
         val noteTitle = intent.getStringExtra("note_title") ?: "Reminder"
         val blockText = intent.getStringExtra("block_text") ?: "You have a task to check."
@@ -39,5 +47,14 @@ class AndroidReminderReceiver : BroadcastReceiver() {
             .build()
 
         notificationManager.notify(notificationId, notification)
+
+        val pendingResult = goAsync()
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                reminderRescheduler.rescheduleUpcomingReminders()
+            } finally {
+                pendingResult.finish()
+            }
+        }
     }
 }

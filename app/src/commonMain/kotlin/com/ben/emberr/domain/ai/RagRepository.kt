@@ -18,6 +18,10 @@ class RagRepository(
     private val externalAiEngine: ExternalAiEngine,
     private val aiSettingsRepository: AiSettingsRepository
 ) {
+    val localAiUnsupportedReason: String? get() = localAiEngine.unsupportedHardwareReason
+
+    private val canSearchNoteKnowledge: Boolean get() = localAiUnsupportedReason == null
+
     fun queryAiStream(userQuestion: String, conversationHistory: List<ChatTurn> = emptyList()): Flow<String> = flow {
         val knowledgeMode = aiSettingsRepository.knowledgeMode.first()
         val generationMode = aiSettingsRepository.aiGenerationMode.first()
@@ -27,7 +31,7 @@ class RagRepository(
             AiGenerationMode.EXTERNAL -> AiContextWindows.EXTERNAL_TOKENS
         }
 
-        if (knowledgeMode == KnowledgeMode.WORLD_ONLY) {
+        if (knowledgeMode == KnowledgeMode.WORLD_ONLY || !canSearchNoteKnowledge) {
             val planned = PromptBudgetPlanner.plan(
                 totalContextTokens = totalContextTokens,
                 outputReservationTokens = maxOutputTokens,
@@ -196,7 +200,8 @@ class RagRepository(
 
     suspend fun isModelAvailable(): Boolean {
         return try {
-            val needsEmbedder = aiSettingsRepository.knowledgeMode.first() != KnowledgeMode.WORLD_ONLY
+            val needsEmbedder = canSearchNoteKnowledge &&
+                    aiSettingsRepository.knowledgeMode.first() != KnowledgeMode.WORLD_ONLY
             if (needsEmbedder && !localAiEngine.isEmbeddingModelAvailable()) return false
 
             when (aiSettingsRepository.aiGenerationMode.first()) {

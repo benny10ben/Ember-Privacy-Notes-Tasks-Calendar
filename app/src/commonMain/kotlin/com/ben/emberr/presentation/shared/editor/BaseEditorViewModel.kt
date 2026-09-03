@@ -280,6 +280,15 @@ abstract class BaseEditorViewModel(
         }
     }
 
+    private var isDiscarded = false
+
+    // Called when the note this editor is bound to is being deleted while the editor is still
+    // open. Without this, the save in onCleared would write the note straight back to disk.
+    fun discardPendingWrites() {
+        isDiscarded = true
+        autosaveJob?.cancel()
+    }
+
     // A reactive collector's disk/sync snapshot can legitimately be older than what's already in
     // _blocks (e.g. it was queued before a just-completed local edit committed, or a self-host sync
     // pass reconciled a not-yet-pushed prior state) - the LOCAL_MUTATION_COOLDOWN_MS window is a
@@ -2123,6 +2132,7 @@ abstract class BaseEditorViewModel(
         super.onCleared()
         ActiveEditorRegistry.unregister(this)
         autosaveJob?.cancel()
+        if (isDiscarded) return
         val needsIndexing = computeBlocksHash() != lastIndexedContentHash
         appScope.launch(Dispatchers.IO) {
             withContext(NonCancellable) {

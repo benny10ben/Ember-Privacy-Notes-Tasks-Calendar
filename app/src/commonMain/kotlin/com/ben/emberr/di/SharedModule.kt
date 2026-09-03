@@ -73,6 +73,15 @@ val sharedModule = module {
     }
 
     single {
+        com.ben.emberr.presentation.reminders.ReminderRescheduler(
+            calendarTaskDao = get(),
+            calendarEventExceptionDao = get(),
+            noteDao = get(),
+            reminderScheduler = get()
+        )
+    }
+
+    single {
         com.ben.emberr.domain.media.LocalMediaGarbageCollector(
             noteRepository = get(),
             mediaStorageHelper = get()

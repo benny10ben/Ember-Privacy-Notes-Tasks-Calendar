@@ -255,6 +255,7 @@ private fun RagChatContent(
                         sidePadding = sidePadding,
                         downloadProgress = localGeneratorDownloadProgress,
                         isExternalModeSelected = aiGenerationMode == AiGenerationMode.EXTERNAL,
+                        localAiUnsupportedReason = viewModel.localAiUnsupportedReason,
                         onDownloadClick = { showLocalAiSheet = true },
                         onApiKeyClick = { showExternalAiSheet = true }
                     )
@@ -448,6 +449,7 @@ private fun ModelUnavailablePrompt(
     sidePadding: Dp,
     downloadProgress: ModelDownloadProgress?,
     isExternalModeSelected: Boolean,
+    localAiUnsupportedReason: String?,
     onDownloadClick: () -> Unit,
     onApiKeyClick: () -> Unit
 ) {
@@ -475,18 +477,21 @@ private fun ModelUnavailablePrompt(
         )
         Spacer(Modifier.height(32.dp))
 
-        ModelOptionCard(
-//            icon = { Icon(Icons.Default.Download, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp)) },
-            title = "Run AI on this device",
-            subtitle = when (downloadProgress) {
-                is ModelDownloadProgress.Downloading -> "Downloading… ${(downloadProgress.fraction * 100).toInt()}% — tap to manage"
-                is ModelDownloadProgress.Failed -> "Download stopped. Tap to try again."
-                ModelDownloadProgress.Paused -> "Paused. Tap to resume the download."
-                else -> "Private and offline. Download or add your own model."
-            },
-            onClick = onDownloadClick,
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp)
-        )
+        if (localAiUnsupportedReason == null) {
+            ModelOptionCard(
+                title = "Run AI on this device",
+                subtitle = when (downloadProgress) {
+                    is ModelDownloadProgress.Downloading -> "Downloading… ${(downloadProgress.fraction * 100).toInt()}% — tap to manage"
+                    is ModelDownloadProgress.Failed -> "Download stopped. Tap to try again."
+                    ModelDownloadProgress.Paused -> "Paused. Tap to resume the download."
+                    else -> "Private and offline. Download or add your own model."
+                },
+                onClick = onDownloadClick,
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp)
+            )
+        } else {
+            UnsupportedHardwareNotice(reason = localAiUnsupportedReason)
+        }
         Spacer(Modifier.height(10.dp))
 
         ModelOptionCard(
@@ -496,6 +501,31 @@ private fun ModelUnavailablePrompt(
             onClick = onApiKeyClick,
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp)
         )
+    }
+}
+
+@Composable
+internal fun UnsupportedHardwareNotice(reason: String, modifier: Modifier = Modifier) {
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+            Text(
+                text = "On-device AI is unavailable here",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = reason,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            )
+        }
     }
 }
 
@@ -960,13 +990,20 @@ private fun ModelPickerPill(viewModel: RagViewModel) {
     val selectedLocalModelFileName by viewModel.selectedLocalModelFileName.collectAsState()
     var showPicker by remember { mutableStateOf(false) }
 
+    val selectableLocalModels = if (viewModel.localAiUnsupportedReason == null) {
+        installedLocalModels
+    } else {
+        emptyList()
+    }
+
     var selectedExternalModelName by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(selectedExternalAiProvider, aiGenerationMode) {
         selectedExternalModelName = viewModel.getExternalAiConfig(selectedExternalAiProvider)?.model
     }
 
     val label = if (aiGenerationMode == AiGenerationMode.LOCAL) {
-        installedLocalModels.find { it.fileName == selectedLocalModelFileName }?.displayName ?: "Local"
+        selectableLocalModels.find { it.fileName == selectedLocalModelFileName }?.displayName
+            ?: if (viewModel.localAiUnsupportedReason == null) "Local" else "Unavailable"
     } else {
         selectedExternalModelName?.takeIf { it.isNotBlank() } ?: selectedExternalAiProvider.displayName
     }
@@ -1021,7 +1058,7 @@ private fun ModelPickerPill(viewModel: RagViewModel) {
                 onDismissRequest = { showPicker = false }
             ) {
                 Column(modifier = Modifier.width(240.dp).padding(vertical = 4.dp)) {
-                    installedLocalModels.forEach { model ->
+                    selectableLocalModels.forEach { model ->
                         RagDesktopMenuItem(
                             text = model.displayName,
                             isSelected = aiGenerationMode == AiGenerationMode.LOCAL &&
@@ -1056,7 +1093,7 @@ private fun ModelPickerPill(viewModel: RagViewModel) {
             contentHorizontalPadding = 0.dp,
         ) { closeAnd ->
             Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
-                installedLocalModels.forEach { model ->
+                selectableLocalModels.forEach { model ->
                     val isSelectedModel = aiGenerationMode == AiGenerationMode.LOCAL &&
                             selectedLocalModelFileName == model.fileName
                     ModelOptionCard(
@@ -1175,7 +1212,10 @@ private fun AiSettingsSheet(
         Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
             ModelOptionCard(
                 title = "Local AI",
-                subtitle = "Runs fully on-device. Private & offline.",
+                subtitle = if (viewModel.localAiUnsupportedReason == null)
+                    "Runs fully on-device. Private & offline."
+                else
+                    "Not supported by this hardware.",
                 onClick = onLocalAiClick
             )
             Spacer(Modifier.height(10.dp))
@@ -1222,7 +1262,13 @@ private fun AiSettingsMenuContent(
     Column(modifier = Modifier.width(260.dp).padding(vertical = 4.dp)) {
         when (currentMenu) {
             AiSettingsMenuLevel.MAIN -> {
-                RagDesktopMenuItem(text = "Local AI", onClick = onLocalAiClick)
+                RagDesktopMenuItem(
+                    text = if (viewModel.localAiUnsupportedReason == null)
+                        "Local AI"
+                    else
+                        "Local AI — unavailable",
+                    onClick = onLocalAiClick
+                )
                 RagDesktopMenuItem(
                     text = if (aiGenerationMode == AiGenerationMode.EXTERNAL)
                         "External AI — ${selectedExternalAiProvider.displayName}"

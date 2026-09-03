@@ -9,6 +9,7 @@ import com.ben.emberr.domain.ai.chat.ChatSessionRepository
 import com.ben.emberr.domain.ai.chat.ChatTurn
 import com.ben.emberr.domain.ai.models.InstalledLocalModel
 import com.ben.emberr.domain.ai.KnowledgeMode
+import com.ben.emberr.domain.ai.LocalAiUnsupportedException
 import com.ben.emberr.domain.ai.RagRepository
 import com.ben.emberr.domain.ai.external.AiSettingsRepository
 import com.ben.emberr.domain.ai.external.ExternalAiException
@@ -62,6 +63,8 @@ class RagViewModel(
     private val reindexAllNotesUseCase: ReindexAllNotesUseCase,
     private val localModelUploadManager: LocalModelUploadManager
 ) : ViewModel() {
+
+    val localAiUnsupportedReason: String? = ragRepository.localAiUnsupportedReason
 
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
     val messages: StateFlow<List<ChatMessage>> = _messages.asStateFlow()
@@ -157,7 +160,8 @@ class RagViewModel(
     }
 
     private fun refreshEmbeddingSetupState() {
-        _embeddingSetupState.value = if (ragRepository.isEmbeddingModelAvailable()) {
+        val hasNothingToSetUp = localAiUnsupportedReason != null
+        _embeddingSetupState.value = if (hasNothingToSetUp || ragRepository.isEmbeddingModelAvailable()) {
             EmbeddingSetupState.Ready
         } else {
             EmbeddingSetupState.Required
@@ -181,6 +185,7 @@ class RagViewModel(
     private var embeddingDownloadJob: Job? = null
 
     fun downloadEmbeddingModel() {
+        if (localAiUnsupportedReason != null) return
         if (_embeddingSetupState.value is EmbeddingSetupState.Downloading) return
         if (ragRepository.isEmbeddingModelAvailable()) {
             _embeddingSetupState.value = EmbeddingSetupState.Ready
@@ -260,6 +265,11 @@ class RagViewModel(
     private var generatorDownloadJob: Job? = null
 
     fun downloadGeneratorModel() {
+        val unsupportedReason = localAiUnsupportedReason
+        if (unsupportedReason != null) {
+            _localGeneratorDownloadProgress.value = ModelDownloadProgress.Failed(unsupportedReason)
+            return
+        }
         if (_localGeneratorDownloadProgress.value is ModelDownloadProgress.Downloading) return
         if (aiSettingsRepository.getInstalledLocalModels().any { it.fileName == ModelFileNames.GENERATOR }) {
             _localGeneratorDownloadProgress.value = ModelDownloadProgress.Completed
@@ -311,6 +321,11 @@ class RagViewModel(
     }
 
     fun uploadGeneratorModel(pickedPath: String) {
+        val unsupportedReason = localAiUnsupportedReason
+        if (unsupportedReason != null) {
+            _localModelUploadState.value = LocalModelUploadState.Failed(unsupportedReason)
+            return
+        }
         _localModelUploadState.value = LocalModelUploadState.Uploading
         _localModelUploadProgress.value = 0f
         viewModelScope.launch {
@@ -475,6 +490,8 @@ class RagViewModel(
             } catch (e: Exception) {
                 if (activeGenerationJob === thisJob) {
                     val friendlyMessage = when (e) {
+                        is LocalAiUnsupportedException -> e.message
+                            ?: "Local AI cannot run on this hardware."
                         is ExternalAiException -> e.message ?: "Sorry, an error occurred."
                         else -> "Sorry, an error occurred: ${e.message}"
                     }

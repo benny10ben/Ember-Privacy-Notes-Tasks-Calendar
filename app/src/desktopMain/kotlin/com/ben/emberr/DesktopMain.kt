@@ -80,11 +80,22 @@ fun main() = application {
         val syncEncryptionManager = koin.get<com.ben.emberr.core.security.SyncEncryptionManager>()
         val pairingState = koin.get<com.ben.emberr.domain.sync.SyncPairingState>()
 
-        startSyncServer(settingsManager, syncRepository, hmacSigner, syncEncryptionManager, pairingState)
+        val serverAvailability = koin.get<com.ben.emberr.domain.sync.SyncServerAvailability>()
+        val isSyncServerRunning = startSyncServer(
+            settingsManager,
+            syncRepository,
+            hmacSigner,
+            syncEncryptionManager,
+            pairingState,
+            serverAvailability
+        )
 
-        val discoveryManager = koin.get<com.ben.emberr.domain.sync.discovery.SyncDiscoveryManager>()
-        val port = settingsManager.getSyncPort().let { if (it <= 0) 8080 else it }
-        discoveryManager.startBroadcasting(port, "Emberr Desktop")
+        if (isSyncServerRunning) {
+            val discoveryManager = koin.get<com.ben.emberr.domain.sync.discovery.SyncDiscoveryManager>()
+            val port = settingsManager.getSyncPort()
+                .let { if (it <= 0) com.ben.emberr.data.local.prefs.SyncConstants.DEFAULT_PORT else it }
+            discoveryManager.startBroadcasting(port, "Emberr Desktop")
+        }
     }
 
     LaunchedEffect(Unit) {

@@ -15,6 +15,10 @@ object ActiveEditorRegistry {
         activeEditors.update { it - viewModel }
     }
 
+    fun discardAllPendingWrites() {
+        activeEditors.value.forEach { editor -> editor.discardPendingWrites() }
+    }
+
     suspend fun flushAllPending() {
         activeEditors.value.forEach { editor ->
             try {

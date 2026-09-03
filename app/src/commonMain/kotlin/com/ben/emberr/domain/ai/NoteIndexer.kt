@@ -62,6 +62,7 @@ class NoteIndexer(
 
     suspend fun indexNote(metadata: NoteMetadataEntity, content: NoteContent) {
         if (settingsManager.isAiFeaturesDisabled()) return
+        if (aiEngine.unsupportedHardwareReason != null) return
         if (metadata.noteId == "global_pinned") return
 
         val baseContext = buildContextString(metadata)

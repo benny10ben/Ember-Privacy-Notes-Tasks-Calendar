@@ -2,12 +2,17 @@ package com.ben.emberr.domain.model
 
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.DayOfWeek
+import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.Month
+import kotlinx.datetime.TimeZone
 import kotlinx.datetime.daysUntil
 import kotlinx.datetime.isoDayNumber
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus
+import kotlinx.datetime.toInstant
+import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.Serializable
 
 enum class RecurrenceFrequency { DAILY, WEEKLY, MONTHLY, YEARLY }
@@ -82,6 +87,16 @@ object RecurrenceEngine {
             cursor = cursor.plus(1, DateTimeUnit.DAY)
         }
         return result
+    }
+
+    fun retargetTimestampToDate(originalTimestamp: Long, newDate: LocalDate): Long {
+        val timeZone = TimeZone.currentSystemDefault()
+        val originalDateTime = Instant.fromEpochMilliseconds(originalTimestamp).toLocalDateTime(timeZone)
+        val retargeted = LocalDateTime(
+            newDate.year, newDate.monthNumber, newDate.dayOfMonth,
+            originalDateTime.hour, originalDateTime.minute, originalDateTime.second
+        )
+        return retargeted.toInstant(timeZone).toEpochMilliseconds()
     }
 
     fun previousOccurrence(rule: RecurrenceRule, anchor: LocalDate, before: LocalDate): LocalDate? {

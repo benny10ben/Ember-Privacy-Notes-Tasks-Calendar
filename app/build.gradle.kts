@@ -13,6 +13,28 @@ ksp {
     arg("room.schemaLocation", "${projectDir}/schemas")
 }
 
+val llamatikVersion = "1.7.0"
+
+val llamatikJvmArtifact: Configuration by configurations.creating {
+    isTransitive = false
+}
+
+dependencies {
+    llamatikJvmArtifact("com.llamatik:library-jvm:$llamatikVersion")
+}
+
+val llamatikWithLinuxNativesOnly = tasks.register<Jar>("llamatikWithLinuxNativesOnly") {
+    archiveFileName.set("llamatik-linux-natives-only.jar")
+    destinationDirectory.set(layout.buildDirectory.dir("llamatik"))
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+    from(llamatikJvmArtifact.elements.map { artifacts -> artifacts.map { zipTree(it.asFile) } }) {
+        exclude("native/macos/**")
+        exclude("native/windows/**")
+        exclude("META-INF/MANIFEST.MF")
+    }
+}
+
 kotlin {
     androidTarget {
         compilations.all {
@@ -59,7 +81,7 @@ kotlin {
                 implementation("io.ktor:ktor-serialization-kotlinx-json:3.3.0")
 
                 // On-device LLM inference via llama.cpp
-                implementation("com.llamatik:library:1.7.0")
+                implementation("com.llamatik:library:$llamatikVersion")
                 // SQLDelight coroutines extensions
                 implementation("app.cash.sqldelight:coroutines-extensions:2.0.2")
 
@@ -127,9 +149,15 @@ kotlin {
 
                 // SQLDelight JVM driver
                 implementation("app.cash.sqldelight:sqlite-driver:2.0.2")
+
+                runtimeOnly(files(llamatikWithLinuxNativesOnly))
             }
         }
     }
+}
+
+configurations.named("desktopRuntimeClasspath") {
+    exclude(mapOf("group" to "com.llamatik", "module" to "library-jvm"))
 }
 
 compose.desktop {
@@ -143,6 +171,17 @@ compose.desktop {
             )
             packageName = "Emberr"
             packageVersion = "1.0.0"
+
+            linux {
+                packageName = "emberr"
+                debMaintainer = "developer.ben10@gmail.com"
+                rpmLicenseType = "AGPL-3.0-or-later"
+                appCategory = "Office"
+                menuGroup = "Office"
+                appRelease = "1"
+                shortcut = true
+                iconFile.set(project.file("packaging/linux/emberr.png"))
+            }
         }
     }
 }

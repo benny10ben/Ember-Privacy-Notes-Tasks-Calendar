@@ -26,7 +26,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.ben.emberr.domain.sync.SyncPairingData
+import com.ben.emberr.domain.util.AppPermission
 import com.ben.emberr.domain.util.isDesktopPlatform
+import com.ben.emberr.domain.util.rememberAppPermissionCoordinator
 import com.ben.emberr.presentation.shared.stableStatusBarsPadding
 import com.ben.emberr.presentation.shared.components.EmberrBottomSheet
 import com.ben.emberr.presentation.shared.components.EmberrButtonPrimary
@@ -143,6 +145,25 @@ fun SettingsScreen(
                 .background(MaterialTheme.colorScheme.background),
             contentPadding = PaddingValues(top = topBarHeightDp + 8.dp, bottom = 48.dp)
         ) {
+            if (!isDesktopPlatform) {
+                item {
+                    SettingsGroup(title = "Reminders") {
+                        val permissionCoordinator = rememberAppPermissionCoordinator()
+                        val isUnrestricted = permissionCoordinator
+                            .isGranted(AppPermission.UnrestrictedBackground)
+
+                        SettingsActionRow(
+                            icon = painterResource(Res.drawable.timer_reset),
+                            title = "Unrestricted Background",
+                            trailingLabel = if (isUnrestricted) "On" else "Off",
+                            onClick = {
+                                permissionCoordinator.request(AppPermission.UnrestrictedBackground)
+                            }
+                        )
+                    }
+                }
+            }
+
             item {
                 SettingsGroup(title = "Data & Storage") {
                     SettingsActionRow(
