@@ -210,6 +210,7 @@ fun DailyBottomWeekStrip(
                 .align(Alignment.Center)
                 .width(animatedWidth)
                 .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen },
+
 //                .drawWithContent {
 //                    drawContent()
 //                    val fw = fadeWidth.toPx()
@@ -230,6 +231,7 @@ fun DailyBottomWeekStrip(
 //                        )
 //                    }
 //                },
+
             horizontalArrangement = Arrangement.spacedBy(pillSpacing, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically
         ) {
